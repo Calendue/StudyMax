@@ -28,16 +28,23 @@ function StepDots() {
   )
 }
 
-/** The frame every question shares: Back, the dots, the question, and Continue in the action bar. */
+/**
+ * The frame every question shares: Back, the dots, and the question. A single-select question
+ * advances the moment an option is clicked, so it has no Continue button — only a multi-select
+ * question (picking several specializations) needs one, since there's no single click that means
+ * "done".
+ */
 function Step({
   title,
   lead,
   canContinue = true,
+  multiSelect = false,
   children,
 }: {
   title: ReactNode
   lead?: ReactNode
   canContinue?: boolean
+  multiSelect?: boolean
   children: ReactNode
 }) {
   const m = useModel()
@@ -48,11 +55,13 @@ function Step({
         <ScreenTitle lead={lead}>{title}</ScreenTitle>
         {children}
       </ScreenBody>
-      <ActionBar>
-        <Button block disabled={!canContinue} onClick={m.next}>
-          {m.nextIsReveal ? 'Reveal what my school hides' : 'Continue'}
-        </Button>
-      </ActionBar>
+      {multiSelect && (
+        <ActionBar>
+          <Button block disabled={!canContinue} onClick={m.next}>
+            {m.nextIsReveal ? 'Reveal what my school hides' : 'Continue'}
+          </Button>
+        </ActionBar>
+      )}
     </>
   )
 }
@@ -232,6 +241,7 @@ export function ConcentrationScreen() {
     <Step
       title="Any specializations you're aiming for?"
       lead={`Optional. Pick as many as you're considering in ${m.selectedProgram?.name ?? 'your major'}; your plan is built around them.`}
+      multiSelect
     >
       <Group>
         {m.concentrationOptions.map((spec, i) => {

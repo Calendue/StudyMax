@@ -89,6 +89,7 @@ The same Vite app ships as iOS and Android apps through Capacitor 8 (`capacitor.
 - **Keep the cheap safety nets, skip the expensive ones.** The `scripts/check-*.ts` asserts and `npm run lint && npm run build` are fast and catch exactly the kind of silent data breakage (a course code the catalogue dropped, a scholarship link that 404s) that would be embarrassing live — keep running them before calling something done. Don't add new test infrastructure or heavy process during the sprint.
 - **Four people editing the same small codebase.** Keep diffs scoped and legible so teammates can tell what changed and why at a glance; avoid unrelated drive-by refactors while everyone's moving fast in parallel.
 - **When in doubt, ask.** With this little runway, a wrong guess that has to be unwound costs more than a 10-second clarifying question — especially for anything that touches the demo path or judging story.
+- **Don't use the claude-in-chrome tool in this project.** Verify UI changes another way (build, lint, `npm run dev` + reading the code, or ask the user to check).
 
 TEAM_EMAIL=ayotundeogunade13@gmail.com,michealsalam06@gmail.com,lafiajisamuel@gmail.com,Ibraheem.Islam.2016@gmail.com,support@calendue.ai,calendue.dev@gmail.com
 
