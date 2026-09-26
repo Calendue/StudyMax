@@ -1,4 +1,5 @@
 import { useModel } from '../model.ts'
+import { isNative } from '../platform.ts'
 import { daysUntil, formatCountdown } from '../lib/resources.ts'
 import type { Resource } from '../data/schools/types.ts'
 import { ScreenTitle } from '../ui/chrome.tsx'
@@ -45,6 +46,19 @@ export function AwardsTab() {
               Get a call before it closes
             </Button>
           )}
+          {/* The deadline watch: a Live Activity on iOS, a Live Update on Android. Apps only. */}
+          {isNative && m.watchableDeadline?.id === top.id && (
+            <Button
+              block
+              variant="secondary"
+              icon="clock"
+              disabled={m.watchBusy}
+              onClick={() => void (m.watchedId === top.id ? m.unwatchDeadline() : m.watchDeadline())}
+            >
+              {m.watchedId === top.id ? 'Stop watching' : 'Watch this deadline'}
+            </Button>
+          )}
+          {m.watchError && <p className="footnote">{m.watchError}</p>}
         </Appear>
       )}
 
