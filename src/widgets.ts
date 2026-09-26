@@ -1,4 +1,4 @@
-import { registerPlugin } from '@capacitor/core'
+import { Capacitor, registerPlugin } from '@capacitor/core'
 import { isNative } from './platform.ts'
 import type { WidgetDeadline, WidgetSnapshot } from './lib/widgetSnapshot.ts'
 
@@ -66,7 +66,10 @@ export function watchFailureMessage(reason: WatchFailure | undefined): string {
     case 'denied':
       return 'StudyMax needs notification permission to keep the countdown on your screen. You can allow it in Settings.'
     case 'disabled':
-      return 'Live Activities are switched off for StudyMax. You can turn them on in Settings.'
+      // iOS: the Live Activities switch. Android: the app's notifications, or the watch's channel.
+      return Capacitor.getPlatform() === 'android'
+        ? 'Notifications for StudyMax are switched off. You can turn them on in Settings.'
+        : 'Live Activities are switched off for StudyMax. You can turn them on in Settings.'
     case 'unsupported':
       return "This phone's system is too old for a live countdown. The widgets still show it."
     default:

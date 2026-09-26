@@ -57,7 +57,7 @@ private struct DeadlineHero: View {
         .minimumScaleFactor(0.85)
         .fixedSize(horizontal: false, vertical: true)
       if let moment = deadline.moment {
-        Text("Due \(moment.dueLabel)")
+        Text("Closes \(moment.dueLabel)")
           .font(.caption2)
           .foregroundStyle(tone.inkFaint)
           .lineLimit(1)
@@ -165,7 +165,7 @@ struct DeadlineRectangular: View {
           .lineLimit(2)
           .minimumScaleFactor(0.8)
         if let moment = open.deadline.moment {
-          Text("Due \(moment.dueLabel)")
+          Text("Closes \(moment.dueLabel)")
             .font(.caption2)
             .foregroundStyle(.secondary)
             .lineLimit(1)

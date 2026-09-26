@@ -130,7 +130,7 @@ struct CredentialMedium: View {
           Text("Next: \(next.code) · \(next.title)")
             .font(.caption.weight(.medium))
             .foregroundStyle(tone.inkFaint)
-            .lineLimit(1)
+            .lineLimit(2)
             .minimumScaleFactor(0.8)
             .padding(.top, 3)
         }
