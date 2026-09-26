@@ -45,7 +45,9 @@ function nameFrom(profile: unknown): string | null {
   return p?.name ?? p?.given_name ?? null
 }
 
-const native = () => import('@capacitor-firebase/authentication').then((m) => m.FirebaseAuthentication)
+// Resolve to the module, never to the plugin itself: a Capacitor plugin answers every property,
+// including \`then\`, so a promise resolving to it treats it as a thenable and never settles.
+const native = () => import('@capacitor-firebase/authentication')
 
 let webAuth: Promise<{ auth: Auth; sdk: typeof import('firebase/auth') }> | null = null
 function web() {
@@ -60,7 +62,7 @@ export async function currentAccount(): Promise<Account | null> {
   if (!isAuthConfigured) return null
   try {
     if (isNative) {
-      const { user } = await (await native()).getCurrentUser()
+      const { user } = await (await native()).FirebaseAuthentication.getCurrentUser()
       return user ? toAccount(user) : null
     }
     const { auth } = await web()
@@ -74,7 +76,7 @@ export async function currentAccount(): Promise<Account | null> {
 
 export async function signIn(provider: Provider): Promise<Account> {
   if (isNative) {
-    const plugin = await native()
+    const plugin = (await native()).FirebaseAuthentication
     const result = provider === 'apple' ? await plugin.signInWithApple() : await plugin.signInWithGoogle()
     if (!result.user) throw new Error('no user')
     return toAccount(result.user, nameFrom(result.additionalUserInfo?.profile))
@@ -89,7 +91,7 @@ export async function signIn(provider: Provider): Promise<Account> {
 }
 
 export async function signOut() {
-  if (isNative) await (await native()).signOut()
+  if (isNative) await (await native()).FirebaseAuthentication.signOut()
   else if (webAuth) await (await webAuth).auth.signOut()
 }
 
