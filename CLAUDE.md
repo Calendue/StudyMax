@@ -6,7 +6,7 @@ This is an active hackathon submission, not a normal side project. **The clock i
 
 Upload a transcript → StudyMax tells you what credential (specialization/certificate/minor) you're closest to finishing, the one course that advances the most of it, a term-by-term plan, and it calls your phone about the scholarship deadline closing soonest. Fully working end-to-end only for **Computer Science at University of Saskatchewan** right now; other programs are partially mapped or unmapped.
 
-Matching/planning are deterministic (`src/lib/match.ts`, `src/lib/plan.ts`, `src/lib/credentials.ts`); an OpenAI model (`gpt-5.6`, called only from `api/_openai.ts`) handles just the parts that need real reasoning (transcript parsing, scholarship "why this fits you" copy, guidance for unmapped schools).
+Matching/planning are deterministic (`src/lib/match.ts`, `src/lib/plan.ts`, `src/lib/credentials.ts`); an OpenAI model (`gpt-5-mini`, called only from `api/_openai.ts`) handles just the parts that need real reasoning (transcript parsing, scholarship "why this fits you" copy, guidance for unmapped schools).
 
 ## Current features (what's actually built and demoable today)
 
