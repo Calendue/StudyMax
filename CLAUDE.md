@@ -13,7 +13,7 @@ Matching/planning are deterministic (`src/lib/match.ts`, `src/lib/plan.ts`, `src
 - Transcript upload (PDF — DegreeWorks audit or unofficial transcript), parsed by the model into completed vs. in-progress courses.
 - Manual course entry: search across the full catalogue by code or title, or browse the Arts & Science course list and tick courses by hand.
 - Credential matching: what specialization/certificate/minor you're closest to finishing, and the single highest-overlap course you haven't taken yet.
-- Term-by-term plan generator, with prerequisite chains expanded automatically (including prereqs the specialization page itself never lists).
+- Term-by-term plan, drawn as a roadmap (see Plan roadmap below), with prerequisite chains expanded automatically (including prereqs the specialization page itself never lists). It starts in a term the student picks and counts in-progress courses as passed by then; onboarding seeds it with the chosen concentrations first, then the minor's requirement lists.
 - Certificates/minors detector — surfaces credentials a student is partway through without knowing it.
 - Scholarships/awards ranked by deadline, with AI-generated "why this fits you" copy.
 - Outbound phone call (via Bland) about the award closing soonest — one-way, says its piece, hangs up.
@@ -24,7 +24,7 @@ Matching/planning are deterministic (`src/lib/match.ts`, `src/lib/plan.ts`, `src
 
 Brainstorm list — none of these are commitments until someone actually starts building them. Flag to the team before sinking real time into one.
 
-- **Academic journey roadmap/graph UI (currently being explored).** Turn the term-by-term plan into a visual, graph-like roadmap: courses taken, in progress, and remaining laid out as connected nodes (prerequisite chains as edges), so a student can *see* their path to a credential at a glance instead of reading a list. This is the leading candidate for the "wow" feature from the gaps above — likely the single highest-impact visual upgrade for judging, since it turns an already-real feature (the plan) into something demoable at a glance from across a room.
+- **Academic journey roadmap/graph UI (built; see Plan roadmap below).** Turn the term-by-term plan into a visual, graph-like roadmap: courses taken, in progress, and remaining laid out as connected nodes (prerequisite chains as edges), so a student can *see* their path to a credential at a glance instead of reading a list. This is the leading candidate for the "wow" feature from the gaps above — likely the single highest-impact visual upgrade for judging, since it turns an already-real feature (the plan) into something demoable at a glance from across a room.
 - Mobile-first product (built — iOS and Android via Capacitor, see Mobile build below) as its own differentiator: most transcript/planning tools are desktop-only dashboards; a genuinely good phone experience is a visible point of difference in a room full of laptop demos.
 - A shareable/exportable version of the roadmap or "what you're closest to" result (image or link) — gives the product a viral, show-your-friends moment beyond the live demo.
 - GPA or "what-if" simulation on top of the existing deterministic planner (e.g., "what if I dropped this specialization for that one") — reuses `src/lib/plan.ts` and `src/lib/match.ts` rather than needing new infrastructure.
@@ -46,7 +46,7 @@ The five colors below are the canonical brand palette — use these for any new 
 | Ultrasonic Blue | `#0921d7` | 9, 33, 215 |
 | Rosy Taupe | `#c38d94` | 195, 141, 148 |
 
-**Note:** `tokens.css` currently has a provisional palette under similar names (Dark Teal, Ultrasonic Blue, Old Lace, Cherry Rose, Rosy Taupe) with different hex values and a full 50–950 shade scale for each — that was an earlier stand-in, not this canonical set. Whoever picks up UI/theming work next should reconcile `tokens.css` against the five hex values above (this is the source of truth going forward), swapping in the black instead of the earlier teal.
+**Note:** `tokens.css` implements this palette. Inside the app Cherry Rose is the single accent and Rosy Taupe its tonal partner (never body text); Ultrasonic Blue belongs to the brand kit in `public/brand/`, not to app UI. The landing page uses the same tokens.
 
 ## Code structure: component-first, no more god pages
 
@@ -57,9 +57,21 @@ The app is a screen flow, not one page. `src/App.tsx` owns the state in one `use
 - A new piece of UI gets its own file with clearly typed props (or reads the model), not another inline block in `App.tsx`. Logic that isn't UI (matching, planning, credentials) stays in `src/lib/`.
 - `src/platform.ts` wraps everything native (haptics, Android back button, splash, keyboard, the API base URL); `src/auth.ts` is the one sign-in module for native and web.
 
+## OpenAI helper
+
+Every AI route (`api/parse-transcript.ts`, `api/why-you.ts`, `api/scholarship-guidance.ts`) calls `respond()` in `api/_openai.ts` and answers failures with `sendFailure()`. Don't add a route that calls OpenAI directly.
+
+- `gpt-5-mini` on Chat Completions with `reasoning_effort: 'minimal'` and `store: false`. Uncapped, gpt-5-mini can spend its whole token budget on hidden reasoning and return empty text. Minimal against low, and Chat Completions against Responses, were measured on a synthetic transcript: minimal was 2–5x faster and always correct.
+- The key only travels in the Authorization header. OpenAI's error text never leaves the server: its invalid-key error quotes part of the key and its rate-limit error names the org. The browser gets `{ error, status }`; the log gets the status and OpenAI's error code.
+- `api/features.ts` reports `ai`/`call` from whether `OPENAI_API_KEY`/`BLAND_API_KEY` are set, and the app hides what's missing.
+
+## Plan roadmap
+
+The Plan tab (`src/screens/PlanTab.tsx`) draws the plan as a graph (`src/screens/PlanRoadmap.tsx`), laid out by `src/lib/roadmapLayout.ts`: a collapsed Completed column, an In progress column, then one column per term; prerequisite links are the edges. It consumes `buildStudentPlan`'s output as-is and has no scheduling logic of its own. The SVG edges use fixed geometry (`HEADER_HEIGHT`, `NODE_HEIGHT`, `COLUMN_WIDTH`), so if you change the column label or node size in `App.css`, change the constants with it.
+
 ## Database
 
-Schema lives in `prisma/schema.prisma`, migrated onto the team's shared remote Supabase Postgres — see `docs/databaseSpec.md` for what each table is for and what's deliberately not in the DB (the course catalogue/programs/scholarships stay static files).
+Schema lives in `prisma/schema.prisma`, migrated onto the team's shared remote Supabase Postgres (the app itself doesn't read or write it yet; identity is the Firebase uid in `UserInfo.authUid`) — see `docs/databaseSpec.md` for what each table is for and what's deliberately not in the DB (the course catalogue/programs/scholarships stay static files).
 
 - **Use `prisma migrate deploy`, never `prisma migrate dev`.** There's no local/shadow database here — only the one shared remote instance — and `migrate dev` provisions a shadow DB to diff against, which isn't the right model for four people hitting the same remote schema. Write migration SQL with `prisma migrate diff` (or by hand for something simple like a rename), then apply it with `npm run db:migrate` (wraps `prisma migrate deploy`).
 - Prisma's CLI doesn't read `.env.local` — `db:migrate`/`db:studio` are wrapped in `dotenv-cli` for this reason. Don't add a plain `.env` with the same values instead.

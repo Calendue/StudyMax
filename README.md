@@ -4,7 +4,7 @@ Your university hides things in plain sight. Specializations that go on your tra
 
 StudyMax takes your transcript and shows you what you are close to, the single course that advances the most of it at once, and a term by term path to finish. Then it calls your phone about the award closing soonest, because nobody reopens a dashboard.
 
-Live at [studymax-one.vercel.app](https://studymax-one.vercel.app/).
+Live at [www.studymax.study](https://www.studymax.study/), with iOS and Android apps built from the same code.
 
 ## Scope: Computer Science
 
@@ -23,7 +23,7 @@ Applied Mathematics, Physics and Applied Computing are mapped too and will produ
 3. No transcript handy? Use **Load a sample student**, or search the catalogue and tick off courses by hand.
 4. Press **Reveal what my school hides**.
 
-You will get: what you are closest to finishing, the highest overlap course you have not taken, a term by term plan including the prerequisites the specialization page never lists, certificates and minors you are partway through, awards ranked by deadline, and the call at the end.
+You will get: what you are closest to finishing, the highest overlap course you have not taken, a term by term plan drawn as a roadmap (what you finished, what you are taking now, then each term, with prerequisites as connectors) including the prerequisites the specialization page never lists, certificates and minors you are partway through, awards ranked by deadline, and the call at the end.
 
 ## Run it locally
 
@@ -80,11 +80,26 @@ src/data/prereqs.ts   prerequisite chains, scraped, quoted verbatim
 src/lib/match.ts      what you are close to, and course overlap
 src/lib/plan.ts       course selection, prerequisite expansion, term packing
 src/lib/credentials.ts  certificates and minors you are partway through
+src/lib/roadmapLayout.ts  places the plan on the roadmap grid
+api/_openai.ts        the one OpenAI helper every AI route goes through
 api/                  serverless routes: transcript, why-you, guidance, call, and features (which keys are set)
+prisma/               database schema and migrations (not read by the app yet)
 scripts/scrape-*.ts   catalogue scrapers that regenerate the data files
 ```
 
 Matching and planning are deterministic. They read requirement data and produce the same answer every time, which is the part you would not want a model guessing at. The OpenAI model handles the parts that genuinely need reasoning.
+
+### The OpenAI helper
+
+Every AI route goes through `respond()` in `api/_openai.ts`: `gpt-5-mini` on Chat Completions, reasoning effort `minimal` (uncapped, the model can spend its whole budget on hidden reasoning and return nothing), and `store: false`, since the inputs are transcripts. The key only travels in the Authorization header, and OpenAI's error text never reaches the browser or the logs; a failure returns just the status code.
+
+### The roadmap
+
+The Plan tab draws the plan as a graph. `src/lib/roadmapLayout.ts` turns the planner's terms into columns (completed, in progress, then one per term) and prerequisite links into edges; `src/screens/PlanRoadmap.tsx` renders it and opens a course's details on tap. The layout owns no scheduling logic; that stays in `src/lib/plan.ts`.
+
+### The database
+
+`prisma/schema.prisma` describes the student data we intend to store (users keyed by their Firebase uid, profiles, courses, generated plans, and seeded institutions and majors) on a shared Supabase Postgres. The app doesn't use it yet. Migrations are applied with `npm run db:migrate` (`prisma migrate deploy`, never `migrate dev`: there is only the one shared database); see `docs/databaseSpec.md`.
 
 ## Known limits
 
@@ -95,4 +110,4 @@ Matching and planning are deterministic. They read requirement data and produce 
 
 ## Built with
 
-React, TypeScript, Vite, deployed on Vercel. The OpenAI API (`gpt-5-mini`, Responses API) for transcript reading and scholarship reasoning. Bland for the phone call.
+React, TypeScript, Vite, deployed on Vercel. The OpenAI API (`gpt-5-mini`, Chat Completions) for transcript reading and scholarship reasoning. Bland for the phone call.
