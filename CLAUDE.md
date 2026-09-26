@@ -67,7 +67,7 @@ Ranked by what actually swings judges, in order of what to protect first:
 
 ## Mobile build
 
-The same Vite app ships as iOS and Android apps through Capacitor 8 (`capacitor.config.ts`, `ios/`, `android/`; app id `ai.calendue.studymax`). Native Apple and Google sign-in go through `@capacitor-firebase/authentication` against Firebase project `studymax-3a090`; the web uses the Firebase JS SDK only when the four `VITE_FIREBASE_*` vars are set, otherwise it starts as a guest.
+The same Vite app ships as iOS and Android apps through Capacitor 8 (`capacitor.config.ts`, `ios/`, `android/`; app id `ai.calendue.studymax`). Native Apple and Google sign-in go through `@capacitor-firebase/authentication` against Firebase project `studymax-3a090`; the web uses the Firebase JS SDK only when the four `VITE_FIREBASE_*` vars are set, otherwise it starts as a guest. The native apps call the API at `https://study-max-theta.vercel.app` (`src/platform.ts`). Features that need `ANTHROPIC_API_KEY` or `BLAND_API_KEY` are gated by `/api/features` (`src/features.ts`), so they stay hidden until those keys are in Vercel.
 
 - `npm run build` then `npx cap sync` copies `dist/` into both native projects; open `ios/App/App.xcodeproj` or `android/` to run on a simulator/emulator.
 - `npm run build:ios` builds the signed ad hoc IPA into `release/`; `npm run build:android` builds the signed APK. `npm run cap:assets` regenerates icons and splash.

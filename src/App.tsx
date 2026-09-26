@@ -16,6 +16,7 @@ import { searchCourses, catalogueTitle } from './lib/courseSearch.ts'
 import { courseInfo } from './data/prereqs.ts'
 import { artsAndScienceSubjects } from './data/courses.ts'
 import { api, haptic, isNative, onBackButton } from './platform.ts'
+import { cachedFeatures, fetchFeatures } from './features.ts'
 import { currentAccount, isAuthConfigured, signIn, signInErrorMessage, signOut, type Account, type Provider } from './auth.ts'
 import { ModelContext } from './model.ts'
 import { courseCode, type TargetKind } from './format.ts'
@@ -151,6 +152,12 @@ function resumeScreen(state: Partial<SavedState>): Screen {
 }
 
 function useStudyMax() {
+  // --- what this deployment can do: features whose server key is missing are left out entirely ---
+  const [features, setFeatures] = useState(cachedFeatures)
+  useEffect(() => {
+    void fetchFeatures().then((next) => next && setFeatures(next))
+  }, [])
+
   // --- intake: university → program → courses (the number is asked for later, with the call) ---
   const saved = useRef(loadSaved()).current
   const [universityId, setUniversityId] = useState<UniversityChoice>(saved.universityId ?? '')
@@ -606,8 +613,11 @@ function useStudyMax() {
     if (matched) {
       const token = ++lookupToken.current
       const hasResources = matched.resources.length > 0
-      setLookup({ kind: 'verified', school: matched, whyYou: {}, loadingWhy: hasResources })
-      if (!hasResources) return
+      // Without the Anthropic key there are no "why you" notes to wait for: each award shows its own
+      // description instead.
+      const wantWhy = hasResources && features.ai
+      setLookup({ kind: 'verified', school: matched, whyYou: {}, loadingWhy: wantWhy })
+      if (!wantWhy) return
       const context = {
         school: matched.name,
         program: selectedProgram?.name ?? 'their program',
@@ -964,6 +974,7 @@ function useStudyMax() {
   }, [screen, lookup, universityId])
 
   return {
+    features,
     // account
     account,
     authBusy,

@@ -28,31 +28,38 @@ export function CoursesScreen() {
     <>
       <TopBar onBack={m.back} />
       <ScreenBody>
-        <ScreenTitle lead={`${m.selectedProgram?.name ?? 'Your program'} at USask. Your transcript is the fastest way in.`}>
+        <ScreenTitle
+          lead={`${m.selectedProgram?.name ?? 'Your program'} at USask. ${
+            m.features.ai ? 'Your transcript is the fastest way in.' : 'Try the sample student, or add yours by search.'
+          }`}
+        >
           Add your courses
         </ScreenTitle>
 
-        <Appear index={0}>
-          <label className="upload">
-            <input
-              type="file"
-              accept="application/pdf"
-              className="visually-hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0]
-                e.target.value = '' // allow re-uploading the same filename later
-                if (file) void m.handleTranscriptFile(file)
-              }}
-            />
-            <span className="upload__icon">
-              <Icon name="upload" size={26} />
-            </span>
-            <span className="upload__text">
-              <span className="upload__title">Upload your transcript</span>
-              <span className="upload__hint">A DegreeWorks audit or unofficial transcript, as a PDF. Claude reads every course on it.</span>
-            </span>
-          </label>
-        </Appear>
+        {/* Reading a transcript needs the Anthropic key; without it the card isn't offered at all. */}
+        {m.features.ai && (
+          <Appear index={0}>
+            <label className="upload">
+              <input
+                type="file"
+                accept="application/pdf"
+                className="visually-hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  e.target.value = '' // allow re-uploading the same filename later
+                  if (file) void m.handleTranscriptFile(file)
+                }}
+              />
+              <span className="upload__icon">
+                <Icon name="upload" size={26} />
+              </span>
+              <span className="upload__text">
+                <span className="upload__title">Upload your transcript</span>
+                <span className="upload__hint">A DegreeWorks audit or unofficial transcript, as a PDF. Claude reads every course on it.</span>
+              </span>
+            </label>
+          </Appear>
+        )}
 
         {(m.uploadStatus === 'success' || m.uploadStatus === 'sample') && (
           <Appear index={0} className="notice notice--ok">

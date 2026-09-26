@@ -59,7 +59,7 @@ Google/Apple sign-in on the web needs the Firebase project (`studymax-3a090`) wi
 
 Without them the web build has no sign-in: it skips the welcome screen and starts onboarding as a guest. The iOS and Android apps always offer Apple and Google sign-in natively, from the Firebase config files described in `CLAUDE.md`. Everything works without an account either way.
 
-Under plain `npm run dev` the upload button returns a clear message saying the reader is a serverless function, rather than failing silently.
+A missing key switches its features off rather than letting them fail. At startup the app asks `/api/features`, which reports only whether each key is set. Without `ANTHROPIC_API_KEY`, the transcript upload, the "why you" notes and the "Another university" path are hidden, and awards show their own descriptions. Without `BLAND_API_KEY`, the call button is hidden. Adding a key in Vercel turns its features back on for the site and the installed apps, with no rebuild. Under plain `npm run dev` there is no `/api`, so both are off.
 
 ## Checks
 
@@ -80,7 +80,7 @@ src/data/prereqs.ts   prerequisite chains, scraped, quoted verbatim
 src/lib/match.ts      what you are close to, and course overlap
 src/lib/plan.ts       course selection, prerequisite expansion, term packing
 src/lib/credentials.ts  certificates and minors you are partway through
-api/                  four serverless routes: transcript, why-you, guidance, call
+api/                  serverless routes: transcript, why-you, guidance, call, and features (which keys are set)
 scripts/scrape-*.ts   catalogue scrapers that regenerate the data files
 ```
 

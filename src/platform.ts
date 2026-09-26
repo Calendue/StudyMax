@@ -7,10 +7,11 @@ import { StatusBar, Style } from '@capacitor/status-bar'
 
 export const isNative = Capacitor.isNativePlatform()
 
-// The four serverless routes stay on Vercel. On the web they're same-origin; inside the native app
-// the page is served from the device, so they go to the deployed site. CapacitorHttp is enabled in
-// capacitor.config.ts, which sends these through native HTTP, so CORS never applies.
-export const API_BASE = isNative ? 'https://studymax-one.vercel.app' : ''
+// The serverless routes stay on Vercel. On the web they're same-origin; inside the native app the
+// page is served from the device, so they go to our deployment (the study-max project, deployed
+// from main). CapacitorHttp is enabled in capacitor.config.ts, which sends these through native
+// HTTP, so CORS never applies.
+export const API_BASE = isNative ? 'https://study-max-theta.vercel.app' : ''
 
 export function api(path: string) {
   return `${API_BASE}${path}`

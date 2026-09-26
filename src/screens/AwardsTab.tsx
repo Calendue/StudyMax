@@ -40,9 +40,11 @@ export function AwardsTab() {
           <h2 className="spotlight__name">{top.name}</h2>
           {top.value && <p className="spotlight__value">{top.value}</p>}
           <p className="spotlight__why">{top.whatItIs}</p>
-          <Button block icon="phone" onClick={() => m.go('call')}>
-            Get a call before it closes
-          </Button>
+          {m.features.call && (
+            <Button block icon="phone" onClick={() => m.go('call')}>
+              Get a call before it closes
+            </Button>
+          )}
         </Appear>
       )}
 
@@ -62,7 +64,7 @@ export function AwardsTab() {
               </a>
               <p className="award__what">{award.whatItIs}</p>
               <WhyYou
-                loading={!lookup || (lookup.loadingWhy && !lookup.whyYou[award.id])}
+                loading={m.features.ai && (!lookup || (lookup.loadingWhy && !lookup.whyYou[award.id]))}
                 text={lookup?.whyYou[award.id]}
                 fallback={award.whyRelevant}
               />
@@ -96,6 +98,15 @@ function WhyYou({ loading, text, fallback }: { loading: boolean; text?: string; 
 function Guidance() {
   const m = useModel()
   const lookup = m.lookup?.kind === 'guidance' ? m.lookup : null
+  // Direction for unmapped schools comes from Claude. The university step hides this path without the
+  // Anthropic key, but a session saved before that still lands here, so say so instead of a dead form.
+  if (!m.features.ai) {
+    return (
+      <ScreenTitle lead="StudyMax has verified award lists for the schools it has mapped. Direction for other schools is switched off for now.">
+        Scholarships
+      </ScreenTitle>
+    )
+  }
   return (
     <>
       <ScreenTitle lead="StudyMax has verified award lists for the schools it has mapped. For anywhere else, Claude points you to the kinds of awards to look for, and where.">

@@ -75,7 +75,11 @@ export function StudentScreen() {
           index={2}
           leading={<RowIcon name="upload" />}
           title="Existing student"
-          subtitle="You've got courses on the books. Upload a transcript or add them by hand."
+          subtitle={
+            m.features.ai
+              ? "You've got courses on the books. Upload a transcript or add them by hand."
+              : "You've got courses on the books. Add them from the catalogue."
+          }
           selected={m.studentType === 'existing'}
           trailing={m.studentType === 'existing' ? check : null}
           onClick={() => m.chooseStudentType('existing')}
@@ -109,15 +113,18 @@ export function UniversityScreen() {
           trailing={m.universityId === 'usask' ? check : null}
           onClick={() => m.handleUniversityChange('usask')}
         />
-        <Row
-          index={2}
-          leading={<RowIcon name="globe" />}
-          title="Another university"
-          subtitle="Scholarship direction for any school"
-          selected={m.universityId === 'other'}
-          trailing={m.universityId === 'other' ? check : null}
-          onClick={() => m.handleUniversityChange('other')}
-        />
+        {/* Everything on the other-school path is Claude's guidance, so it needs the Anthropic key. */}
+        {m.features.ai && (
+          <Row
+            index={2}
+            leading={<RowIcon name="globe" />}
+            title="Another university"
+            subtitle="Scholarship direction for any school"
+            selected={m.universityId === 'other'}
+            trailing={m.universityId === 'other' ? check : null}
+            onClick={() => m.handleUniversityChange('other')}
+          />
+        )}
       </Group>
     </Step>
   )
