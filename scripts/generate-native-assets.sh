@@ -1,179 +1,84 @@
 #!/usr/bin/env bash
-# Regenerate the iOS + Android app icons and splash marks from resources/mark.svg.
-# Requires rsvg-convert (brew install librsvg) and ImageMagick (`magick`, brew install imagemagick).
+# Regenerates the native app icons and splash screens from the approved StudyMax brand pack.
 #
-# Usage:
-#   npm run cap:assets
+#   App icons  copied exactly as supplied: resources/brand/ios/AppIcon.appiconset (default, dark and
+#              tinted) and resources/brand/android/res (adaptive, themed monochrome and legacy sizes).
+#   Splash     flat jet navy, nothing else: the first frame of the in-app intro, which is where the S
+#              ignites. The S appears once, in the intro, so it never blinks between the native
+#              launch screen, Capacitor's splash and the web view.
 #
-# Icon: the mark in Old Lace on a Cherry Rose field.
-# Splash: the mark in Cherry Rose on Old Lace. The mark's full 64-unit box is drawn at 96pt/dp and
-# centred in the whole screen, so the web app's intro can pick it up in exactly the same place.
+# Requires rsvg-convert and python3 (macOS: brew install librsvg).
+# Usage: npm run cap:assets
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MARK="$ROOT/resources/mark.svg"
-CHERRY='#982649'
+BRAND="$ROOT/resources/brand"
 LACE='#FFF8EB'
-SPLASH_MARK=96
+BERRY='#982649'
+INK='#12262B'
+SPLASH_MARK=176
+# The symbol's square box in resources/mark.svg, and the path inside it.
+BOX_X=-45
+BOX_Y=-36
+BOX=362
 IOS_ASSETS="$ROOT/ios/App/App/Assets.xcassets"
 RES="$ROOT/android/app/src/main/res"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-for tool in rsvg-convert magick perl bc; do
+for tool in rsvg-convert python3; do
   if ! command -v "$tool" >/dev/null 2>&1; then
-    echo "Missing $tool: install it (brew install librsvg imagemagick) and retry." >&2
+    echo "Missing $tool: install it and retry." >&2
+    exit 1
+  fi
+done
+for f in "$MARK" "$BRAND/approved-A2-path.json" "$BRAND/ios/AppIcon.appiconset/Contents.json" "$BRAND/android/res"; do
+  if [[ ! -e "$f" ]]; then
+    echo "Missing $f (part of the brand pack every icon and splash comes from)." >&2
     exit 1
   fi
 done
 
-# The mark's drawing without its <svg> wrapper, recoloured.
-mark_body() {
-  perl -0pe 's/.*?<svg[^>]*>//s; s/<\/svg>\s*$//s; s/<!--.*?-->//gs' "$MARK" | sed "s/#982649/$1/g"
-}
+SYMBOL="$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['d'])" "$BRAND/approved-A2-path.json")"
 
-# compose WIDTH HEIGHT BACKGROUND_SVG MARK_COLOUR MARK_SIZE OUT.png
-# Draws the background, then the mark's 64-unit box at MARK_SIZE px, centred.
-compose() {
-  local w=$1 h=$2 bg=$3 colour=$4 size=$5 out=$6
-  local x y
-  x=$(echo "($w - $size) / 2" | bc -l)
-  y=$(echo "($h - $size) / 2" | bc -l)
-  cat > "$TMP/compose.svg" <<EOF
-<svg xmlns="http://www.w3.org/2000/svg" width="$w" height="$h" viewBox="0 0 $w $h">
-$bg
-<svg x="$x" y="$y" width="$size" height="$size" viewBox="0 0 64 64">$(mark_body "$colour")</svg>
-</svg>
-EOF
-  mkdir -p "$(dirname "$out")"
-  rsvg-convert -w "$w" -h "$h" "$TMP/compose.svg" -o "$out"
-}
+# ── iOS ──────────────────────────────────────────────────────────────────────────────────────────
 
-fill() { echo "<rect width=\"100%\" height=\"100%\" fill=\"$1\"/>"; }
+rm -rf "$IOS_ASSETS/AppIcon.appiconset"
+cp -R "$BRAND/ios/AppIcon.appiconset" "$IOS_ASSETS/"
 
-if [[ ! -f "$MARK" ]]; then
-  echo "Missing $MARK (the StudyMax mark every icon and splash is drawn from)." >&2
-  exit 1
-fi
-echo "Using mark: $MARK"
+# The launch storyboard is flat navy; it no longer draws an image.
+rm -rf "$IOS_ASSETS/SplashMark.imageset"
 
-# --- iOS ---------------------------------------------------------------------------------------
-# App icon: exactly 1024x1024 with no alpha channel (App Store and ad hoc installs reject alpha).
-compose 1024 1024 "$(fill "$CHERRY")" "$LACE" 640 "$TMP/icon.png"
-magick "$TMP/icon.png" -background "$CHERRY" -alpha remove -alpha off -strip \
-  "$IOS_ASSETS/AppIcon.appiconset/AppIcon-512@2x.png"
+# ── Android ──────────────────────────────────────────────────────────────────────────────────────
 
-# Launch screen mark, shown by LaunchScreen.storyboard in a fixed 96pt image view.
-rm -rf "$IOS_ASSETS/Splash.imageset"
-SPLASH_SET="$IOS_ASSETS/SplashMark.imageset"
-mkdir -p "$SPLASH_SET"
-for scale in 1 2 3; do
-  px=$((SPLASH_MARK * scale))
-  suffix=$([[ $scale == 1 ]] && echo "" || echo "@${scale}x")
-  compose "$px" "$px" "" "$CHERRY" "$px" "$SPLASH_SET/splash-mark$suffix.png"
-done
-cat > "$SPLASH_SET/Contents.json" <<'EOF'
-{
-  "images" : [
-    { "filename" : "splash-mark.png", "idiom" : "universal", "scale" : "1x" },
-    { "filename" : "splash-mark@2x.png", "idiom" : "universal", "scale" : "2x" },
-    { "filename" : "splash-mark@3x.png", "idiom" : "universal", "scale" : "3x" }
-  ],
-  "info" : { "author" : "xcode", "version" : 1 }
-}
-EOF
+# Launcher icons as supplied; AndroidManifest.xml points at @mipmap/studymax_launcher(_round).
+cp -R "$BRAND/android/res/." "$RES/"
+# The earlier generated set, which nothing references any more.
+rm -f "$RES"/mipmap-*/ic_launcher.png "$RES"/mipmap-*/ic_launcher_round.png "$RES"/mipmap-*/ic_launcher_foreground.png
+rm -f "$RES/mipmap-anydpi-v26/ic_launcher.xml" "$RES/mipmap-anydpi-v26/ic_launcher_round.xml"
+rm -f "$RES/drawable/ic_launcher_foreground.xml" "$RES/drawable/ic_launcher_background.xml" "$RES/values/ic_launcher_background.xml"
+rm -rf "$RES/drawable-v24"
 
-# --- Android -----------------------------------------------------------------------------------
-# Adaptive icon: Cherry Rose background colour + the Old Lace mark as a vector foreground. The
-# vectors below repeat resources/mark.svg's two shapes (ring arc and dot); keep them in step.
-RING='M32,12 A20,20 0 1,1 12.3,28.53'
-DOT='M32,25.5 A6.5,6.5 0 1,1 32,38.5 A6.5,6.5 0 1,1 32,25.5 Z'
-
-# vector_mark NAME COLOUR SCALE  (108x108 viewport, mark centred at 54,54)
-vector_mark() {
-  local name=$1 colour=$2 scale=$3
-  local shift
-  shift=$(echo "54 - 32 * $scale" | bc -l | sed 's/^\./0./; s/0*$//; s/\.$//')
-  cat > "$RES/drawable/$name.xml" <<EOF
+# Android 12+ requires a splash icon; a transparent one leaves the flat navy ground.
+cat > "$RES/drawable/splash_icon.xml" <<'EOF'
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Generated by scripts/generate-native-assets.sh from resources/mark.svg. -->
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp"
-    android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-    <group
-        android:scaleX="$scale"
-        android:scaleY="$scale"
-        android:translateX="$shift"
-        android:translateY="$shift">
-        <path
-            android:pathData="$RING"
-            android:strokeColor="$colour"
-            android:strokeWidth="8"
-            android:strokeLineCap="round" />
-        <path
-            android:pathData="$DOT"
-            android:fillColor="$colour" />
-    </group>
-</vector>
-EOF
-}
-
-mkdir -p "$RES/drawable" "$RES/mipmap-anydpi-v26" "$RES/values"
-# Foreground: the ring's outer edge spans 46dp of the 108dp canvas, well inside the 66dp safe zone.
-vector_mark ic_launcher_foreground "$LACE" 0.9583
-# Android 12+ splash icon: the platform draws it at 288dp, so 36 of 108 units is the same 96dp
-# mark box as iOS.
-vector_mark splash_icon "$CHERRY" 0.5625
-
-# Capacitor's template icons would otherwise shadow ours.
-rm -f "$RES/drawable-v24/ic_launcher_foreground.xml" "$RES/drawable/ic_launcher_background.xml"
-rm -f "$RES"/mipmap-*/ic_launcher_foreground.png
-rmdir "$RES/drawable-v24" 2>/dev/null || true
-
-for name in ic_launcher ic_launcher_round; do
-  cat > "$RES/mipmap-anydpi-v26/$name.xml" <<'EOF'
-<?xml version="1.0" encoding="utf-8"?>
-<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-    <background android:drawable="@color/ic_launcher_background"/>
-    <foreground android:drawable="@drawable/ic_launcher_foreground"/>
-    <monochrome android:drawable="@drawable/ic_launcher_foreground"/>
-</adaptive-icon>
-EOF
-done
-cat > "$RES/values/ic_launcher_background.xml" <<EOF
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <color name="ic_launcher_background">$CHERRY</color>
-</resources>
+<!-- Generated by scripts/generate-native-assets.sh. Transparent on purpose: the S ignites in the app. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@android:color/transparent" />
+    <size android:width="108dp" android:height="108dp" />
+</shape>
 EOF
 
-# Legacy launcher icons (API 24-25): a rounded square and a circle, mark in Old Lace.
-gen_legacy() {
-  local folder=$1 px=$2
-  local r inset mark
-  inset=$(echo "$px * 0.04" | bc -l)
-  r=$(echo "$px * 0.2" | bc -l)
-  mark=$(echo "$px * 0.58" | bc -l)
-  local side
-  side=$(echo "$px - 2 * $inset" | bc -l)
-  compose "$px" "$px" "<rect x=\"$inset\" y=\"$inset\" width=\"$side\" height=\"$side\" rx=\"$r\" fill=\"$CHERRY\"/>" \
-    "$LACE" "$mark" "$RES/$folder/ic_launcher.png"
-  compose "$px" "$px" "<circle cx=\"$(echo "$px / 2" | bc -l)\" cy=\"$(echo "$px / 2" | bc -l)\" r=\"$(echo "$px * 0.46" | bc -l)\" fill=\"$CHERRY\"/>" \
-    "$LACE" "$mark" "$RES/$folder/ic_launcher_round.png"
-}
-gen_legacy mipmap-mdpi 48
-gen_legacy mipmap-hdpi 72
-gen_legacy mipmap-xhdpi 96
-gen_legacy mipmap-xxhdpi 144
-gen_legacy mipmap-xxxhdpi 192
-
-# Splash drawables the plugin falls back to: Old Lace with the 96dp mark, at each density.
+# The splash drawables the plugin falls back to before Android 12: the same flat navy.
 gen_splash() {
-  local folder=$1 w=$2 h=$3 density=$4
-  compose "$w" "$h" "$(fill "$LACE")" "$CHERRY" "$(echo "$SPLASH_MARK * $density" | bc -l)" "$RES/$folder/splash.png"
+  local folder=$1 w=$2 h=$3
+  mkdir -p "$RES/$folder"
+  cat > "$TMP/splash.svg" <<EOF
+<svg xmlns="http://www.w3.org/2000/svg" width="$w" height="$h"><rect width="100%" height="100%" fill="$INK"/></svg>
+EOF
+  rsvg-convert -w "$w" -h "$h" "$TMP/splash.svg" -o "$RES/$folder/splash.png"
 }
 gen_splash drawable 480 320 1
 for orient in port land; do
@@ -184,4 +89,4 @@ for orient in port land; do
   done
 done
 
-echo "Done: iOS AppIcon + SplashMark, Android adaptive/legacy icons + splash updated."
+echo "Done: iOS AppIcon, Android launcher icons, and flat navy splash drawables updated."
