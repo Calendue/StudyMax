@@ -14,7 +14,7 @@
 .prism__root {
   position: absolute;
   inset: 0;
-  background: var(--ink);
+  background: var(--bg);
 }
 
 .prism__field {
@@ -70,9 +70,9 @@
   opacity: 0;
 }
 
-/* Lit: the Old Lace S, revealed by the bloom's mask (opaque core to 60%, soft rim to the edge). */
+/* Lit: the Cherry Rose S, revealed by the bloom's mask (opaque core to 60%, soft rim to the edge). */
 .prism__lit {
-  color: var(--old-lace);
+  color: var(--accent);
   opacity: 0;
   -webkit-mask-image: radial-gradient(circle closest-side, #000 0%, #000 60%, transparent 100%);
   mask-image: radial-gradient(circle closest-side, #000 0%, #000 60%, transparent 100%);

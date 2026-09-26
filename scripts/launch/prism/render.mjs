@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // Renders prism.frag.glsl to public/splash/prism-splash.mp4.
 //
-// Copied from CalenDue's launch splash as it is. The only changes are the three preset colours
-// (StudyMax's jet navy, Cherry Rose and Old Lace in place of #050505, #A78BFA and #FFFFFF) and
-// where the files are written.
+// Copied from CalenDue's launch splash as it is. The changes: the three preset colours (StudyMax's
+// Old Lace ground, Cherry Rose and jet navy in place of #050505, #A78BFA and #FFFFFF, keeping the
+// same ramp from the ground to the peaks), where the files are written, and 24 more frames of the
+// shader past the light's peak, so the light is still moving while the splash dissolves into the app.
 //
 // The shader runs in headless Chrome's WebGL2 — the same API the reference
 // component uses — one frame at a time, at the preset's own settings. Frames
@@ -29,17 +30,17 @@ const WIDTH = 804;
 const HEIGHT = 1748;
 const PIXEL_RATIO = 2;
 const FPS = 30;
-/** Frames of animation, ending on the light's peak. */
-const FRAMES = 97;
+/** Frames of animation: to the light's peak (97), then on while the splash dissolves (24). */
+const FRAMES = 121;
 /** Frames holding that peak, so a slow launch never sees the light recede. */
 const HOLD = 45;
 /** Frames per browser launch. Height x this must stay under Chrome's limits. */
 const CHUNK = 8;
 
 const PRESET = {
-  color1: '#12262B',
+  color1: '#FFF8EB',
   color2: '#982649',
-  color3: '#FFF8EB',
+  color3: '#12262B',
   rotation: -50,
   proportion: 1,
   scale: 0.01,

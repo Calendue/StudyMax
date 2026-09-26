@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, animate, motion, useMotionValue, useTransform } from 'motion/react'
-import { StatusBar, Style } from '@capacitor/status-bar'
 import { Mark } from '../ui/Brand.tsx'
 import { prefersReducedMotion } from '../ui/motion.ts'
 import { hideSplash, isNative } from '../platform.ts'
@@ -8,19 +7,23 @@ import { hideSplash, isNative } from '../platform.ts'
 // The launch splash, ported from CalenDue's (mobile/components/splash/PrismStage.tsx and
 // PrismVideo.tsx) as it is: the same Prism shader, played back from a video rendered at the same
 // preset (scripts/launch/prism), the same beat, and the mark igniting in the middle of it the same
-// way. Only the colours are StudyMax's: jet navy, Cherry Rose and Old Lace in the shader, the
-// Old Lace S as the mark, and the halo and silhouette tints taken from the same palette.
+// way. Only the colours are StudyMax's: an Old Lace ground, Cherry Rose and jet navy in the shader,
+// the Cherry Rose S as the mark, and the halo and silhouette tints taken from the same palette.
+//
+// One addition, the hand-over: at the light's peak the app's first screen mounts underneath and
+// the splash crossfades into it while the light keeps moving (the video runs on past the peak), so
+// the animation never stops dead before the app appears.
 //
 // The beat, on the shader's own clock:
 //
-//   0.00 s  flat jet navy across every pixel. Identical to the native launch screen, which is what
+//   0.00 s  flat Old Lace across every pixel. Identical to the native launch screen, which is what
 //           makes the hand-off invisible.
 //   0.85 s  the first blade of light enters from the top-right.
 //   1.50 s  IGNITION: the mark appears as an unlit silhouette, the shape present but not yet alive.
 //   1.65 s  the colour blooms outward from the centre of the mark and fills it, with a soft halo
 //           that swells and settles.
 //   2.45 s  filled.
-//   3.20 s  the light is at its peak. The splash reports itself finished and dissolves.
+//   3.20 s  the light is at its peak. The app mounts underneath and the splash crossfades into it.
 //
 // Under reduced motion none of this runs: the peak frame is held still and the finished mark
 // dissolves in over it. The web has no native launch to hand over from, so it starts on the page.
@@ -38,37 +41,38 @@ const PRISM = {
 
 /** Points. The mark is padded inside its own square, so this is generous. */
 const MARK_SIZE = 168
-/** CalenDue's EASE and its 200ms dissolve (motion.base). */
+/** CalenDue's EASE. */
 const EASE = [0.22, 1, 0.36, 1] as const
-const DISSOLVE_S = 0.2
+/** The crossfade into the app: long enough to read as one move, with the light still travelling. */
+const DISSOLVE_S = 0.7
+const DISSOLVE_EASE = [0.45, 0, 0.55, 1] as const
 
-function statusBarOverGround(on: boolean) {
-  // Light icons over the navy ground; back to dark icons over the Old Lace app.
-  void StatusBar.setStyle({ style: on ? Style.Dark : Style.Light }).catch(() => {})
-}
-
-export function Intro() {
+/** `onReveal` fires as the splash starts to dissolve: the moment to mount the app beneath it. */
+export function Intro({ onReveal }: { onReveal: () => void }) {
   const [shown, setShown] = useState(isNative)
+  const reveal = () => {
+    onReveal()
+    setShown(false)
+  }
 
   useEffect(() => {
     // Release the native launch screen once this component's first frame is on screen.
     let frame = requestAnimationFrame(() => {
       frame = requestAnimationFrame(() => hideSplash())
     })
-    if (isNative) statusBarOverGround(true)
     return () => cancelAnimationFrame(frame)
   }, [])
 
   return (
-    <AnimatePresence onExitComplete={() => statusBarOverGround(false)}>
+    <AnimatePresence>
       {shown && (
         <motion.div
           key="intro"
           className="prism"
           aria-hidden
-          exit={{ opacity: 0, transition: { duration: DISSOLVE_S, ease: EASE } }}
+          exit={{ opacity: 0, transition: { duration: DISSOLVE_S, ease: DISSOLVE_EASE } }}
         >
-          <PrismStage onAnimationDone={() => setShown(false)} />
+          <PrismStage onAnimationDone={reveal} />
         </motion.div>
       )}
     </AnimatePresence>
@@ -78,11 +82,15 @@ export function Intro() {
 function PrismStage({ onAnimationDone }: { onAnimationDone: () => void }) {
   const reduceMotion = prefersReducedMotion()
   const reported = useRef(false)
+  // Held in a ref: the parent re-renders while the app starts (account, feature flags), and a new
+  // callback identity must never restart the ignition or re-seek the video.
+  const done = useRef(onAnimationDone)
+  done.current = onAnimationDone
   const reachedStop = useCallback(() => {
     if (reported.current) return
     reported.current = true
-    onAnimationDone()
-  }, [onAnimationDone])
+    done.current()
+  }, [])
 
   // The animation always starts past its flat opening: those frames are the single colour the
   // native launch screen has been showing since the icon was tapped.

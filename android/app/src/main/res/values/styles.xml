@@ -15,16 +15,15 @@
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:background">@null</item>
-        <item name="android:windowBackground">@color/studymax_ink</item>
+        <item name="android:windowBackground">@color/studymax_old_lace</item>
         <item name="android:forceDarkAllowed" tools:targetApi="q">false</item>
     </style>
 
-    <!-- Launch: flat jet navy (drawable/splash_icon is transparent), the in-app intro's first frame,
-         with light status-bar icons over it; then straight into the app theme. -->
+    <!-- Launch: flat Old Lace (drawable/splash_icon is transparent), the in-app splash's first
+         frame; then straight into the app theme. -->
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="android:background">@drawable/splash</item>
-        <item name="windowSplashScreenBackground">@color/studymax_ink</item>
-        <item name="android:windowLightStatusBar">false</item>
+        <item name="windowSplashScreenBackground">@color/studymax_old_lace</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/splash_icon</item>
         <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
         <item name="android:forceDarkAllowed" tools:targetApi="q">false</item>
