@@ -6,16 +6,16 @@ This is an active hackathon submission, not a normal side project. **The clock i
 
 Upload a transcript → StudyMax tells you what credential (specialization/certificate/minor) you're closest to finishing, the one course that advances the most of it, a term-by-term plan, and it calls your phone about the scholarship deadline closing soonest. Fully working end-to-end only for **Computer Science at University of Saskatchewan** right now; other programs are partially mapped or unmapped.
 
-Matching/planning are deterministic (`src/lib/match.ts`, `src/lib/plan.ts`, `src/lib/credentials.ts`); Claude only handles the parts that need real reasoning (transcript parsing, scholarship "why this fits you" copy, guidance for unmapped schools).
+Matching/planning are deterministic (`src/lib/match.ts`, `src/lib/plan.ts`, `src/lib/credentials.ts`); an OpenAI model (`gpt-5.6`, called only from `api/_openai.ts`) handles just the parts that need real reasoning (transcript parsing, scholarship "why this fits you" copy, guidance for unmapped schools).
 
 ## Current features (what's actually built and demoable today)
 
-- Transcript upload (PDF — DegreeWorks audit or unofficial transcript), parsed by Claude into completed vs. in-progress courses.
+- Transcript upload (PDF — DegreeWorks audit or unofficial transcript), parsed by the model into completed vs. in-progress courses.
 - Manual course entry: search across the full catalogue by code or title, or browse the Arts & Science course list and tick courses by hand.
 - Credential matching: what specialization/certificate/minor you're closest to finishing, and the single highest-overlap course you haven't taken yet.
 - Term-by-term plan generator, with prerequisite chains expanded automatically (including prereqs the specialization page itself never lists).
 - Certificates/minors detector — surfaces credentials a student is partway through without knowing it.
-- Scholarships/awards ranked by deadline, with Claude-generated "why this fits you" copy.
+- Scholarships/awards ranked by deadline, with AI-generated "why this fits you" copy.
 - Outbound phone call (via Bland) about the award closing soonest — one-way, says its piece, hangs up.
 - "Load a sample student" — a bulletproof canned path for demoing without a real transcript.
 - Full end-to-end support for Computer Science at University of Saskatchewan; partial data (plan-only, no credential detection) for Applied Mathematics, Physics, and Applied Computing; every other Arts & Science subject reaches only the scholarship side.
@@ -67,7 +67,7 @@ Ranked by what actually swings judges, in order of what to protect first:
 
 ## Mobile build
 
-The same Vite app ships as iOS and Android apps through Capacitor 8 (`capacitor.config.ts`, `ios/`, `android/`; app id `ai.calendue.studymax`). Native Apple and Google sign-in go through `@capacitor-firebase/authentication` against Firebase project `studymax-3a090`; the web uses the Firebase JS SDK only when the four `VITE_FIREBASE_*` vars are set, otherwise it starts as a guest. The native apps call the API at `https://study-max-theta.vercel.app` (`src/platform.ts`). Features that need `ANTHROPIC_API_KEY` or `BLAND_API_KEY` are gated by `/api/features` (`src/features.ts`), so they stay hidden until those keys are in Vercel.
+The same Vite app ships as iOS and Android apps through Capacitor 8 (`capacitor.config.ts`, `ios/`, `android/`; app id `ai.calendue.studymax`). Native Apple and Google sign-in go through `@capacitor-firebase/authentication` against Firebase project `studymax-3a090`; the web uses the Firebase JS SDK only when the four `VITE_FIREBASE_*` vars are set, otherwise it starts as a guest. The native apps call the API at `https://study-max-theta.vercel.app` (`src/platform.ts`). Features that need `OPENAI_API_KEY` or `BLAND_API_KEY` are gated by `/api/features` (`src/features.ts`), so they stay hidden until those keys are in Vercel.
 
 - `npm run build` then `npx cap sync` copies `dist/` into both native projects; open `ios/App/App.xcodeproj` or `android/` to run on a simulator/emulator.
 - `npm run build:ios` builds the signed ad hoc IPA into `release/`; `npm run build:android` builds the signed APK. `npm run cap:assets` regenerates icons and splash.

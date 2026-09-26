@@ -32,7 +32,7 @@ const COVERAGE_LABEL: Record<CoverageRow['status'], string> = {
 const STEPS = [
   {
     title: 'Upload your transcript',
-    body: 'A DegreeWorks audit or an unofficial transcript, as a PDF. Claude reads every course in every subject and separates what you’ve finished from what you’re taking now.',
+    body: 'A DegreeWorks audit or an unofficial transcript, as a PDF. StudyMax reads every course in every subject and separates what you’ve finished from what you’re taking now.',
   },
   {
     title: 'See what you’re closest to',
@@ -59,7 +59,7 @@ const FEATURES: Feature[] = [
   { tag: 'match', title: 'Credential matching', body: 'The specialization, certificate, or minor you’re closest to finishing, ranked by how little is left.' },
   { tag: 'plan', title: 'Term-by-term plan', body: 'A real sequence, prerequisites expanded, not just a checklist of remaining requirements.' },
   { tag: 'detect', title: 'Certificates & minors detector', body: 'Surfaces credentials a student is already partway through without knowing it.' },
-  { tag: 'fund', title: 'Scholarships by deadline', body: 'Every award ranked by how soon it closes, with Claude-written copy on why it fits you specifically.' },
+  { tag: 'fund', title: 'Scholarships by deadline', body: 'Every award ranked by how soon it closes, with AI-written copy on why it fits you specifically.' },
   { tag: 'call', title: 'The phone call', body: 'One outbound call about the award closing soonest. It says its piece and hangs up — on purpose, see below.' },
   { tag: 'demo', title: 'Sample data, no transcript needed', body: '“Load sample student data” runs the entire reveal on a canned USask CS record — our own demo safety net.' },
 ]
@@ -76,7 +76,7 @@ const JUDGE_QA: QA[] = [
   },
   {
     q: 'Is the matching itself AI, or is it hardcoded?',
-    a: 'It’s deterministic. src/lib/match.ts and src/lib/plan.ts read the requirement data and produce the same answer every time — the part you would not want a model guessing at. Claude is used only where reasoning is genuinely needed: reading a messy transcript PDF, and writing the “why this fits you” scholarship copy.',
+    a: 'It’s deterministic. src/lib/match.ts and src/lib/plan.ts read the requirement data and produce the same answer every time — the part you would not want a model guessing at. The model is used only where reasoning is genuinely needed: reading a messy transcript PDF, and writing the “why this fits you” scholarship copy.',
   },
   {
     q: 'What if a live transcript upload goes wrong mid-demo?',
@@ -204,7 +204,7 @@ export function LandingPage({ onGetStarted, onSkip }: LandingPageProps) {
         </div>
         <div className="landing__footer-meta">
           <p className="landing__team">Built by Ayo Ogunade, Sam Lafiaji, Tobi Salam, and Ibraheem Arif.</p>
-          <p className="landing__stack">React, TypeScript, Vite, deployed on Vercel. The Claude API for transcript reading and scholarship reasoning. Bland for the call.</p>
+          <p className="landing__stack">React, TypeScript, Vite, deployed on Vercel. The OpenAI API for transcript reading and scholarship reasoning. Bland for the call.</p>
         </div>
       </footer>
     </div>

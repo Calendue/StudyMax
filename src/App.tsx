@@ -613,7 +613,7 @@ function useStudyMax() {
     if (matched) {
       const token = ++lookupToken.current
       const hasResources = matched.resources.length > 0
-      // Without the Anthropic key there are no "why you" notes to wait for: each award shows its own
+      // Without the OpenAI key there are no "why you" notes to wait for: each award shows its own
       // description instead.
       const wantWhy = hasResources && features.ai
       setLookup({ kind: 'verified', school: matched, whyYou: {}, loadingWhy: wantWhy })
@@ -626,7 +626,7 @@ function useStudyMax() {
         topOverlapCourse: topOverlap?.course,
         otherCloseSpecializations,
       }
-      // The route asks Claude for every line in one reply under a fixed token budget, and twenty
+      // The route asks the model for every line in one reply under a fixed token budget, and twenty
       // awards overflow it (the reply is cut off and parses to nothing). Small batches, sent
       // together in deadline order, each fit, and each award's line arrives as its batch lands.
       const ranked = rankByUrgency(matched.resources, today)
@@ -965,7 +965,7 @@ function useStudyMax() {
   }
 
   // The awards list is looked up for mapped schools as soon as results open, so it's ready (and
-  // Claude's "why you" notes are on their way) by the time the student gets to that tab.
+  // the "why you" notes are on their way) by the time the student gets to that tab.
   // It goes through a ref because findResources is a new function every render.
   const loadAwards = useRef(() => {})
   loadAwards.current = () => void findResources('University of Saskatchewan', selectedProgram?.name ?? '')

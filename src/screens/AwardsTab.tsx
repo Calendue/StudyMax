@@ -76,7 +76,7 @@ export function AwardsTab() {
   )
 }
 
-/** Claude's note on why this award fits this student: a skeleton while it's written, then read in. */
+/** The AI's note on why this award fits this student: a skeleton while it's written, then read in. */
 function WhyYou({ loading, text, fallback }: { loading: boolean; text?: string; fallback: string }) {
   if (loading) {
     return (
@@ -98,8 +98,8 @@ function WhyYou({ loading, text, fallback }: { loading: boolean; text?: string; 
 function Guidance() {
   const m = useModel()
   const lookup = m.lookup?.kind === 'guidance' ? m.lookup : null
-  // Direction for unmapped schools comes from Claude. The university step hides this path without the
-  // Anthropic key, but a session saved before that still lands here, so say so instead of a dead form.
+  // Direction for unmapped schools is AI-written. The university step hides this path without the
+  // OpenAI key, but a session saved before that still lands here, so say so instead of a dead form.
   if (!m.features.ai) {
     return (
       <ScreenTitle lead="StudyMax has verified award lists for the schools it has mapped. Direction for other schools is switched off for now.">
@@ -109,7 +109,7 @@ function Guidance() {
   }
   return (
     <>
-      <ScreenTitle lead="StudyMax has verified award lists for the schools it has mapped. For anywhere else, Claude points you to the kinds of awards to look for, and where.">
+      <ScreenTitle lead="StudyMax has verified award lists for the schools it has mapped. For anywhere else, StudyMax points you to the kinds of awards to look for, and where.">
         Scholarships
       </ScreenTitle>
       <form
@@ -162,7 +162,7 @@ function Guidance() {
       {lookup?.result && (
         <Appear className="guidance">
           <p className="footnote">
-            {lookup.schoolName} isn&rsquo;t in our verified list yet, so this is direction from Claude, not specific named
+            {lookup.schoolName} isn&rsquo;t in our verified list yet, so this is AI-written direction, not specific named
             awards.
           </p>
           <SectionLabel>Kinds of awards to look for</SectionLabel>

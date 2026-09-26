@@ -3,7 +3,7 @@ import { api } from './platform.ts'
 // Features that need a server key. api/features.ts reports which keys the deployment has; anything
 // it can't run is left out of the app rather than failing when the student reaches it.
 export interface Features {
-  /** Transcript reading, "why you" notes, and guidance for schools we haven't mapped (Anthropic). */
+  /** Transcript reading, "why you" notes, and guidance for schools we haven't mapped (OpenAI). */
   ai: boolean
   /** The phone call about the award closing soonest (Bland). */
   call: boolean

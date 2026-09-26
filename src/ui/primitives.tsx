@@ -234,7 +234,7 @@ export function Chip({ children, tone = 'quiet', icon }: { children: ReactNode; 
   )
 }
 
-/** Placeholder lines in the surface tones while Claude writes. */
+/** Placeholder lines in the surface tones while the AI writes. */
 export function Skeleton({ lines = 2 }: { lines?: number }) {
   return (
     <span className="skeleton" aria-hidden>
@@ -246,7 +246,7 @@ export function Skeleton({ lines = 2 }: { lines?: number }) {
 }
 
 /**
- * Claude-written text reveals at a reading cadence, snapped to word boundaries, instead of popping
+ * AI-written text reveals at a reading cadence, snapped to word boundaries, instead of popping
  * in as a block. The unrevealed rest is already laid out (transparent), so the paragraph has its
  * final height from the first frame and nothing below it moves.
  */

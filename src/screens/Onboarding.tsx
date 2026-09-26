@@ -113,7 +113,7 @@ export function UniversityScreen() {
           trailing={m.universityId === 'usask' ? check : null}
           onClick={() => m.handleUniversityChange('usask')}
         />
-        {/* Everything on the other-school path is Claude's guidance, so it needs the Anthropic key. */}
+        {/* Everything on the other-school path is AI guidance, so it needs the OpenAI key. */}
         {m.features.ai && (
           <Row
             index={2}

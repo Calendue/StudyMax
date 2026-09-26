@@ -6,7 +6,7 @@ import { Mark } from '../ui/Brand.tsx'
 import { Appear, Button } from '../ui/primitives.tsx'
 import { StatusLines, type StatusLine } from './StatusLines.tsx'
 
-// The full-screen wait while Claude reads the transcript (10 to 30 seconds). Every line says what is
+// The full-screen wait while the model reads the transcript (10 to 30 seconds). Every line says what is
 // actually happening at that moment: no timed fake steps, no percentages.
 export function ReadingScreen() {
   const m = useModel()
@@ -21,7 +21,7 @@ export function ReadingScreen() {
   const lines: StatusLine[] = [
     { text: 'Preparing your PDF', state: m.readPhase === 'preparing' ? 'active' : 'done' },
     {
-      text: 'Claude is reading every course, and sorting finished ones from ones in progress',
+      text: 'Reading every course, and sorting finished ones from ones in progress',
       state: m.readPhase === 'reading' ? 'active' : found ? 'done' : 'pending',
     },
   ]

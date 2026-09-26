@@ -13,7 +13,7 @@ export default function handler(_req: unknown, res: VercelResponse) {
   res.setHeader('Cache-Control', 'no-store')
   res.status(200).json({
     // transcript reading, "why you" notes, guidance for schools we haven't mapped
-    ai: Boolean(process.env.ANTHROPIC_API_KEY),
+    ai: Boolean(process.env.OPENAI_API_KEY),
     // the phone call about the award closing soonest
     call: Boolean(process.env.BLAND_API_KEY),
   })

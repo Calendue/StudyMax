@@ -36,7 +36,7 @@ export function CoursesScreen() {
           Add your courses
         </ScreenTitle>
 
-        {/* Reading a transcript needs the Anthropic key; without it the card isn't offered at all. */}
+        {/* Reading a transcript needs the OpenAI key; without it the card isn't offered at all. */}
         {m.features.ai && (
           <Appear index={0}>
             <label className="upload">
@@ -55,7 +55,7 @@ export function CoursesScreen() {
               </span>
               <span className="upload__text">
                 <span className="upload__title">Upload your transcript</span>
-                <span className="upload__hint">A DegreeWorks audit or unofficial transcript, as a PDF. Claude reads every course on it.</span>
+                <span className="upload__hint">A DegreeWorks audit or unofficial transcript, as a PDF. StudyMax reads every course on it.</span>
               </span>
             </label>
           </Appear>

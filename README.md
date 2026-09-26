@@ -19,7 +19,7 @@ Applied Mathematics, Physics and Applied Computing are mapped too and will produ
 ## Try it
 
 1. Open the site and answer the onboarding questions: existing student, University of Saskatchewan, your degree, Computer Science, an optional minor, and any specializations you are aiming for. First-years skip straight to their plan.
-2. Upload a DegreeWorks audit or unofficial transcript as a PDF. Claude reads every course in every subject and separates what you finished from what you are taking now.
+2. Upload a DegreeWorks audit or unofficial transcript as a PDF. StudyMax reads every course in every subject and separates what you finished from what you are taking now.
 3. No transcript handy? Use **Load a sample student**, or search the catalogue and tick off courses by hand.
 4. Press **Reveal what my school hides**.
 
@@ -43,7 +43,7 @@ vercel dev
 
 | Variable | Used by | Required |
 | --- | --- | --- |
-| `ANTHROPIC_API_KEY` | transcript parsing, why this award fits you, guidance for unmapped schools | yes, for those routes |
+| `OPENAI_API_KEY` | transcript parsing, why this award fits you, guidance for unmapped schools | yes, for those routes |
 | `BLAND_API_KEY` | the outbound phone call | yes, for the call |
 | `BLAND_VOICE` | voice preset, defaults to `maya` | no |
 | `BLAND_FROM_NUMBER` | pins caller ID to one owned Bland number instead of their shared pool | no |
@@ -59,7 +59,7 @@ Google/Apple sign-in on the web needs the Firebase project (`studymax-3a090`) wi
 
 Without them the web build has no sign-in: it skips the welcome screen and starts onboarding as a guest. The iOS and Android apps always offer Apple and Google sign-in natively, from the Firebase config files described in `CLAUDE.md`. Everything works without an account either way.
 
-A missing key switches its features off rather than letting them fail. At startup the app asks `/api/features`, which reports only whether each key is set. Without `ANTHROPIC_API_KEY`, the transcript upload, the "why you" notes and the "Another university" path are hidden, and awards show their own descriptions. Without `BLAND_API_KEY`, the call button is hidden. Adding a key in Vercel turns its features back on for the site and the installed apps, with no rebuild. Under plain `npm run dev` there is no `/api`, so both are off.
+A missing key switches its features off rather than letting them fail. At startup the app asks `/api/features`, which reports only whether each key is set. Without `OPENAI_API_KEY`, the transcript upload, the "why you" notes and the "Another university" path are hidden, and awards show their own descriptions. Without `BLAND_API_KEY`, the call button is hidden. Adding a key in Vercel turns its features back on for the site and the installed apps, with no rebuild. Under plain `npm run dev` there is no `/api`, so both are off.
 
 ## Checks
 
@@ -84,7 +84,7 @@ api/                  serverless routes: transcript, why-you, guidance, call, an
 scripts/scrape-*.ts   catalogue scrapers that regenerate the data files
 ```
 
-Matching and planning are deterministic. They read requirement data and produce the same answer every time, which is the part you would not want a model guessing at. Claude handles the parts that genuinely need reasoning.
+Matching and planning are deterministic. They read requirement data and produce the same answer every time, which is the part you would not want a model guessing at. The OpenAI model handles the parts that genuinely need reasoning.
 
 ## Known limits
 
@@ -95,4 +95,4 @@ Matching and planning are deterministic. They read requirement data and produce 
 
 ## Built with
 
-React, TypeScript, Vite, deployed on Vercel. The Claude API for transcript reading and scholarship reasoning. Bland for the phone call.
+React, TypeScript, Vite, deployed on Vercel. The OpenAI API (`gpt-5.6`, Responses API) for transcript reading and scholarship reasoning. Bland for the phone call.
