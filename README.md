@@ -14,7 +14,7 @@ Live at [www.studymax.study](https://www.studymax.study/), with iOS and Android 
 - 4 certificates and 1 minor that a CS student is usually partway through without knowing
 - Prerequisite chains scraped from the catalogue for the ~240 courses the planner reasons about
 
-Applied Mathematics, Physics and Applied Computing are mapped too and will produce a plan. Every other Arts and Science subject is pickable, but without requirement data those students only reach the scholarship side of the app. Adding a program is a data task, not an engineering one: write one file in `src/data/programs/`, register it in `index.ts`, and the matcher, planner and credential detector pick it up.
+Applied Mathematics, Physics and Applied Computing are mapped too and will produce a plan, as do Biology, Psychology, Engineering, Nursing, Agriculture, Commerce, Kinesiology and Education (their degree requirements, not specializations). Every other Arts and Science subject is pickable, but without requirement data those students only reach the scholarship side of the app. Adding a program is a data task, not an engineering one: write one file in `src/data/programs/`, register it in `index.ts`, and the matcher, planner and credential detector pick it up.
 
 ## Try it
 

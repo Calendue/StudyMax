@@ -19,7 +19,7 @@ Matching/planning are deterministic (`src/lib/match.ts`, `src/lib/plan.ts`, `src
 - Classes tab (USask only): look up a course's sections and watch live seat counts from USask's own class search (`api/classes.ts`, `api/_banner.ts`), with a badge when a watched seat opens.
 - Outbound phone call (via Bland) about the award closing soonest — one-way, says its piece, hangs up.
 - "Load a sample student" — a bulletproof canned path for demoing without a real transcript.
-- Full end-to-end support for Computer Science at University of Saskatchewan; partial data (plan-only, no credential detection) for Applied Mathematics, Physics, and Applied Computing; every other Arts & Science subject reaches only the scholarship side.
+- Full end-to-end support for Computer Science at University of Saskatchewan; partial data (plan-only, no credential detection) for Applied Mathematics, Physics, and Applied Computing, and degree-requirement plans for Biology, Psychology, Engineering, Nursing, Agriculture, Commerce, Kinesiology and Education; every other Arts & Science subject reaches only the scholarship side.
 
 ## Scaling ideas toward a winning product
 
