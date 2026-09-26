@@ -5,7 +5,7 @@
 //   route gets the status code and a safe error code, and passes on nothing else.
 
 const RESPONSES_URL = 'https://api.openai.com/v1/responses'
-export const OPENAI_MODEL = 'gpt-5.6'
+export const OPENAI_MODEL = 'gpt-5-mini'
 
 export type InputContent =
   | { type: 'input_text'; text: string }

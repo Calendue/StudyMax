@@ -95,4 +95,4 @@ Matching and planning are deterministic. They read requirement data and produce 
 
 ## Built with
 
-React, TypeScript, Vite, deployed on Vercel. The OpenAI API (`gpt-5.6`, Responses API) for transcript reading and scholarship reasoning. Bland for the phone call.
+React, TypeScript, Vite, deployed on Vercel. The OpenAI API (`gpt-5-mini`, Responses API) for transcript reading and scholarship reasoning. Bland for the phone call.
