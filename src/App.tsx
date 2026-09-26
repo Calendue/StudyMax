@@ -96,11 +96,20 @@ class UploadError extends Error {}
 // the choice survives a refresh the same way a real program id does.
 const SUBJECT_PROGRAM_PREFIX = 'subject:'
 
+// Shorthand for programs whose name doesn't match an Arts & Science subject's name.
+const PROGRAM_CODES: Record<string, string[]> = {
+  'computer-science': ['CS', 'COMPSCI'],
+  'applied-computing': ['CMPT'],
+  'applied-mathematics': ['MATH'],
+}
+
 export interface ProgramOption {
   id: string
   name: string
-  /** Present only for programs derived from an Arts & Science subject. */
+  /** The Arts & Science subject code whose name matches this program's ("CMPT" for Computer Science). */
   subjectCode?: string
+  /** Other shorthand a student might search by. */
+  aliases: string[]
   /** Whether StudyMax has requirement data, i.e. whether it can build a plan or only find money. */
   hasData: boolean
 }
@@ -193,7 +202,16 @@ function useStudyMax() {
   const programOptions = useMemo<ProgramOption[]>(() => {
     const fromSchool = availablePrograms
       .filter((p) => p.kind !== 'certificate' && p.kind !== 'minor')
-      .map((p) => ({ id: p.id, name: p.name, hasData: p.specializations.length > 0 }))
+      .map((p) => {
+        const subject = artsAndScienceSubjects.find((s) => s.name.toLowerCase() === p.name.toLowerCase())
+        return {
+          id: p.id,
+          name: p.name,
+          subjectCode: subject?.code,
+          aliases: PROGRAM_CODES[p.id] ?? [],
+          hasData: p.specializations.length > 0,
+        }
+      })
     const named = new Set(availablePrograms.map((p) => p.name.toLowerCase()))
     const fromSubjects = artsAndScienceSubjects
       .filter((subject) => !named.has(subject.name.toLowerCase()))
@@ -201,6 +219,7 @@ function useStudyMax() {
         id: `${SUBJECT_PROGRAM_PREFIX}${subject.code}`,
         name: subject.name,
         subjectCode: subject.code,
+        aliases: [],
         hasData: false,
       }))
     return [...fromSchool, ...fromSubjects]
@@ -208,21 +227,24 @@ function useStudyMax() {
 
   const [programPickQuery, setProgramPickQuery] = useState('')
 
-  // Name match first, then subject code ("PSY"), so both ways of thinking about a program work.
-  // Programs StudyMax can actually plan sort above the rest of the college.
+  // An exact subject code ("CMPT") first, then name or shorthand prefix, then name anywhere, so both
+  // ways of thinking about a program work. Programs StudyMax can plan sort above the rest.
   const programResults = useMemo(() => {
     const query = programPickQuery.trim().toLowerCase()
     return programOptions
       .map((option) => {
         const name = option.name.toLowerCase()
+        const codes = [option.subjectCode, ...option.aliases].filter((c): c is string => !!c).map((c) => c.toLowerCase())
         const score =
           query.length === 0
             ? 1
-            : name.startsWith(query) || option.subjectCode?.toLowerCase().startsWith(query)
-              ? 3
-              : name.includes(query)
-                ? 2
-                : 0
+            : option.subjectCode?.toLowerCase() === query
+              ? 4
+              : name.startsWith(query) || codes.some((code) => code.startsWith(query))
+                ? 3
+                : name.includes(query)
+                  ? 2
+                  : 0
         return { option, score }
       })
       .filter((hit) => hit.score > 0)
@@ -363,7 +385,11 @@ function useStudyMax() {
   }
 
   function handleUniversityChange(id: UniversityChoice) {
-    if (id === universityId) return
+    if (id === universityId) {
+      haptic.selection()
+      requestAdvance()
+      return
+    }
     setUniversityId(id)
     setProgramId('')
     setCompleted(new Set())
@@ -378,7 +404,10 @@ function useStudyMax() {
   function handleProgramChange(id: string) {
     setSheet(null)
     haptic.selection()
-    if (id === programId) return
+    if (id === programId) {
+      requestAdvance()
+      return
+    }
     setProgramId(id)
     setCompleted(new Set())
     setUploadInProgress([])
