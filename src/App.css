@@ -2,93 +2,86 @@
 
 /* ─────────────────────────────────────────────────────────── intro */
 
-/* The launch, after CalenDue's prism: jet navy ground (the native launch screen's flat colour), sheets
-   of light on the diagonal, and the Old Lace S igniting at the centre of the full screen. */
-.intro {
+/* The launch splash, ported from CalenDue's PrismStage with StudyMax's colours (see Intro.tsx). */
+.prism {
   position: fixed;
   inset: 0;
   z-index: 100;
-  display: grid;
-  place-items: center;
-  overflow: hidden;
+}
+
+/* Painted under the video, and the same colour as its first frame and the native launch screen,
+   so the moment before the decoder produces anything is not a flash. */
+.prism__root {
+  position: absolute;
+  inset: 0;
   background: var(--ink);
 }
 
-.intro__canvas {
+.prism__field {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
+  object-fit: cover;
+  pointer-events: none;
 }
 
-.intro__icon {
-  position: relative;
-  width: 176px;
-  height: 176px;
-}
-
-.intro__icon svg {
+.prism__centre {
   position: absolute;
   inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.prism__box {
+  position: relative;
+}
+
+/* Light spilling off the mark as it lights: a radial falloff, not a disc. CalenDue's pale blue and
+   reference blue, as Rosy Taupe and Cherry Rose. */
+.prism__halo {
+  position: absolute;
+  left: -50%;
+  top: -50%;
+  width: 200%;
+  height: 200%;
+  opacity: 0;
+  background: radial-gradient(
+    closest-side,
+    rgb(195 141 148 / 0.9) 0%,
+    rgb(152 38 73 / 0.35) 45%,
+    rgb(152 38 73 / 0) 100%
+  );
+}
+
+.prism__layer {
+  position: absolute;
+  inset: 0;
+}
+
+.prism__layer svg {
   display: block;
 }
 
-/* Ignition. The shape arrives first, unlit... */
-.intro__silhouette {
+/* Unlit: the pale tint of the palette. */
+.prism__silhouette {
   color: var(--taupe);
   opacity: 0;
-  transform: scale(1.05);
-  animation: ignite 0.4s var(--settle) 0.5s forwards;
 }
 
-@keyframes ignite {
-  to {
-    opacity: 0.4;
-    transform: scale(1);
-  }
-}
-
-/* ...then Old Lace blooms outward from its centre and fills it. */
-.intro__mark {
+/* Lit: the Old Lace S, revealed by the bloom's mask (opaque core to 60%, soft rim to the edge). */
+.prism__lit {
   color: var(--old-lace);
-  clip-path: circle(0% at 52% 52%);
-  animation: bloom 0.85s cubic-bezier(0.22, 1, 0.36, 1) 0.72s forwards;
-}
-
-@keyframes bloom {
-  to {
-    clip-path: circle(75% at 52% 52%);
-  }
-}
-
-/* A soft halo swells behind the S as it lights, and settles to a glow. */
-.intro__halo {
-  position: absolute;
-  inset: -55%;
-  border-radius: 50%;
-  background: radial-gradient(
-    closest-side,
-    rgb(255 248 235 / 0.4),
-    rgb(221 128 150 / 0.22) 45%,
-    transparent
-  );
   opacity: 0;
-  transform: scale(0.35);
-  animation: halo 1.3s var(--settle) 0.72s forwards;
-}
-
-@keyframes halo {
-  0% {
-    opacity: 0;
-    transform: scale(0.35);
-  }
-  35% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0.6;
-    transform: scale(1.1);
-  }
+  -webkit-mask-image: radial-gradient(circle closest-side, #000 0%, #000 60%, transparent 100%);
+  mask-image: radial-gradient(circle closest-side, #000 0%, #000 60%, transparent 100%);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: 0% 0%;
+  mask-size: 0% 0%;
 }
 
 /* ─────────────────────────────────────────────────────────── onboarding */
