@@ -78,6 +78,13 @@ const PATHS = {
       <path d="M4.5 4.5v3.8h3.8" />
     </>
   ),
+  seat: (
+    <>
+      <path d="M7 11V6.5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2V11" />
+      <path d="M5 11h14v4H5z" />
+      <path d="M7 15v4.5M17 15v4.5" />
+    </>
+  ),
   clock: (
     <>
       <circle cx="12" cy="12" r="8" />

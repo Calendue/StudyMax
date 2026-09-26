@@ -8,20 +8,35 @@ import { DUR, INSTANT } from '../ui/motion.ts'
 import { OverviewTab } from './OverviewTab.tsx'
 import { PlanTab } from './PlanTab.tsx'
 import { AwardsTab } from './AwardsTab.tsx'
+import { ClassesTab } from './ClassesTab.tsx'
 
 const TABS: { id: Tab; label: string; icon: IconName }[] = [
   { id: 'overview', label: 'Closest', icon: 'target' },
   { id: 'plan', label: 'Plan', icon: 'plan' },
   { id: 'awards', label: 'Awards', icon: 'award' },
+  { id: 'classes', label: 'Classes', icon: 'seat' },
 ]
 
 const TAB_CONTENT: Record<Tab, ComponentType> = {
   overview: OverviewTab,
   plan: PlanTab,
   awards: AwardsTab,
+  classes: ClassesTab,
 }
 
-function TabButton({ label, icon, active, onClick }: { label: string; icon: IconName; active: boolean; onClick: () => void }) {
+function TabButton({
+  label,
+  icon,
+  active,
+  badge,
+  onClick,
+}: {
+  label: string
+  icon: IconName
+  active: boolean
+  badge?: boolean
+  onClick: () => void
+}) {
   return (
     <button
       type="button"
@@ -30,7 +45,10 @@ function TabButton({ label, icon, active, onClick }: { label: string; icon: Icon
       className={`tab${active ? ' tab--active' : ''}`}
       onClick={onClick}
     >
-      <Icon name={icon} size={24} />
+      <span className="tab__icon">
+        <Icon name={icon} size={24} />
+        {badge && <span className="tab__badge" aria-label="new" />}
+      </span>
       <span>{label}</span>
     </button>
   )
@@ -40,6 +58,9 @@ export function ResultsScreen() {
   const m = useModel()
   const reduce = useReducedMotion()
   const Content = TAB_CONTENT[m.tab]
+  // Seat watching reads USask's own class search, so the Classes tab is USask-only.
+  const tabs = TABS.filter((t) => t.id !== 'classes' || m.universityId === 'usask')
+  const badge = (id: Tab) => id === 'classes' && m.classes.alert !== null && m.tab !== 'classes'
   return (
     <>
       <TopBar
@@ -62,8 +83,15 @@ export function ResultsScreen() {
           one shows, at the same width the rest of the app already treats as "desktop". */}
       {m.hasProgramData && (
         <nav className="topnav" role="tablist" aria-label="Results">
-          {TABS.map((t) => (
-            <TabButton key={t.id} label={t.label} icon={t.icon} active={m.tab === t.id} onClick={() => m.setTab(t.id)} />
+          {tabs.map((t) => (
+            <TabButton
+              key={t.id}
+              label={t.label}
+              icon={t.icon}
+              active={m.tab === t.id}
+              badge={badge(t.id)}
+              onClick={() => m.setTab(t.id)}
+            />
           ))}
         </nav>
       )}
@@ -84,8 +112,15 @@ export function ResultsScreen() {
       </AnimatePresence>
       {m.hasProgramData && (
         <nav className="tabbar" role="tablist" aria-label="Results">
-          {TABS.map((t) => (
-            <TabButton key={t.id} label={t.label} icon={t.icon} active={m.tab === t.id} onClick={() => m.setTab(t.id)} />
+          {tabs.map((t) => (
+            <TabButton
+              key={t.id}
+              label={t.label}
+              icon={t.icon}
+              active={m.tab === t.id}
+              badge={badge(t.id)}
+              onClick={() => m.setTab(t.id)}
+            />
           ))}
         </nav>
       )}

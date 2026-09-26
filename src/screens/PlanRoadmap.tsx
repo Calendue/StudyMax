@@ -1,18 +1,17 @@
-import { useMemo, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useModel } from '../model.ts'
-import { courseCode } from '../format.ts'
+import { courseCode, plural } from '../format.ts'
 import { catalogueUrl } from '../lib/courseSearch.ts'
 import { haptic } from '../platform.ts'
 import {
   buildRoadmapLayout,
-  columnX,
-  nodeCenterY,
-  COLUMN_WIDTH,
-  COLUMN_GAP,
-  HEADER_HEIGHT,
-  NODE_HEIGHT,
+  graphHeight,
+  nodeBox,
+  LABEL_HEIGHT,
   NODE_GAP,
-  type RoadmapColumn,
+  NODE_HEIGHT,
+  ROW_GAP,
+  ROW_PITCH,
   type RoadmapNodeLayout,
 } from '../lib/roadmapLayout.ts'
 import { Appear, Chip } from '../ui/primitives.tsx'
@@ -20,15 +19,15 @@ import { Icon } from '../ui/Icon.tsx'
 import { Sheet } from '../ui/Sheet.tsx'
 
 /**
- * The visual node/edge view of the term-by-term plan: courses as nodes grouped into term columns,
- * prerequisite links as connectors. Consumes `buildPlan`'s existing output as-is (via `m.plan`) —
- * this owns layout and interaction only, no scheduling logic of its own.
+ * The visual node/edge view of the term-by-term plan: terms stacked top to bottom, each term's
+ * courses sharing the full width, prerequisite links flowing down between them. Consumes
+ * `buildPlan`'s existing output as-is (via `m.plan`) — this owns layout and interaction only.
  */
 export function PlanRoadmap() {
   const m = useModel()
 
-  // Completed courses that count toward what's being planned — shown as a leading, collapsed
-  // "Completed" column so the graph reads as a full journey, not just what's left.
+  // Completed courses that count toward what's being planned, so the graph reads as a whole
+  // journey rather than only what's left.
   const completedRelevant = useMemo(() => {
     const relevant = new Set<string>()
     for (const target of m.targets) {
@@ -38,16 +37,13 @@ export function PlanRoadmap() {
         }
       }
     }
-    return [...relevant]
+    return [...relevant].sort()
   }, [m.targets, m.completed])
 
-  const { columns, nodes, edges } = useMemo(
-    () => buildRoadmapLayout(m.plan, completedRelevant),
-    [m.plan, completedRelevant],
-  )
+  const { rows, nodes, edges } = useMemo(() => buildRoadmapLayout(m.plan), [m.plan])
   const nodesByCode = useMemo(() => new Map(nodes.map((n) => [n.code, n])), [nodes])
 
-  const [completedCollapsed, setCompletedCollapsed] = useState(true)
+  const [doneOpen, setDoneOpen] = useState(false)
   const [activeCode, setActiveCode] = useState<string | null>(null)
   const activeNode = activeCode ? nodesByCode.get(activeCode) : undefined
 
@@ -61,55 +57,107 @@ export function PlanRoadmap() {
     return connected
   }, [edges, activeCode])
 
-  if (columns.length === 0) return null
+  // Connectors are drawn in pixels, so the graph measures its own width and redraws on resize.
+  const graphRef = useRef<HTMLDivElement>(null)
+  const [width, setWidth] = useState(0)
+  const hasRows = rows.length > 0
+  useLayoutEffect(() => {
+    const el = graphRef.current
+    if (!el) return
+    setWidth(el.clientWidth)
+    const observer = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width))
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [hasRows])
+
+  if (!hasRows) return null
 
   function selectCourse(code: string) {
     haptic.selection()
     setActiveCode(code)
   }
 
-  const maxRows = Math.max(1, ...columns.map((c) => (c.collapsible && completedCollapsed ? 0 : c.codes.length)))
-  const width = columnX(columns.length - 1) + COLUMN_WIDTH
-  const height = HEADER_HEIGHT + maxRows * (NODE_HEIGHT + NODE_GAP)
+  const height = graphHeight(rows.length)
 
   return (
     <Appear index={3} className="roadmap">
-      <div className="roadmap__scroll">
-        <div className="roadmap__track" style={{ width, gap: COLUMN_GAP }}>
+      {completedRelevant.length > 0 && (
+        <div className="roadmap__done">
+          <button
+            type="button"
+            className="roadmap__done-toggle"
+            aria-expanded={doneOpen}
+            onClick={() => setDoneOpen((open) => !open)}
+          >
+            <span>
+              <Icon name="check" size={18} />
+              {plural(completedRelevant.length, 'course')} already done toward this
+            </span>
+            <Icon name="chevron" size={18} />
+          </button>
+          {doneOpen && (
+            <div className="roadmap__done-list">
+              {completedRelevant.map((code) => (
+                <span key={code} className="chip chip--quiet" title={m.courseTitle(code)}>
+                  {courseCode(code)}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="roadmap__graph" ref={graphRef} style={{ height }}>
+        {width > 0 && (
           <svg className="roadmap__edges" width={width} height={height} aria-hidden>
             {edges.map((edge) => {
               const from = nodesByCode.get(edge.from)
               const to = nodesByCode.get(edge.to)
               if (!from || !to) return null
-              const sx = columnX(from.col) + COLUMN_WIDTH
-              const sy = nodeCenterY(from.row)
-              const tx = columnX(to.col)
-              const ty = nodeCenterY(to.row)
-              const midX = (sx + tx) / 2
+              const a = nodeBox(from, width)
+              const b = nodeBox(to, width)
+              const sx = a.x + a.w / 2
+              const sy = a.y + a.h
+              const tx = b.x + b.w / 2
+              const ty = b.y
+              const bend = ROW_GAP * 0.9
               const active = connectedCodes ? connectedCodes.has(edge.from) && connectedCodes.has(edge.to) : false
               return (
-                <path
-                  key={`${edge.from}->${edge.to}`}
-                  d={`M ${sx} ${sy} C ${midX} ${sy}, ${midX} ${ty}, ${tx} ${ty}`}
-                  className={`roadmap__edge${active ? ' roadmap__edge--active' : ''}`}
-                />
+                <g key={`${edge.from}->${edge.to}`} className={`roadmap__edge${active ? ' roadmap__edge--active' : ''}`}>
+                  <path d={`M ${sx} ${sy} C ${sx} ${sy + bend}, ${tx} ${ty - bend}, ${tx} ${ty}`} />
+                  <circle cx={tx} cy={ty} r={3.5} />
+                </g>
               )
             })}
           </svg>
-          {columns.map((column) => (
-            <RoadmapColumnView
-              key={column.key}
-              column={column}
-              nodesByCode={nodesByCode}
-              collapsed={column.collapsible && completedCollapsed}
-              onToggleCollapse={() => setCompletedCollapsed((c) => !c)}
-              connectedCodes={connectedCodes}
-              activeCode={activeCode}
-              onSelect={selectCourse}
-              courseTitle={m.courseTitle}
-            />
-          ))}
-        </div>
+        )}
+
+        {rows.map((row, i) => (
+          <div key={row.key} className="roadmap__row" style={{ top: i * ROW_PITCH }}>
+            <p className="roadmap__row-label" style={{ height: LABEL_HEIGHT }}>
+              {row.label}
+            </p>
+            <div
+              className="roadmap__row-nodes"
+              style={{ gridTemplateColumns: `repeat(${row.codes.length}, minmax(0, 1fr))`, gap: NODE_GAP, height: NODE_HEIGHT }}
+            >
+              {row.codes.map((code) => {
+                const node = nodesByCode.get(code)
+                if (!node) return null
+                return (
+                  <RoadmapNodeView
+                    key={code}
+                    node={node}
+                    title={m.courseTitle(code)}
+                    active={activeCode === code}
+                    dimmed={connectedCodes !== null && !connectedCodes.has(code)}
+                    onSelect={() => selectCourse(code)}
+                  />
+                )
+              })}
+            </div>
+          </div>
+        ))}
       </div>
 
       <Sheet open={activeNode !== undefined} onClose={() => setActiveCode(null)} title={activeCode ? courseCode(activeCode) : ''}>
@@ -136,62 +184,6 @@ export function PlanRoadmap() {
   )
 }
 
-function RoadmapColumnView({
-  column,
-  nodesByCode,
-  collapsed,
-  onToggleCollapse,
-  connectedCodes,
-  activeCode,
-  onSelect,
-  courseTitle,
-}: {
-  column: RoadmapColumn
-  nodesByCode: Map<string, RoadmapNodeLayout>
-  collapsed: boolean
-  onToggleCollapse: () => void
-  connectedCodes: Set<string> | null
-  activeCode: string | null
-  onSelect: (code: string) => void
-  courseTitle: (code: string) => string | undefined
-}) {
-  return (
-    <div className="roadmap__column" style={{ width: COLUMN_WIDTH }}>
-      <p className="roadmap__column-label">{column.label}</p>
-      {column.collapsible && collapsed ? (
-        <button type="button" className="roadmap__summary" onClick={onToggleCollapse}>
-          {column.codes.length} done
-          <Icon name="chevron" size={14} />
-        </button>
-      ) : (
-        <div className="roadmap__nodes">
-          {column.collapsible && (
-            <button type="button" className="roadmap__collapse" onClick={onToggleCollapse}>
-              Collapse
-            </button>
-          )}
-          {column.codes.map((code) => {
-            const node = nodesByCode.get(code)
-            if (!node) return null
-            const connected = connectedCodes?.has(code) ?? false
-            const dimmed = connectedCodes !== null && !connected
-            return (
-              <RoadmapNodeView
-                key={code}
-                node={node}
-                title={courseTitle(code)}
-                active={activeCode === code}
-                dimmed={dimmed}
-                onSelect={() => onSelect(code)}
-              />
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
-}
-
 function RoadmapNodeView({
   node,
   title,
@@ -211,8 +203,13 @@ function RoadmapNodeView({
 
   return (
     <button type="button" className={classes.join(' ')} onClick={onSelect}>
-      {node.alsoAdvances.length > 0 && <span className="roadmap__node-dot" aria-hidden />}
-      <span className="roadmap__node-code">{courseCode(node.code)}</span>
+      <span className="roadmap__node-head">
+        <span className="roadmap__node-code">{courseCode(node.code)}</span>
+        {node.alsoAdvances.length > 0 && (
+          <span className="roadmap__node-dot" title={`Also counts toward ${node.alsoAdvances.join(', ')}`} />
+        )}
+        {node.state === 'prerequisite' && <span className="roadmap__node-tag">Prereq</span>}
+      </span>
       <span className="roadmap__node-title">{title}</span>
     </button>
   )
