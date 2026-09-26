@@ -393,6 +393,22 @@
   color: var(--landing-rose);
 }
 
+/* --- meme break --- */
+
+.landing__meme {
+  display: flex;
+  justify-content: center;
+  padding: 0 var(--space-md) var(--space-2xl);
+}
+
+.landing__meme-img {
+  width: 100%;
+  max-width: 380px;
+  border: 1px solid var(--landing-line);
+  background: var(--landing-paper-alt);
+  transform: rotate(-1.5deg);
+}
+
 /* --- judge Q&A --- */
 
 .landing__qa-list {

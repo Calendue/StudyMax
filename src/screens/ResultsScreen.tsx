@@ -31,10 +31,16 @@ export function ResultsScreen() {
         onBack={() => m.go(m.resultsBack, -1)}
         backLabel={m.resultsBack === 'courses' ? 'Courses' : 'Back'}
         right={
-          <button type="button" className="topbar__action" onClick={m.startOver}>
-            <Icon name="restart" size={18} />
-            Start over
-          </button>
+          <div className="topbar__actions">
+            <button type="button" className="topbar__action" onClick={() => m.setShowLanding(true)}>
+              <Icon name="globe" size={18} />
+              Pitch
+            </button>
+            <button type="button" className="topbar__action" onClick={m.startOver}>
+              <Icon name="restart" size={18} />
+              Start over
+            </button>
+          </div>
         }
       />
       {/* A tab change is a destination change: a quick fade-through on one timeline, never a
