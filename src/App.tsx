@@ -197,10 +197,13 @@ function App() {
     setUniversityId('usask')
     setProgramId(profile.majorProgramId)
     setCompleted(new Set())
+    setUploadInProgress([])
     setUploadStatus('idle')
     // Concentrations first (the student's actual academic goal), then any declared minor — both
     // just seed the same multi-target plan the "Add another one you're close to" picker builds.
-    const ids = [...profile.concentrationIds, profile.minorProgramId].filter((id): id is string => Boolean(id))
+    // The minor is a program; the plan targets its requirement lists (specializations) by id.
+    const minorSpecIds = usask.programs?.find((p) => p.id === profile.minorProgramId)?.specializations.map((s) => s.id) ?? []
+    const ids = [...profile.concentrationIds, ...minorSpecIds]
     setHeroId(ids[0] ?? null)
     setExtraTargetIds(ids.slice(1))
     setFirstYear(profile.studentType === 'first-year')
@@ -312,6 +315,8 @@ function App() {
   )
 
   const [heroId, setHeroId] = useState<string | null>(null)
+  // Targets planned alongside the hero — seeded by onboarding, edited in the plan section.
+  const [extraTargetIds, setExtraTargetIds] = useState<string[]>([])
   useEffect(() => {
     if (heroId === null && matches.length > 0) setHeroId(matches[0].spec.id)
   }, [heroId, matches])
@@ -969,6 +974,8 @@ function App() {
                   candidates={planCandidates}
                   completed={completed}
                   inProgress={uploadInProgress}
+                  extraTargetIds={extraTargetIds}
+                  onExtraTargetIdsChange={setExtraTargetIds}
                   programName={selectedProgram.name}
                   courseLabel={courseLabel}
                   today={today}

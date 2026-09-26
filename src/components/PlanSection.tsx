@@ -14,6 +14,9 @@ interface PlanSectionProps {
   completed: Set<string>
   /** Registered but ungraded — counted as done by the start term, never planned again. */
   inProgress: string[]
+  /** Targets planned alongside the hero. An id that stops resolving (program switched) drops out. */
+  extraTargetIds: string[]
+  onExtraTargetIdsChange: (ids: string[]) => void
   programName: string
   courseLabel: (code: string) => string
   today: Date
@@ -26,12 +29,20 @@ function parseTermKey(key: string): TermStart {
 }
 
 /** Term-by-term path to one or more targets, from the student's courses and chosen start term. */
-export function PlanSection({ hero, candidates, completed, inProgress, programName, courseLabel, today }: PlanSectionProps) {
+export function PlanSection({
+  hero,
+  candidates,
+  completed,
+  inProgress,
+  extraTargetIds,
+  onExtraTargetIdsChange,
+  programName,
+  courseLabel,
+  today,
+}: PlanSectionProps) {
   const [coursesPerTerm, setCoursesPerTerm] = useState(2)
   const startChoices = useMemo(() => termsFrom(upcomingTerm(today), START_TERM_CHOICES), [today])
   const [start, setStart] = useState<TermStart>(startChoices[0])
-  // Extra targets added to the same plan. An id that stops resolving (program switched) drops out.
-  const [extraTargetIds, setExtraTargetIds] = useState<string[]>([])
   const [planCopied, setPlanCopied] = useState(false)
   // Clipboard writes are blocked in some browsers and contexts. Rather than a button that appears to
   // do nothing, the plan text is shown for the student to select by hand.
@@ -144,7 +155,7 @@ export function PlanSection({ hero, candidates, completed, inProgress, programNa
                   type="button"
                   className="chip__remove"
                   aria-label={`Remove ${t.spec.name} from this plan`}
-                  onClick={() => setExtraTargetIds((ids) => ids.filter((id) => id !== t.spec.id))}
+                  onClick={() => onExtraTargetIdsChange(extraTargetIds.filter((id) => id !== t.spec.id))}
                 >
                   ×
                 </button>
@@ -160,7 +171,7 @@ export function PlanSection({ hero, candidates, completed, inProgress, programNa
               value=""
               onChange={(e) => {
                 const id = e.target.value
-                if (id) setExtraTargetIds((ids) => [...ids, id])
+                if (id) onExtraTargetIdsChange([...extraTargetIds, id])
               }}
             >
               <option value="">+ Add another one you&rsquo;re close to…</option>
