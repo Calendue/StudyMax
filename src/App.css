@@ -526,6 +526,12 @@
   margin-top: var(--s3);
 }
 
+/* In progress: outlined rather than filled, since it isn't done yet. */
+.roadmap__in-progress {
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--track);
+}
+
 .roadmap__graph {
   position: relative;
 }

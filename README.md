@@ -23,7 +23,7 @@ Applied Mathematics, Physics and Applied Computing are mapped too and will produ
 3. No transcript handy? Use **Load a sample student**, or search the catalogue and tick off courses by hand.
 4. Press **Reveal what my school hides**.
 
-You will get: what you are closest to finishing, the highest overlap course you have not taken, a term by term plan drawn as a roadmap (what you finished, what you are taking now, then each term, with prerequisites as connectors) including the prerequisites the specialization page never lists, certificates and minors you are partway through, awards ranked by deadline, and the call at the end.
+You will get: what you are closest to finishing, the highest overlap course you have not taken, a term by term plan drawn as a roadmap (each term a row, prerequisites as connectors, with what you finished and what you are taking now listed above it) including the prerequisites the specialization page never lists, certificates and minors you are partway through, awards ranked by deadline, and the call at the end.
 
 ## Run it locally
 
@@ -95,7 +95,7 @@ Every AI route goes through `respond()` in `api/_openai.ts`: `gpt-5-mini` on Cha
 
 ### The roadmap
 
-The Plan tab draws the plan as a graph. `src/lib/roadmapLayout.ts` turns the planner's terms into columns (completed, in progress, then one per term) and prerequisite links into edges; `src/screens/PlanRoadmap.tsx` renders it and opens a course's details on tap. The layout owns no scheduling logic; that stays in `src/lib/plan.ts`.
+The Plan tab draws the plan as a graph. `src/lib/roadmapLayout.ts` turns the planner's terms into rows, top to bottom, and prerequisite links into connectors; `src/screens/PlanRoadmap.tsx` renders it and opens a course's details on tap. The layout owns no scheduling logic; that stays in `src/lib/plan.ts`.
 
 ### The database
 
