@@ -42,6 +42,14 @@ Brainstorm list — none of these are commitments until someone actually starts 
 - A component should do one thing (a card, a progress bar, a roadmap node, a credential badge) and be usable without dragging in unrelated page state — that's what makes it portable to mobile.
 - If you're touching a chunk of the existing god page anyway, it's fine (encouraged, even) to peel that piece out into its own component as part of the change. It is **not** the time to attempt a full top-to-bottom refactor of `App.tsx` — that's a big, demo-risking move; coordinate with the team before taking it on.
 
+## Database
+
+Schema lives in `prisma/schema.prisma`, migrated onto the team's shared remote Supabase Postgres — see `docs/databaseSpec.md` for what each table is for and what's deliberately not in the DB (the course catalogue/programs/scholarships stay static files).
+
+- **Use `prisma migrate deploy`, never `prisma migrate dev`.** There's no local/shadow database here — only the one shared remote instance — and `migrate dev` provisions a shadow DB to diff against, which isn't the right model for four people hitting the same remote schema. Write migration SQL with `prisma migrate diff` (or by hand for something simple like a rename), then apply it with `npm run db:migrate` (wraps `prisma migrate deploy`).
+- Prisma's CLI doesn't read `.env.local` — `db:migrate`/`db:studio` are wrapped in `dotenv-cli` for this reason. Don't add a plain `.env` with the same values instead.
+- `Institution`/`Major` are seeded reference tables (`npm run db:seed`), not something to hand-edit rows into for testing — add to the JSON files in `scripts/` and reseed if a row is missing.
+
 ## Why we're not done: the three gaps to a winning submission
 
 Ranked by what actually swings judges, in order of what to protect first:
