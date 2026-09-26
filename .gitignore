@@ -37,3 +37,7 @@ ios/DerivedData
 *.ipa
 *.apk
 *.aab
+
+# Firebase config, copied in from the console downloads, never committed
+ios/App/App/GoogleService-Info.plist
+android/app/google-services.json

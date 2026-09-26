@@ -16,10 +16,13 @@ import { searchCourses, catalogueTitle } from './lib/courseSearch.ts'
 import { courseInfo } from './data/prereqs.ts'
 import { artsAndScienceSubjects } from './data/courses.ts'
 import { api, haptic, onBackButton } from './platform.ts'
+import { authAvailable, currentAccount, isCancel, signIn, signOut, type Account, type Provider } from './auth.ts'
 import { ModelContext } from './model.ts'
 import { courseCode, type TargetKind } from './format.ts'
 import { DUR, INSTANT, SETTLE } from './ui/motion.ts'
 import { Intro } from './screens/Intro.tsx'
+import { WelcomeScreen } from './screens/WelcomeScreen.tsx'
+import { AccountSheet } from './screens/AccountSheet.tsx'
 import { SchoolScreen } from './screens/SchoolScreen.tsx'
 import { CoursesScreen } from './screens/CoursesScreen.tsx'
 import { ReadingScreen } from './screens/ReadingScreen.tsx'
@@ -46,7 +49,7 @@ type Lookup =
 type UniversityChoice = '' | 'usask' | 'other'
 
 /** The flow, in order. Results is tabbed; the call is the last step. */
-export type Screen = 'school' | 'courses' | 'reading' | 'reveal' | 'results' | 'call'
+export type Screen = 'welcome' | 'school' | 'courses' | 'reading' | 'reveal' | 'results' | 'call'
 export type Tab = 'overview' | 'plan' | 'awards'
 
 // Selected when the student picks "Other university": no course-matching data exists for it, so it
@@ -90,13 +93,31 @@ interface SavedState {
 }
 
 // Intake selections survive a refresh so a half-finished session isn't lost. The phone number is
-// deliberately excluded: it never touches storage.
-function loadSaved(): Partial<SavedState> {
+// deliberately excluded: it never touches storage. A signed-in student's state is kept under their
+// Firebase uid, so two people on one phone don't see each other's courses.
+function saveKeyFor(uid: string | null) {
+  return uid ? `${SAVE_KEY}:${uid}` : SAVE_KEY
+}
+
+function loadSaved(key = SAVE_KEY): Partial<SavedState> {
   try {
-    return JSON.parse(localStorage.getItem(SAVE_KEY) ?? '{}')
+    return JSON.parse(localStorage.getItem(key) ?? '{}')
   } catch {
     return {}
   }
+}
+
+function hasSaved(key: string) {
+  try {
+    return localStorage.getItem(key) !== null
+  } catch {
+    return false
+  }
+}
+
+/** Where a session resumes: its results if it got that far, otherwise the start of the intake. */
+function resumeScreen(state: Partial<SavedState>): Screen {
+  return state.revealed && state.universityId ? 'results' : 'school'
 }
 
 function useStudyMax() {
@@ -187,14 +208,20 @@ function useStudyMax() {
   const completedRef = useRef(completed)
   completedRef.current = completed
 
+  // --- account (native only): Apple or Google through Firebase, or none at all ---
+  const [account, setAccount] = useState<Account | null>(null)
+  const [authBusy, setAuthBusy] = useState<Provider | null>(null)
+  const [authError, setAuthError] = useState<string | null>(null)
+  const saveKey = saveKeyFor(account?.uid ?? null)
+
   useEffect(() => {
     const state: SavedState = { universityId, programId, completed: [...completed], revealed }
     try {
-      localStorage.setItem(SAVE_KEY, JSON.stringify(state))
+      localStorage.setItem(saveKey, JSON.stringify(state))
     } catch {
       // storage full or blocked (private mode): the app works fine without persistence
     }
-  }, [universityId, programId, completed, revealed])
+  }, [saveKey, universityId, programId, completed, revealed])
 
   const matches = useMemo(
     () => computeMatches(selectedProgram?.specializations ?? [], completed),
@@ -622,9 +649,94 @@ function useStudyMax() {
   // Only a mapped program has a course step; everyone else goes straight to what we can find them.
   const hasCourseStep = universityId === 'usask' && hasProgramData
 
+  /** Swaps in a whole saved session: the student's own on sign-in, the anonymous one on sign-out. */
+  function applySaved(state: Partial<SavedState>) {
+    setUniversityId(state.universityId ?? '')
+    setProgramId(state.programId ?? '')
+    setCompleted(new Set(state.completed ?? []))
+    setRevealed(state.revealed ?? false)
+    setUploadInProgress([])
+    setUploadStatus('idle')
+    setHeroId(null)
+    setExtraTargetIds([])
+    setLookup(null)
+    setCallStatus('idle')
+  }
+
+  // A student who signed in last time goes straight back to their own session; the welcome screen
+  // only greets people who aren't signed in. This resolves under the intro, so it's never seen.
+  const applySavedRef = useRef(applySaved)
+  applySavedRef.current = applySaved
+  useEffect(() => {
+    if (!authAvailable) return
+    let live = true
+    void currentAccount().then((existing) => {
+      if (!live || !existing) return
+      const state = loadSaved(saveKeyFor(existing.uid))
+      applySavedRef.current(state)
+      setAccount(existing)
+      setDirection(1)
+      setScreen(resumeScreen(state))
+    })
+    return () => {
+      live = false
+    }
+    // Runs once, at launch.
+  }, [])
+
+  async function signInWith(provider: Provider) {
+    setAuthBusy(provider)
+    setAuthError(null)
+    try {
+      const signedIn = await signIn(provider)
+      // Their own saved session if they have one on this phone; otherwise what they've done so far
+      // carries over into their account.
+      const key = saveKeyFor(signedIn.uid)
+      const state = hasSaved(key) ? loadSaved(key) : { universityId, programId, completed: [...completed], revealed }
+      if (hasSaved(key)) applySaved(state)
+      setAccount(signedIn)
+      haptic.light()
+      go(resumeScreen(state))
+    } catch (err) {
+      // Closing the sheet is a choice, not a failure: nothing is shown.
+      if (!isCancel(err)) {
+        setAuthError(
+          provider === 'google'
+            ? "Google sign-in didn't work this time. Check your connection and try again, or continue without an account."
+            : /error 1000\b/.test(String((err as Error)?.message))
+              ? // Apple's catch-all, most often: no Apple Account is signed in on this device.
+                "Sign in with Apple isn't available right now. Check you're signed in to your Apple Account in Settings, or continue another way."
+              : "Sign in with Apple didn't work this time. Try again, or continue without an account.",
+        )
+      }
+    } finally {
+      setAuthBusy(null)
+    }
+  }
+
+  function continueWithoutAccount() {
+    haptic.selection()
+    setAuthError(null)
+    go(resumeScreen({ universityId, revealed }))
+  }
+
+  async function signOutOfAccount() {
+    haptic.selection()
+    setSheet(null)
+    try {
+      await signOut()
+    } catch {
+      // the local session ends regardless
+    }
+    setAccount(null)
+    applySaved(loadSaved(SAVE_KEY))
+    go('welcome', -1)
+  }
+
   // --- navigation: one screen at a time, a direction for the transition, and at most one sheet ---
   const [screen, setScreen] = useState<Screen>(() =>
-    saved.revealed && saved.universityId && saved.programId !== undefined ? 'results' : 'school',
+    // Native launches start at the welcome screen; the web build has no sign-in and starts as before.
+    authAvailable ? 'welcome' : saved.revealed && saved.universityId ? 'results' : 'school',
   )
   const [direction, setDirection] = useState<1 | -1>(1)
   const [tab, setTabState] = useState<Tab>(() => (hasProgramData ? 'overview' : 'awards'))
@@ -696,7 +808,13 @@ function useStudyMax() {
       return true
     }
     switch (screen) {
+      case 'welcome':
+        return false
       case 'school':
+        if (authAvailable && !account) {
+          go('welcome', -1)
+          return true
+        }
         return false
       case 'courses':
         go('school', -1)
@@ -731,6 +849,13 @@ function useStudyMax() {
   }, [screen, lookup, universityId])
 
   return {
+    // account
+    account,
+    authBusy,
+    authError,
+    signInWith,
+    continueWithoutAccount,
+    signOutOfAccount,
     // intake
     universityId,
     handleUniversityChange,
@@ -815,6 +940,7 @@ function useStudyMax() {
 export type Model = ReturnType<typeof useStudyMax>
 
 const SCREENS: Record<Screen, ComponentType> = {
+  welcome: WelcomeScreen,
   school: SchoolScreen,
   courses: CoursesScreen,
   reading: ReadingScreen,
@@ -863,6 +989,7 @@ function App() {
           </motion.div>
         </AnimatePresence>
       </div>
+      {model.account && <AccountSheet />}
       <Intro />
     </ModelContext.Provider>
   )

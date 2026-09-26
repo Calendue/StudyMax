@@ -1,4 +1,5 @@
 import { useModel } from '../model.ts'
+import { firstName } from '../auth.ts'
 import { KIND_LABEL, WHY_IT_MATTERS, courseCode, plural } from '../format.ts'
 import type { SpecializationMatch } from '../lib/match.ts'
 import { ScreenTitle } from '../ui/chrome.tsx'
@@ -9,10 +10,11 @@ export function OverviewTab() {
   const m = useModel()
   const hero = m.hero
   const done = hero.remaining === 0
+  const name = firstName(m.account)
 
   return (
     <>
-      <ScreenTitle>What you&rsquo;re closest to</ScreenTitle>
+      <ScreenTitle greeting={name ? `Hi, ${name}.` : undefined}>What you&rsquo;re closest to</ScreenTitle>
 
       <Appear index={0} className="hero">
         <Ring

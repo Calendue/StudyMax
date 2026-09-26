@@ -723,3 +723,168 @@
     border-radius: var(--r4);
   }
 }
+
+/* ─────────────────────────────────────────────────────────── welcome, sign-in */
+
+.welcome {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--s4);
+  padding: calc(var(--sat) + var(--s6)) calc(var(--s5) + var(--sar)) var(--s5) calc(var(--s5) + var(--sal));
+}
+
+.welcome__mark {
+  display: block;
+  color: var(--accent);
+  margin-bottom: var(--s2);
+}
+
+.welcome__title {
+  font: 700 2.25rem/1.12 var(--font-brand);
+  letter-spacing: -0.03em;
+}
+
+.welcome__lead {
+  font-size: 1.0625rem;
+  color: var(--ink-2);
+}
+
+.welcome__actions {
+  gap: var(--s3);
+  padding-top: var(--s4);
+}
+
+.welcome__error {
+  padding: var(--s3) var(--s4);
+  border-radius: var(--r2);
+  background: var(--surface);
+  box-shadow: inset 3px 0 0 var(--accent);
+  font-size: 0.875rem;
+}
+
+.welcome__note {
+  text-align: center;
+  font-size: var(--fs-caption);
+  color: var(--ink-2);
+}
+
+/* Apple and Google: the same height, radius and width, differing only in the fill their rules ask for. */
+.auth-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  padding: 0 var(--s5);
+  border-radius: var(--r2);
+  font-size: 1rem;
+  font-weight: 600;
+  transition:
+    transform var(--d-fast) var(--settle),
+    opacity var(--d-fast) var(--settle);
+}
+
+.auth-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.auth-btn:disabled:not([aria-busy='true']) {
+  opacity: 0.55;
+}
+
+.auth-btn--apple {
+  background: var(--ink);
+  color: var(--old-lace);
+}
+
+.auth-btn--google {
+  background: var(--old-lace);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--edge);
+}
+
+.auth-btn__logo {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+}
+
+.spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: turn 0.7s linear infinite;
+}
+
+/* ─────────────────────────────────────────────────────────── account */
+
+.topbar__account {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-right: calc(-1 * var(--s2));
+  border-radius: 50%;
+}
+
+.topbar__account:active .avatar {
+  transform: scale(0.92);
+}
+
+.avatar {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--selected);
+  color: var(--accent);
+  font-family: var(--font-brand);
+  font-weight: 700;
+  line-height: 1;
+  transition: transform var(--d-fast) var(--settle);
+}
+
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.account {
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  margin: var(--s2) var(--s1) var(--s4);
+}
+
+.account__text {
+  min-width: 0;
+}
+
+.account__name {
+  font: 600 var(--fs-title) / 1.3 var(--font-brand);
+}
+
+.account__email {
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+.account__note {
+  margin: 0 var(--s1);
+}
+
+.screen-title__greeting {
+  margin-bottom: var(--s1);
+  font: 600 var(--fs-title) / 1.3 var(--font-brand);
+  color: var(--accent);
+}
