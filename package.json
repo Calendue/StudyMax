@@ -18,6 +18,8 @@
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
+    "@vapi-ai/server-sdk": "^2.0.1",
+    "@vapi-ai/web": "^2.7.1",
     "firebase": "^12.19.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
