@@ -1,17 +1,19 @@
 // The one place StudyMax talks to OpenAI. The underscore keeps Vercel from serving this file as a
-// route. Every AI route goes through here so two rules hold everywhere:
+// route. Every AI route goes through here so three rules hold everywhere:
 // · The key only ever travels in the Authorization header. It is never logged or echoed.
 // · OpenAI's error text never leaves the server. An auth failure quotes part of the key back, so a
-//   route gets the status code and a safe error code, and passes on nothing else.
+//   route gets the status code and nothing else.
+// · A call never hangs: it is aborted after `timeoutMs`, and an unreachable OpenAI is an error with
+//   status 0, not an exception that escapes the route.
 
-const RESPONSES_URL = 'https://api.openai.com/v1/responses'
+const CHAT_URL = 'https://api.openai.com/v1/chat/completions'
 export const OPENAI_MODEL = 'gpt-5-mini'
 
-export type InputContent =
-  | { type: 'input_text'; text: string }
-  | { type: 'input_file'; filename: string; file_data: string }
+export type ChatContent =
+  | string
+  | Array<{ type: 'text'; text: string } | { type: 'file'; file: { filename: string; file_data: string } }>
 
-/** A failed call, carrying only what's safe to act on: the HTTP status (0 when unreachable). */
+/** A failed call, carrying only what's safe to act on: the HTTP status (0 when unreachable or timed out). */
 export class OpenAIError extends Error {
   readonly status: number
   constructor(status: number) {
@@ -26,51 +28,50 @@ export function openAIKey(): string | null {
 }
 
 /**
- * One request, one reply's text. Reasoning stays low: these are extraction and short writing
- * tasks, and the student is waiting. Nothing is stored on OpenAI's side (store: false), since the
- * inputs include student transcripts.
+ * One user message, one reply's text. Reasoning is capped at minimal: these are extraction and short
+ * writing tasks, and uncapped gpt-5-mini spends the whole token budget on hidden reasoning and
+ * returns empty content (finish_reason "length", content "").
  */
-export async function respond(apiKey: string, content: string | InputContent[], maxOutputTokens: number): Promise<string> {
-  let upstream: Response
+export async function chat(apiKey: string, content: ChatContent, maxCompletionTokens: number, timeoutMs: number): Promise<string> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    upstream = await fetch(RESPONSES_URL, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: OPENAI_MODEL,
-        reasoning: { effort: 'low' },
-        max_output_tokens: maxOutputTokens,
-        store: false,
-        input: [{ role: 'user', content }],
-      }),
-    })
-  } catch {
-    console.error('openai unreachable')
+    let upstream: Response
+    try {
+      upstream = await fetch(CHAT_URL, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          model: OPENAI_MODEL,
+          reasoning_effort: 'minimal',
+          max_completion_tokens: maxCompletionTokens,
+          messages: [{ role: 'user', content }],
+        }),
+      })
+    } catch {
+      console.error(controller.signal.aborted ? 'openai timed out' : 'openai unreachable')
+      throw new OpenAIError(0)
+    }
+
+    if (!upstream.ok) {
+      // Log the status and OpenAI's error code (e.g. "invalid_api_key", "rate_limit_exceeded"),
+      // never its message.
+      const code = await upstream
+        .json()
+        .then((d) => String(d?.error?.code ?? d?.error?.type ?? ''))
+        .catch(() => '')
+      console.error(`openai ${upstream.status} ${code.replace(/[^a-z0-9_]/gi, '').slice(0, 60)}`)
+      throw new OpenAIError(upstream.status)
+    }
+
+    const data = await upstream.json().catch(() => null)
+    const text = data?.choices?.[0]?.message?.content
+    return typeof text === 'string' ? text : ''
+  } catch (error) {
+    if (error instanceof OpenAIError) throw error
     throw new OpenAIError(0)
+  } finally {
+    clearTimeout(timer)
   }
-
-  if (!upstream.ok) {
-    // Log the status and OpenAI's error code (e.g. "invalid_api_key", "rate_limit_exceeded"),
-    // never its message.
-    const code = await upstream
-      .json()
-      .then((d) => String(d?.error?.code ?? d?.error?.type ?? ''))
-      .catch(() => '')
-    console.error(`openai ${upstream.status} ${code.replace(/[^a-z0-9_]/gi, '').slice(0, 60)}`)
-    throw new OpenAIError(upstream.status)
-  }
-
-  return outputText(await upstream.json())
-}
-
-/** The reply's text: every output_text part of every message item, in order. */
-function outputText(data: unknown): string {
-  const output = (data as { output?: unknown[] })?.output
-  if (!Array.isArray(output)) return ''
-  let text = ''
-  for (const item of output as { type?: string; content?: { type?: string; text?: string }[] }[]) {
-    if (item?.type !== 'message' || !Array.isArray(item.content)) continue
-    for (const part of item.content) if (part?.type === 'output_text' && typeof part.text === 'string') text += part.text
-  }
-  return text
 }

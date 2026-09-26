@@ -12,9 +12,14 @@ export function PlanTab() {
   const last = plan[plan.length - 1]
 
   if (plan.length === 0) {
+    // Targets with courses left but no plan: everything left is being taken right now.
+    const lead =
+      m.targets.length > 0
+        ? `Everything left for ${m.hero.spec.name} is in progress now. Finish those and it's done. Pick another target on the Closest tab to plan it too.`
+        : `You've finished ${m.hero.spec.name}. Pick another target on the Closest tab to plan it.`
     return (
       <>
-        <ScreenTitle lead={`You've finished ${m.hero.spec.name}. Pick another target on the Closest tab to plan it.`}>
+        <ScreenTitle lead={lead}>
           Your plan
         </ScreenTitle>
         <Button block variant="secondary" onClick={() => m.setTab('overview')}>

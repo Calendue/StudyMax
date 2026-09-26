@@ -17,12 +17,17 @@ export function rankByUrgency(resources: Resource[], today: Date = new Date()): 
   )
 }
 
-/** Days from `today` until the resource's deadline. null for rolling/ongoing or past deadlines. */
+/**
+ * Calendar days from `today` until the resource's deadline day: 0 on the day itself, 1 the day before.
+ * null for rolling/ongoing or past deadlines. Counted between local midnights, so the time of day
+ * never pushes a same-day deadline to "tomorrow", and DST's 23/25-hour days round away.
+ */
 export function daysUntil(resource: Resource, today: Date = new Date()): number | null {
   if (!resource.deadlineDate) return null
-  const deadline = new Date(resource.deadlineDate + 'T23:59:59')
-  const diffMs = deadline.getTime() - today.getTime()
-  const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+  const [year, month, day] = resource.deadlineDate.split('-').map(Number)
+  const deadline = new Date(year, month - 1, day)
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+  const days = Math.round((deadline.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
   return days >= 0 ? days : null
 }
 

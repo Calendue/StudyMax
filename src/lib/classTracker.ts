@@ -66,6 +66,12 @@ export interface Watch {
   openedAt: number | null
 }
 
+/**
+ * How many sections a student can watch. The seat check is capped at the same number of courses, so
+ * no watch is ever silently left out of a check.
+ */
+export const MAX_WATCHES = 12
+
 /** PAWS is where registering actually happens. StudyMax only watches and points there. */
 export const PAWS_URL = 'https://paws.usask.ca'
 
@@ -89,12 +95,13 @@ export function openSeats(seats: SeatState): number {
 /**
  * Folds a fresh reading into a watch and says whether it's news. Rules carried over from CalenDue:
  * a section already open when watched is not an opening; an `unknown` reading is a Banner hiccup and
- * keeps the last good one; re-opening after a close alerts again, staying open doesn't.
+ * keeps the last good one; re-opening after a close alerts again, staying open doesn't. A watch that
+ * only ever had an `unknown` reading was never seen open, so its first open reading is news too.
  */
 export function applyReading(watch: Watch, live: SeatState, now: number): { next: Watch; opened: boolean } {
   const status = deriveStatus(live)
   if (status === 'unknown') return { next: { ...watch, checkedAt: now }, opened: false }
-  const opened = status === 'open' && watch.status !== 'open' && watch.status !== 'unknown'
+  const opened = status === 'open' && watch.status !== 'open'
   return {
     next: {
       ...watch,

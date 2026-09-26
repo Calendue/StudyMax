@@ -121,6 +121,8 @@ interface SavedState {
   universityId: UniversityChoice
   programId: string
   completed: string[]
+  /** Courses the transcript lists as in progress: not counted as done, but never planned again. */
+  inProgress?: string[]
   revealed: boolean
   studentType: StudentType | null
   /** Descriptive only: it doesn't change matching or planning. */
@@ -270,6 +272,9 @@ function useStudyMax() {
   }
 
   const [completed, setCompleted] = useState<Set<string>>(() => new Set(saved.completed ?? []))
+  const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'sample' | 'error'>('idle')
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const [uploadInProgress, setUploadInProgress] = useState<string[]>(saved.inProgress ?? [])
   const completedRef = useRef(completed)
   completedRef.current = completed
 
@@ -283,6 +288,7 @@ function useStudyMax() {
     universityId,
     programId,
     completed: [...completed],
+    inProgress: uploadInProgress,
     revealed,
     studentType,
     degree,
@@ -467,11 +473,10 @@ function useStudyMax() {
     if (screen !== 'courses') go('courses')
   }
 
-  const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'sample' | 'error'>('idle')
-  const [uploadError, setUploadError] = useState<string | null>(null)
-  const [uploadInProgress, setUploadInProgress] = useState<string[]>([])
   // What the reading screen says, and only ever what is actually happening.
   const [readPhase, setReadPhase] = useState<'preparing' | 'reading' | 'found'>('preparing')
+  // How many completed courses the last transcript itself listed (the list may also hold hand-added ones).
+  const [foundCount, setFoundCount] = useState(0)
   // Bumped to abandon an upload in flight (Back on the reading screen): its answer is then ignored.
   const uploadToken = useRef(0)
 
@@ -490,6 +495,9 @@ function useStudyMax() {
 
     const token = ++uploadToken.current
     const live = () => uploadToken.current === token
+    // A transcript adds to courses entered by hand (transfer credit, outside the program), but
+    // replaces the sample student, whose courses aren't the student's own.
+    const replacing = uploadStatus === 'sample'
     setUploadStatus('uploading')
     setUploadError(null)
     setReadPhase('preparing')
@@ -532,8 +540,9 @@ function useStudyMax() {
         )
       }
 
-      setCompleted(new Set(codes))
-      setUploadInProgress(inProgressCodes)
+      setCompleted((prev) => new Set(replacing ? codes : [...prev, ...codes]))
+      setUploadInProgress((prev) => (replacing ? inProgressCodes : [...new Set([...prev, ...inProgressCodes])]))
+      setFoundCount(codes.length)
       seedTargets(targetSeed)
       setReadPhase('found')
       setUploadStatus('success')
@@ -558,7 +567,21 @@ function useStudyMax() {
     setUploadStatus('idle')
   }
 
-  const today = useMemo(() => new Date(), [])
+  // The phone app can sit resumed in the background for days, so "today" follows the calendar:
+  // checked when the app comes back into view and once a minute while it's open.
+  const [today, setToday] = useState(() => new Date())
+  useEffect(() => {
+    const refresh = () => {
+      const now = new Date()
+      setToday((current) => (current.toDateString() === now.toDateString() ? current : now))
+    }
+    const id = window.setInterval(refresh, 60_000)
+    document.addEventListener('visibilitychange', refresh)
+    return () => {
+      window.clearInterval(id)
+      document.removeEventListener('visibilitychange', refresh)
+    }
+  }, [])
 
   // --- term-by-term path to the closest specialization ---
   const [coursesPerTerm, setCoursesPerTerm] = useState(2)
@@ -578,11 +601,18 @@ function useStudyMax() {
       (m) => m.remaining > 0,
     )
   }, [hero, matches, credentials, extraTargetIds])
-  const plan = useMemo(
-    () =>
-      targets.length > 0 ? buildPlan(targets, planningSpecs, completed, coursesPerTerm, upcomingTerm(today)) : [],
-    [targets, planningSpecs, completed, coursesPerTerm, today],
-  )
+  // In-progress courses don't count as done (the targets' "N left" still includes them), but the plan
+  // is built around them: a course the student is sitting in now is never scheduled again, and it
+  // already unlocks what it's a prerequisite for.
+  const plannedAround = useMemo(() => new Set([...completed, ...uploadInProgress]), [completed, uploadInProgress])
+  const plan = useMemo(() => {
+    const planTargets = targets
+      .map((t) => computeMatches([t.spec], plannedAround)[0])
+      .filter((t) => t.remaining > 0)
+    return planTargets.length > 0
+      ? buildPlan(planTargets, planningSpecs, plannedAround, coursesPerTerm, upcomingTerm(today))
+      : []
+  }, [targets, planningSpecs, plannedAround, coursesPerTerm, today])
   const [planCopied, setPlanCopied] = useState(false)
   // Clipboard writes are blocked in some browsers and contexts. Rather than a button that appears to
   // do nothing, the plan text is shown for the student to select by hand.
@@ -695,6 +725,8 @@ function useStudyMax() {
       return
     }
 
+    // Only the latest request may land: an older, slower reply never overwrites a newer one.
+    const token = ++lookupToken.current
     setLookup({ kind: 'guidance', schoolName, program: programName, loading: true, result: null, error: null })
     try {
       const res = await fetch(api('/api/scholarship-guidance'), {
@@ -704,9 +736,11 @@ function useStudyMax() {
       })
       if (!res.ok) throw new Error('guidance request failed')
       const result: GuidanceResult = await res.json()
+      if (lookupToken.current !== token) return
       setLookup({ kind: 'guidance', schoolName, program: programName, loading: false, result, error: null })
       haptic.light()
     } catch {
+      if (lookupToken.current !== token) return
       setLookup({
         kind: 'guidance',
         schoolName,
@@ -777,12 +811,12 @@ function useStudyMax() {
     setUniversityId(state.universityId ?? '')
     setProgramId(state.programId ?? '')
     setCompleted(new Set(state.completed ?? []))
+    setUploadInProgress(state.inProgress ?? [])
     setRevealed(state.revealed ?? false)
     setStudentType(state.studentType ?? null)
     setDegree(state.degree ?? '')
     setMinorId(state.minorId ?? null)
     setConcentrationIds(state.concentrationIds ?? [])
-    setUploadInProgress([])
     setUploadStatus('idle')
     seedTargets(seedOf(state))
     setLookup(null)
@@ -980,6 +1014,8 @@ function useStudyMax() {
   }
 
   function planTarget(specId: string) {
+    // The "why you" notes name the target, so a new one gets fresh notes (the awards effect refetches).
+    if (specId !== hero.spec.id) setLookup(null)
     setHeroId(specId)
     setExtraTargetIds((ids) => ids.filter((id) => id !== specId))
     setSheet(null)
@@ -1079,6 +1115,7 @@ function useStudyMax() {
     uploadError,
     uploadInProgress,
     readPhase,
+    foundCount,
     handleTranscriptFile,
     // results
     matches,

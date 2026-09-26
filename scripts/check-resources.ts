@@ -38,7 +38,12 @@ const soon = daysUntil(
   { id: 'x', name: 'x', whatItIs: '', whyRelevant: '', deadline: '', deadlineDate: '2099-01-05' },
   new Date('2099-01-01T00:00:00'),
 )
-assert.equal(soon, 5, 'day count is inclusive of the deadline day')
+assert.equal(soon, 4, 'calendar days between today and the deadline day')
+
+const deadlineDay = { id: 'x', name: 'x', whatItIs: '', whyRelevant: '', deadline: '', deadlineDate: '2099-01-05' }
+assert.equal(daysUntil(deadlineDay, new Date('2099-01-05T10:00:00')), 0, 'deadline later today → 0 (closes today)')
+assert.equal(daysUntil(deadlineDay, new Date('2099-01-04T23:30:00')), 1, 'deadline tomorrow → 1, whatever the hour')
+assert.equal(daysUntil(deadlineDay, new Date('2099-01-06T00:01:00')), null, 'the day after → past')
 
 assert.equal(urgencyTier(0), 'urgent', '0 days → urgent')
 assert.equal(urgencyTier(14), 'urgent', '14 days → urgent (boundary)')
