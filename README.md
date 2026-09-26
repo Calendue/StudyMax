@@ -43,7 +43,7 @@ vercel dev
 
 | Variable | Used by | Required |
 | --- | --- | --- |
-| `ANTHROPIC_API_KEY` | transcript parsing, why this award fits you, guidance for unmapped schools | yes, for those routes |
+| `OPENAI_API_KEY` | transcript parsing, why this award fits you, guidance for unmapped schools | yes, for those routes |
 | `BLAND_API_KEY` | the outbound phone call | yes, for the call |
 | `BLAND_VOICE` | voice preset, defaults to `maya` | no |
 | `BLAND_FROM_NUMBER` | pins caller ID to one owned Bland number instead of their shared pool | no |

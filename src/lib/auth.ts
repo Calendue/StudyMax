@@ -29,7 +29,7 @@ const firebaseConfig = {
 
 // Google/Apple sign-in needs a Firebase project (see README for the four VITE_FIREBASE_* keys).
 // Without them, sign-in throws a clear AuthError instead of crashing — same pattern as the missing
-// ANTHROPIC_API_KEY/BLAND_API_KEY handling elsewhere in the app.
+// OPENAI_API_KEY/BLAND_API_KEY handling elsewhere in the app.
 export const isAuthConfigured = Boolean(
   firebaseConfig.apiKey && firebaseConfig.authDomain && firebaseConfig.projectId && firebaseConfig.appId,
 )
