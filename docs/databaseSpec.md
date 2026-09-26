@@ -27,11 +27,12 @@ The onboarding wizard's answers (`src/components/onboarding/`), one per student.
 | --- | --- | --- |
 | `profileId` | `BigInt` id | |
 | `userId` | `BigInt` unique, FK → `UserInfo` (cascade) | |
-| `studentType` | `String` | `"starting"` \| `"existing"` — app-validated, no DB enum |
+| `studentType` | `String` | `"first-year"` \| `"existing"` — app-validated, no DB enum. Matches `OnboardingProfile.studentType` |
 | `institutionId` | `BigInt`, FK → `Institution` (restrict) | |
-| `degree`, `major` | `String` | freeform, not FKs (see `Institution`/`Major` below) |
-| `minor`, `concentration` | `String?` | optional |
-| `startingTermSeason`, `startingTermYear` | `String?`, `Int?` | only set when `studentType = "starting"`; mirrors `lib/plan.ts`'s `TermStart` shape |
+| `degree` | `String` | freeform (from `DEGREE_OPTIONS`), not an FK |
+| `majorProgramId`, `minorProgramId` | `String`, `String?` | **`Program.id` slugs** from the static catalogue (e.g. `"computer-science"`), not freeform names — no FK, catalogue is static. Matches `OnboardingProfile.majorProgramId`/`minorProgramId` exactly |
+| `concentrationIds` | `String[]` | `Specialization.id` slugs the student is targeting alongside their major (multi-select, optional) — matches `OnboardingProfile.concentrationIds`. Empty when the major has no specialization data or the step was skipped |
+| `startingTermSeason`, `startingTermYear` | `String?`, `Int?` | only set when `studentType = "first-year"`; mirrors `lib/plan.ts`'s `TermStart` shape |
 | `goals` | `String?` (text) | |
 
 ### `StudentCourse`
@@ -66,7 +67,7 @@ A seeded dropdown of Canadian universities for the onboarding wizard's "Universi
 Seeded from `scripts/canadian-institutions-seed.json` (98 rows) by `scripts/seed-institutions.ts`, mirroring `calendue_demo`'s `Institution` model exactly: `institutionId`, `name` (unique), `province`, `city`, `country`, `timezone`, `isCustom` (true for a student's own typed-in school, excluded from the dropdown).
 
 ### `Major`
-A seeded dropdown/autocomplete source for the "Major" step — **not** a foreign key target. `StudentProfile.major` is a plain string, same pattern `calendue_demo` uses for its own `Major` table.
+A seeded, generic dropdown/autocomplete source (121 field-of-study names), mirroring `calendue_demo`'s own `Major` table — **not currently referenced by `StudentProfile`**. The onboarding wizard's actual "Major" step (`MajorStep.tsx`) picks from `src/data/programs` (USask-specific `Program`s with real specialization data), stored as `StudentProfile.majorProgramId` — a `Program.id` slug, not a `Major.name`. This table exists for a future institution whose major list isn't backed by static program data yet, not for USask/CS today.
 
 Seeded from `scripts/institution-majors.json` (121 rows) by `scripts/seed-majors.ts`: `majorId`, `name` (unique), `isCustom`.
 
