@@ -74,8 +74,8 @@
 .prism__lit {
   color: var(--accent);
   opacity: 0;
-  -webkit-mask-image: radial-gradient(circle closest-side, #000 0%, #000 60%, transparent 100%);
-  mask-image: radial-gradient(circle closest-side, #000 0%, #000 60%, transparent 100%);
+  -webkit-mask-image: radial-gradient(circle closest-side, var(--ink) 0%, var(--ink) 60%, transparent 100%);
+  mask-image: radial-gradient(circle closest-side, var(--ink) 0%, var(--ink) 60%, transparent 100%);
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
   -webkit-mask-position: center;
@@ -520,9 +520,11 @@
   flex: 0 0 auto;
 }
 
+/* 24px tall plus the --s2 below it: the 32px header roadmapLayout's HEADER_HEIGHT draws edges from. */
 .roadmap__column-label {
+  height: 24px;
   margin: 0 0 var(--s2);
-  font: 600 var(--fs-section) / 1.2 var(--font-brand);
+  font: 600 var(--fs-section) / 24px var(--font-brand);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--ink-2);
@@ -577,9 +579,11 @@
   font: 600 var(--fs-caption) / 1.2 var(--font-brand);
 }
 
+/* One line: the 56px node (NODE_HEIGHT) holds the code and one line of title, and a second line
+   would be cut through the middle. The full title is in the course's sheet. */
 .roadmap__node-title {
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
   margin-top: 2px;

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useModel } from '../model.ts'
 import { courseCode } from '../format.ts'
 import { catalogueUrl } from '../lib/courseSearch.ts'
@@ -57,6 +57,19 @@ export function PlanRoadmap() {
     return connected
   }, [edges, activeCode])
 
+  // On a phone only a column and a half fits, and the completed and in-progress columns come
+  // first, so the graph opens scrolled to show the first planned term rather than only the past.
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const firstTermCol = columns.findIndex((c) => c.key !== 'completed' && c.key !== 'in-progress')
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el || firstTermCol <= 0) return
+    const padding = parseFloat(getComputedStyle(el).paddingLeft) || 0
+    const termEnd = padding + columnX(firstTermCol) + COLUMN_WIDTH + padding
+    // Only when the term is mostly out of view; where it already shows, the past stays in view too.
+    if (termEnd - COLUMN_WIDTH / 2 > el.clientWidth) el.scrollLeft = termEnd - el.clientWidth
+  }, [firstTermCol])
+
   if (columns.length === 0) return null
 
   function selectCourse(code: string) {
@@ -70,7 +83,7 @@ export function PlanRoadmap() {
 
   return (
     <Appear index={3} className="roadmap">
-      <div className="roadmap__scroll">
+      <div className="roadmap__scroll" ref={scrollRef}>
         <div className="roadmap__track" style={{ width, gap: COLUMN_GAP }}>
           <svg className="roadmap__edges" width={width} height={height} aria-hidden>
             {edges.map((edge) => {
