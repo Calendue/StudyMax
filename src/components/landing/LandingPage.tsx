@@ -178,6 +178,14 @@ export function LandingPage({ onGetStarted, onSkip }: LandingPageProps) {
         </div>
       </section>
 
+      <section className="landing__meme" aria-label="Team meme">
+        <img
+          src="/study-maxing-meme.jpg"
+          alt="Drake meme: rejecting &ldquo;Aura maxing,&rdquo; approving &ldquo;Study maxing.&rdquo;"
+          className="landing__meme-img"
+        />
+      </section>
+
       <section className="landing__section" aria-labelledby="qa-heading">
         <h2 id="qa-heading" className="landing__heading">
           Questions we’d ask ourselves

@@ -1,87 +1,90 @@
-Rough draft of the database columns. Should be a prisma schema and pushed to the supabase remotely
+# Database spec
 
+Implemented in `prisma/schema.prisma`, migrated and seeded on the remote Supabase Postgres. This doc explains what each table is for and why — `prisma/schema.prisma` is the source of truth for exact column types/constraints; don't let this drift from it.
 
+Auth is **Firebase** (`src/auth.ts` — one module, native Capacitor sign-in on iOS/Android and the Firebase JS SDK on web, Google/Apple, with a "continue as guest" fallback) — not Clerk. `UserInfo.authUid` holds an `Account.uid`.
 
+## Tables
 
+### `UserInfo`
+The account row, one per signed-in student.
 
--> model UserInfo {
-  userId         BigInt   @id @default(autoincrement())
-  planId 	
-  clerkId        String   @unique @db.VarChar
-  firstName      String?  @db.VarChar
-  lastName       String?  @db.VarChar
-  email          String?  @db.VarChar
-  createdAt      DateTime @default(now()) @db.Timestamp(6)
-}
+| Column | Type | Notes |
+| --- | --- | --- |
+| `userId` | `BigInt` id | |
+| `authUid` | `String` unique | Firebase uid (`Account.uid`) |
+| `firstName`, `lastName`, `email` | `String?` | from the Firebase profile |
+| `createdAt`, `updatedAt` | `DateTime` | |
 
+Relations: one `StudentProfile`, many `StudentCourse`, one `GeneratedPlan`.
 
+Guests (no account) never get a `UserInfo` row — "continue without an account" / "skip onboarding" both work with no backend write, matching `src/auth.ts`'s `isAuthConfigured`/guest-fallback design.
 
+### `StudentProfile`
+The onboarding wizard's answers (`src/components/onboarding/`), one per student.
 
-Profile info {
-	userId
-	studentType: enum: new | existing
-	Institution: default is 64 (University of Saskatchewan)
-	Major (can be multiple)
-	minor (same list as majors)
-	concentration (Should get concentration based on major selected)
-	Goals: text
-}
+| Column | Type | Notes |
+| --- | --- | --- |
+| `profileId` | `BigInt` id | |
+| `userId` | `BigInt` unique, FK → `UserInfo` (cascade) | |
+| `studentType` | `String` | `"first-year"` \| `"existing"` — app-validated, no DB enum. Matches `OnboardingProfile.studentType` |
+| `institutionId` | `BigInt`, FK → `Institution` (restrict) | |
+| `degree` | `String` | freeform (from `DEGREE_OPTIONS`), not an FK |
+| `majorProgramId`, `minorProgramId` | `String`, `String?` | **`Program.id` slugs** from the static catalogue (e.g. `"computer-science"`), not freeform names — no FK, catalogue is static. Matches `OnboardingProfile.majorProgramId`/`minorProgramId` exactly |
+| `concentrationIds` | `String[]` | `Specialization.id` slugs the student is targeting alongside their major (multi-select, optional) — matches `OnboardingProfile.concentrationIds`. Empty when the major has no specialization data or the step was skipped |
+| `startingTermSeason`, `startingTermYear` | `String?`, `Int?` | only set when `studentType = "first-year"`; mirrors `lib/plan.ts`'s `TermStart` shape |
+| `goals` | `String?` (text) | |
 
+### `StudentCourse`
+Transcript entries — one row per (student, course code, status).
 
-Transcript Info {
-	userId
-	credit units done
-	courses taken
-	grades[]
-	….
+| Column | Type | Notes |
+| --- | --- | --- |
+| `studentCourseId` | `BigInt` id | |
+| `userId` | `BigInt`, FK → `UserInfo` (cascade) | |
+| `courseCode` | `String` | matches the static catalogue, e.g. `"CMPT145"` — no FK, catalogue isn't a DB table |
+| `status` | `String` | `"completed"` \| `"in_progress"` — app-validated |
+| `source` | `String`, default `"manual"` | `"manual"` \| `"transcript_upload"` |
 
-}
+`@@unique([userId, courseCode, status])`: the same code can have one `completed` row **and** one `in_progress` row at once (a retake after an earlier pass — see `src/lib/transcriptParse.ts`), just never two rows of the same status. No grades or credit-units-earned are tracked — the real transcript parser (`TranscriptParseResult`) only ever extracts course codes, nothing else.
 
-Model 
+### `GeneratedPlan`
+A cached snapshot of one computed plan, one per student (replaces the old `localStorage` blob).
 
-Generated plan {
-	userId
-	RecommendedCourses
-	…..
+| Column | Type | Notes |
+| --- | --- | --- |
+| `planId` | `BigInt` id | |
+| `userId` | `BigInt` unique, FK → `UserInfo` (cascade) | one current plan per student |
+| `targetProgramId` | `String` | a `Program.id` slug (e.g. `"computer-science"`) — no FK, catalogue is static |
+| `targetSpecializationIds` | `String[]` | `Specialization.id` slugs |
+| `coursesPerTerm` | `Int`, default `2` | |
+| `startSeason`, `startYear` | `String`, `Int` | |
+| `terms` | `Json` | a `PlannedTerm[]` snapshot from `lib/plan.ts`'s `buildPlan()` |
 
-}
+### `Institution`
+A seeded dropdown of Canadian universities for the onboarding wizard's "University" step — **not** the same thing as `src/data/schools/*` (the static, real course/specialization data, which only exists for `'usask'`). The app resolves a chosen `Institution.name` back to its static `School` via `findSchool()` when one exists.
 
-Course {
-	courseName
-	CreditUnits
-	termOffered (list from onboarding flow)
-	…..
+Seeded from `scripts/canadian-institutions-seed.json` (98 rows) by `scripts/seed-institutions.ts`, mirroring `calendue_demo`'s `Institution` model exactly: `institutionId`, `name` (unique), `province`, `city`, `country`, `timezone`, `isCustom` (true for a student's own typed-in school, excluded from the dropdown).
 
-	IsMulti (if a course is split into more than one term)
-}
+### `Major`
+A seeded, generic dropdown/autocomplete source (121 field-of-study names), mirroring `calendue_demo`'s own `Major` table — **not currently referenced by `StudentProfile`**. The onboarding wizard's actual "Major" step (`MajorStep.tsx`) picks from `src/data/programs` (USask-specific `Program`s with real specialization data), stored as `StudentProfile.majorProgramId` — a `Program.id` slug, not a `Major.name`. This table exists for a future institution whose major list isn't backed by static program data yet, not for USask/CS today.
 
+Seeded from `scripts/institution-majors.json` (121 rows) by `scripts/seed-majors.ts`: `majorId`, `name` (unique), `isCustom`.
 
-model GoogleCalendarToken {
-  id           BigInt   @id @default(autoincrement())
-  clerkId      String   @unique @db.VarChar
-  accessToken  String   @db.Text
-  refreshToken String?  @db.Text
-  expiryDate   BigInt? // ms epoch — matches existing Tokens type
-  createdAt    DateTime @default(now()) @db.Timestamp(6)
-  updatedAt    DateTime @updatedAt @db.Timestamp(6)
+## Deliberately not in the database
 
-  UserInfo UserInfo @relation(fields: [clerkId], references: [clerkId], onDelete: Cascade)
+- **The course catalogue, programs, specializations, and scholarships/resources** (`src/data/courses.ts`, `prereqs.ts`, `specializations.ts`, `programs/*`, `schools/*`) stay static generated TypeScript files, per CLAUDE.md: "adding a program is a data task, not an engineering task." Matching/planning (`lib/match.ts`, `plan.ts`, `credentials.ts`) runs client-side over these files; the DB only stores per-student data.
+- **Grades and credit-units-earned** — the real transcript parser never extracts them (only course codes, bucketed completed/in-progress).
+- **Phone numbers** (the Bland call feature, `api/call-me.ts`) — `App.tsx` has an explicit comment that the number "is deliberately excluded — it never touches storage," a privacy decision, not a gap.
+- **Google/Apple calendar tokens, Stripe/subscription fields** — these appeared in an earlier draft of this doc as copy-pasted boilerplate from a sibling project (`calendue_demo`); nothing in StudyMax touches calendars or billing.
+- **"Why this fits you" AI scholarship copy** (`lib/scholarshipAi.ts`) — ephemeral client state today, not cached anywhere.
 
-  @@index([clerkId])
-}
+## Migrations & seeding
 
+```
+npm run db:migrate          # prisma migrate deploy (uses DIRECT_URL, not the pooler)
+npm run db:seed             # seeds Institution + Major from the two JSON files in scripts/
+npm run db:studio           # visual browser for the remote DB
+```
 
-
-model AppleCalendarToken {
-  id          BigInt   @id @default(autoincrement())
-  clerkId     String   @unique @db.VarChar
-  email       String   @db.VarChar
-  appPassword String   @db.Text
-  connectedAt BigInt // ms epoch — matches existing AppleTokens type
-  createdAt   DateTime @default(now()) @db.Timestamp(6)
-  updatedAt   DateTime @updatedAt @db.Timestamp(6)
-
-  UserInfo UserInfo @relation(fields: [clerkId], references: [clerkId], onDelete: Cascade)
-
-  @@index([clerkId])
-}
+`prisma/schema.prisma`'s `datasource` block sets both `url` (pooled, pgbouncer, runtime) and `directUrl` (direct connection, used by the migration engine) — required for Supabase. Prisma's CLI doesn't read `.env.local`, so migration/studio commands are wrapped in `dotenv-cli` (see the `db:*` scripts in `package.json`).

@@ -1,7 +1,7 @@
 // Sanity check for the term planner. Run: node --experimental-strip-types scripts/check-plan.ts
 import assert from 'node:assert/strict'
 import { computeMatches } from '../src/lib/match.ts'
-import { buildPlan, selectCourses, withPrerequisites, courseLevel, upcomingTerm } from '../src/lib/plan.ts'
+import { buildPlan, selectCourses, withPrerequisites, courseLevel, upcomingTerm, buildStudentPlan, termsFrom } from '../src/lib/plan.ts'
 import { courseInfo } from '../src/data/prereqs.ts'
 import { completedCourses } from '../src/data/transcript.ts'
 import { specializations } from '../src/data/specializations.ts'
@@ -167,6 +167,20 @@ assert.deepEqual(
 const done = matches.find((m) => m.remaining === 0)
 if (done) assert.deepEqual(buildPlan(done, specializations, completed, 3, { season: 'Fall', year: 2026 }), [])
 assert.ok(buildPlan(matches[0], specializations, completed, 0, { season: 'Fall', year: 2026 }).length >= 0)
+
+// --- student plan: in-progress courses are never re-planned, and the start term is honoured ---
+{
+  const target = matches.find((m) => m.remaining >= 2)!
+  const inProgress = selectCourses(target, specializations, completed).slice(0, 1).map((c) => c.code)
+  const start = { season: 'Winter', year: 2027 } as const
+  const studentPlan = buildStudentPlan([target.spec], specializations, completed, inProgress, 2, start)
+  const planned = studentPlan.flatMap((t) => t.courses.map((c) => c.code))
+  assert.ok(!planned.includes(inProgress[0]), 'an in-progress course is not planned again')
+  assert.equal(studentPlan[0].label, 'Winter 2027', 'plan starts in the chosen term')
+  assert.deepEqual(termsFrom(start, 3).map((t) => `${t.season} ${t.year}`), ['Winter 2027', 'Fall 2027', 'Winter 2028'])
+  const everything = selectCourses(target, specializations, completed).map((c) => c.code)
+  assert.deepEqual(buildStudentPlan([target.spec], specializations, completed, everything, 2, start), [], 'finished by in-progress = no plan')
+}
 
 assert.deepEqual(upcomingTerm(new Date('2026-03-01')), { season: 'Fall', year: 2026 })
 assert.deepEqual(upcomingTerm(new Date('2026-10-01')), { season: 'Winter', year: 2027 })

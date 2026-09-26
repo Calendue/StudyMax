@@ -1,6 +1,6 @@
 import type { Specialization } from '../data/specializations.ts'
 import { courseInfo } from '../data/prereqs.ts'
-import { computeCourseOverlap, type SpecializationMatch } from './match.ts'
+import { computeCourseOverlap, computeMatches, type SpecializationMatch } from './match.ts'
 
 export interface PlannedCourse {
   code: string
@@ -195,7 +195,7 @@ function topologicalOrder(courses: PlannedCourse[], completed: Set<string>): Pla
   return ordered
 }
 
-function nextTerm({ season, year }: TermStart): TermStart {
+export function nextTerm({ season, year }: TermStart): TermStart {
   // USask runs Fall (Sept, year Y) then Winter (Jan, year Y+1).
   return season === 'Fall' ? { season: 'Winter', year: year + 1 } : { season: 'Fall', year }
 }
@@ -240,6 +240,33 @@ export function buildPlan(
     term = nextTerm(term)
   }
 
+  return terms
+}
+
+/**
+ * The plan from the student's own state, starting in the term they chose.
+ *
+ * In-progress courses are assumed finished by `start`: never planned again, and they unlock their
+ * dependants from the first planned term. Targets are re-matched against that, so a slot an
+ * in-progress course already fills drops out — and a target it finishes outright yields no terms.
+ */
+export function buildStudentPlan(
+  targets: Specialization[],
+  allSpecializations: Specialization[],
+  completed: Set<string>,
+  inProgress: Iterable<string>,
+  coursesPerTerm: number,
+  start: TermStart,
+): PlannedTerm[] {
+  const done = new Set([...completed, ...inProgress])
+  const open = computeMatches(targets, done).filter((m) => m.remaining > 0)
+  return open.length > 0 ? buildPlan(open, allSpecializations, done, coursesPerTerm, start) : []
+}
+
+/** `count` consecutive terms from `start`, for a start-term picker. */
+export function termsFrom(start: TermStart, count: number): TermStart[] {
+  const terms = [start]
+  while (terms.length < count) terms.push(nextTerm(terms[terms.length - 1]))
   return terms
 }
 

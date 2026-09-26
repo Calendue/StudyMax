@@ -4,7 +4,7 @@ import {
   type WhyYouContext,
   type WhyYouResourceInput,
 } from '../src/lib/scholarshipAi.js'
-import { openAIKey, respond } from './_openai.js'
+import { openAIKey, respond, sendFailure } from './_openai.js'
 
 interface VercelRequest {
   method?: string
@@ -37,8 +37,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let text: string
   try {
     text = await respond(apiKey, buildWhyYouPrompt(body.context, body.resources), 2048)
-  } catch {
-    res.status(502).json({ error: 'upstream error' })
+  } catch (err) {
+    sendFailure(res, err)
     return
   }
 

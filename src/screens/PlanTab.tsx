@@ -1,10 +1,10 @@
 import { useModel } from '../model.ts'
-import { KIND_LABEL, courseCode, plural } from '../format.ts'
-import { catalogueUrl } from '../lib/courseSearch.ts'
+import { KIND_LABEL, plural } from '../format.ts'
 import { ScreenTitle } from '../ui/chrome.tsx'
 import { Icon } from '../ui/Icon.tsx'
-import { Appear, Button, Chip, Group, Ring, Row, SectionLabel } from '../ui/primitives.tsx'
+import { Appear, Button, Group, Ring, Row, SectionLabel } from '../ui/primitives.tsx'
 import { Sheet } from '../ui/Sheet.tsx'
+import { PlanRoadmap } from './PlanRoadmap.tsx'
 
 export function PlanTab() {
   const m = useModel()
@@ -79,6 +79,23 @@ export function PlanTab() {
         </div>
       </Appear>
 
+      <Appear index={1} className="per-term">
+        <label htmlFor="start-term">Starting</label>
+        {/* ponytail: native select, not a segmented control; six term labels don't fit one row on a phone */}
+        <select
+          id="start-term"
+          value={`${m.startTerm.season} ${m.startTerm.year}`}
+          onChange={(e) => {
+            const t = m.startChoices.find((c) => `${c.season} ${c.year}` === e.target.value)
+            if (t) m.setStartTerm(t)
+          }}
+        >
+          {m.startChoices.map((t) => (
+            <option key={`${t.season} ${t.year}`}>{`${t.season} ${t.year}`}</option>
+          ))}
+        </select>
+      </Appear>
+
       {m.hiddenPrereqs.length > 0 && (
         <Appear index={2} className="notice">
           <p>
@@ -92,40 +109,7 @@ export function PlanTab() {
         </Appear>
       )}
 
-      <ol className="timeline">
-        {plan.map((term, i) => (
-          <li key={term.label} className="timeline__term">
-            <Appear index={3 + i}>
-              <span className="timeline__node" aria-hidden />
-              <h3 className="timeline__label">{term.label}</h3>
-              <div className="group">
-                {term.courses.map((c) => (
-                  <a key={c.code} className="row row--tap plan-course" href={catalogueUrl(c.code)} target="_blank" rel="noreferrer">
-                    <span className="row__body">
-                      <span className="row__title">
-                        {courseCode(c.code)}
-                        {c.reason === 'prerequisite' && <Chip>Prerequisite</Chip>}
-                      </span>
-                      <span className="row__subtitle">{m.courseTitle(c.code)}</span>
-                      {c.reason === 'prerequisite' && (
-                        <span className="row__note">
-                          Needed before {courseCode(c.neededBy ?? '')}
-                          {c.prerequisiteText ? `, which requires ${c.prerequisiteText}` : ''}
-                        </span>
-                      )}
-                      {c.alsoAdvances.length > 0 && (
-                        <span className="row__note row__note--plus">Also counts toward {c.alsoAdvances.join(', ')}</span>
-                      )}
-                    </span>
-                    <Icon name="external" size={18} className="row__chevron" />
-                    <span className="visually-hidden"> (opens the USask catalogue)</span>
-                  </a>
-                ))}
-              </div>
-            </Appear>
-          </li>
-        ))}
-      </ol>
+      <PlanRoadmap />
 
       <div className="hero-action">
         <Button block icon={m.planCopied ? 'check' : 'copy'} onClick={() => void m.copyPlan()}>

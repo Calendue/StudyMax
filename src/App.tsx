@@ -10,7 +10,7 @@ import type { School } from './data/schools/types.ts'
 import { computerScience } from './data/programs/computerScience.ts'
 import type { Program } from './data/programs/types.ts'
 import { buildCallScript, type CallContext } from './lib/callScript.ts'
-import { buildPlan, upcomingTerm } from './lib/plan.ts'
+import { buildStudentPlan, termsFrom, upcomingTerm, type TermStart } from './lib/plan.ts'
 import { computeCredentials } from './lib/credentials.ts'
 import { searchCourses, catalogueTitle } from './lib/courseSearch.ts'
 import { courseInfo } from './data/prereqs.ts'
@@ -19,12 +19,14 @@ import { api, haptic, isNative, onAppUrlOpen, onBackButton } from './platform.ts
 import { cachedFeatures, fetchFeatures } from './features.ts'
 import { buildWidgetSnapshot } from './lib/widgetSnapshot.ts'
 import { currentDeadlineWatch, startDeadlineWatch, stopDeadlineWatch, syncWidgets, watchFailureMessage } from './widgets.ts'
+import { useClassTracker } from './useClassTracker.ts'
 import { currentAccount, isAuthConfigured, signIn, signInErrorMessage, signOut, type Account, type Provider } from './auth.ts'
 import { ModelContext } from './model.ts'
 import { courseCode, type TargetKind } from './format.ts'
 import { DUR, INSTANT, SETTLE } from './ui/motion.ts'
 import { Intro } from './screens/Intro.tsx'
 import { LandingScreen } from './screens/LandingScreen.tsx'
+import { LandingPage } from './components/landing/LandingPage.tsx'
 import { WelcomeScreen } from './screens/WelcomeScreen.tsx'
 import { AccountSheet } from './screens/AccountSheet.tsx'
 import { ConcentrationScreen, DegreeScreen, MajorScreen, MinorScreen, StudentScreen, UniversityScreen } from './screens/Onboarding.tsx'
@@ -71,7 +73,7 @@ export type Screen =
   | 'reveal'
   | 'results'
   | 'call'
-export type Tab = 'overview' | 'plan' | 'awards'
+export type Tab = 'overview' | 'plan' | 'awards' | 'classes'
 /** First-years have no courses to add yet, so they go from onboarding straight to the reveal. */
 export type StudentType = 'first-year' | 'existing'
 
@@ -97,11 +99,20 @@ class UploadError extends Error {}
 // the choice survives a refresh the same way a real program id does.
 const SUBJECT_PROGRAM_PREFIX = 'subject:'
 
+// Shorthand for programs whose name doesn't match an Arts & Science subject's name.
+const PROGRAM_CODES: Record<string, string[]> = {
+  'computer-science': ['CS', 'COMPSCI'],
+  'applied-computing': ['CMPT'],
+  'applied-mathematics': ['MATH'],
+}
+
 export interface ProgramOption {
   id: string
   name: string
-  /** Present only for programs derived from an Arts & Science subject. */
+  /** The Arts & Science subject code whose name matches this program's ("CMPT" for Computer Science). */
   subjectCode?: string
+  /** Other shorthand a student might search by. */
+  aliases: string[]
   /** Whether StudyMax has requirement data, i.e. whether it can build a plan or only find money. */
   hasData: boolean
 }
@@ -122,7 +133,9 @@ interface SavedState {
 
 /** The targets onboarding seeds the plan with: the concentrations first, then a declared minor. */
 function seedOf(state: Pick<Partial<SavedState>, 'concentrationIds' | 'minorId'>): string[] {
-  return [...(state.concentrationIds ?? []), state.minorId].filter((id): id is string => Boolean(id))
+  // The minor is a program; the plan targets its requirement lists (specializations) by id.
+  const minorSpecIds = usask.programs?.find((p) => p.id === state.minorId)?.specializations.map((s) => s.id) ?? []
+  return [...(state.concentrationIds ?? []), ...minorSpecIds]
 }
 
 // Intake selections survive a refresh so a half-finished session isn't lost. The phone number is
@@ -192,7 +205,16 @@ function useStudyMax() {
   const programOptions = useMemo<ProgramOption[]>(() => {
     const fromSchool = availablePrograms
       .filter((p) => p.kind !== 'certificate' && p.kind !== 'minor')
-      .map((p) => ({ id: p.id, name: p.name, hasData: p.specializations.length > 0 }))
+      .map((p) => {
+        const subject = artsAndScienceSubjects.find((s) => s.name.toLowerCase() === p.name.toLowerCase())
+        return {
+          id: p.id,
+          name: p.name,
+          subjectCode: subject?.code,
+          aliases: PROGRAM_CODES[p.id] ?? [],
+          hasData: p.specializations.length > 0,
+        }
+      })
     const named = new Set(availablePrograms.map((p) => p.name.toLowerCase()))
     const fromSubjects = artsAndScienceSubjects
       .filter((subject) => !named.has(subject.name.toLowerCase()))
@@ -200,6 +222,7 @@ function useStudyMax() {
         id: `${SUBJECT_PROGRAM_PREFIX}${subject.code}`,
         name: subject.name,
         subjectCode: subject.code,
+        aliases: [],
         hasData: false,
       }))
     return [...fromSchool, ...fromSubjects]
@@ -207,21 +230,24 @@ function useStudyMax() {
 
   const [programPickQuery, setProgramPickQuery] = useState('')
 
-  // Name match first, then subject code ("PSY"), so both ways of thinking about a program work.
-  // Programs StudyMax can actually plan sort above the rest of the college.
+  // An exact subject code ("CMPT") first, then name or shorthand prefix, then name anywhere, so both
+  // ways of thinking about a program work. Programs StudyMax can plan sort above the rest.
   const programResults = useMemo(() => {
     const query = programPickQuery.trim().toLowerCase()
     return programOptions
       .map((option) => {
         const name = option.name.toLowerCase()
+        const codes = [option.subjectCode, ...option.aliases].filter((c): c is string => !!c).map((c) => c.toLowerCase())
         const score =
           query.length === 0
             ? 1
-            : name.startsWith(query) || option.subjectCode?.toLowerCase().startsWith(query)
-              ? 3
-              : name.includes(query)
-                ? 2
-                : 0
+            : option.subjectCode?.toLowerCase() === query
+              ? 4
+              : name.startsWith(query) || codes.some((code) => code.startsWith(query))
+                ? 3
+                : name.includes(query)
+                  ? 2
+                  : 0
         return { option, score }
       })
       .filter((hit) => hit.score > 0)
@@ -362,7 +388,11 @@ function useStudyMax() {
   }
 
   function handleUniversityChange(id: UniversityChoice) {
-    if (id === universityId) return
+    if (id === universityId) {
+      haptic.selection()
+      requestAdvance()
+      return
+    }
     setUniversityId(id)
     setProgramId('')
     setCompleted(new Set())
@@ -371,12 +401,16 @@ function useStudyMax() {
     setExtraTargetIds([])
     setUploadStatus('idle')
     haptic.selection()
+    requestAdvance()
   }
 
   function handleProgramChange(id: string) {
     setSheet(null)
     haptic.selection()
-    if (id === programId) return
+    if (id === programId) {
+      requestAdvance()
+      return
+    }
     setProgramId(id)
     setCompleted(new Set())
     setUploadInProgress([])
@@ -384,21 +418,25 @@ function useStudyMax() {
     setExtraTargetIds([])
     setConcentrationIds([]) // they belong to the major they were picked from
     setUploadStatus('idle')
+    requestAdvance()
   }
 
   function chooseStudentType(type: StudentType) {
     haptic.selection()
     setStudentType(type)
+    requestAdvance()
   }
 
   function chooseDegree(value: string) {
     haptic.selection()
     setDegree(value)
+    requestAdvance()
   }
 
   function chooseMinor(id: string | null) {
     haptic.selection()
     setMinorId(id)
+    requestAdvance()
   }
 
   function toggleConcentration(id: string) {
@@ -544,10 +582,20 @@ function useStudyMax() {
       (m) => m.remaining > 0,
     )
   }, [hero, matches, credentials, extraTargetIds])
+  // The plan starts in a term the student picks; in-progress courses count as passed by then.
+  const startChoices = useMemo(() => termsFrom(upcomingTerm(today), 6), [today])
+  const [startTerm, setStartTerm] = useState<TermStart>(startChoices[0])
   const plan = useMemo(
     () =>
-      targets.length > 0 ? buildPlan(targets, planningSpecs, completed, coursesPerTerm, upcomingTerm(today)) : [],
-    [targets, planningSpecs, completed, coursesPerTerm, today],
+      buildStudentPlan(
+        targets.map((t) => t.spec),
+        planningSpecs,
+        completed,
+        uploadInProgress,
+        coursesPerTerm,
+        startTerm,
+      ),
+    [targets, planningSpecs, completed, uploadInProgress, coursesPerTerm, startTerm],
   )
   const [planCopied, setPlanCopied] = useState(false)
   // Clipboard writes are blocked in some browsers and contexts. Rather than a button that appears to
@@ -567,7 +615,7 @@ function useStudyMax() {
         (hiddenPrereqs.length > 0
           ? `, plus ${hiddenPrereqs.length} prerequisite${hiddenPrereqs.length === 1 ? '' : 's'} not listed on the specialization page`
           : '') +
-        `. ${coursesPerTerm} per term.`,
+        `. ${coursesPerTerm} per term, starting ${startTerm.season} ${startTerm.year}.`,
       '',
       ...plan.flatMap((term) => [
         `${term.label}:`,
@@ -828,8 +876,12 @@ function useStudyMax() {
         : resumeScreen(saved),
   )
   const [direction, setDirection] = useState<1 | -1>(1)
+  const [advanceSignal, setAdvanceSignal] = useState(0)
   const [tab, setTabState] = useState<Tab>(() => (hasProgramData ? 'overview' : 'awards'))
   const [sheet, setSheet] = useState<string | null>(null)
+  // A peek at the pitch from inside the app — separate from the `landing` screen the flow itself
+  // uses on first visit, so revisiting it never re-triggers onboarding or reloads the sample data.
+  const [showLanding, setShowLanding] = useState(false)
 
   function go(next: Screen, dir: 1 | -1 = 1) {
     setDirection(dir)
@@ -876,6 +928,21 @@ function useStudyMax() {
     const to = flow[flowIndex + 1]
     if (to) go(to)
     else startReveal()
+  }
+
+  // A single-select answer advances on its own — no Continue click needed. The choose handlers set
+  // their piece of state and call this in the same tick; since flow/onboardingSteps depend on that
+  // state (e.g. picking "another university" changes what comes after), next() can't run inline off
+  // the stale closure from this render. Bumping this signal defers the call to an effect, which runs
+  // after the state has committed and a fresh next() (closed over the updated flow) exists.
+  useEffect(() => {
+    if (advanceSignal === 0) return
+    next()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [advanceSignal])
+
+  function requestAdvance() {
+    setAdvanceSignal((s) => s + 1)
   }
 
   /** The landing page's call to action: into the flow at its first step. */
@@ -1039,8 +1106,13 @@ function useStudyMax() {
     if (screen === 'results' && lookup === null && universityId === 'usask') loadAwards.current()
   }, [screen, lookup, universityId])
 
+  // Watching full USask sections for an open seat (the Classes tab). Lives up here so an opening is
+  // heard from any tab.
+  const classes = useClassTracker()
+
   return {
     features,
+    classes,
     // account
     account,
     authBusy,
@@ -1102,6 +1174,9 @@ function useStudyMax() {
     plan,
     coursesPerTerm,
     setCoursesPerTerm,
+    startChoices,
+    startTerm,
+    setStartTerm,
     hiddenPrereqs,
     copyPlan,
     planCopied,
@@ -1140,6 +1215,8 @@ function useStudyMax() {
     sheet,
     setSheet,
     openSheet,
+    showLanding,
+    setShowLanding,
     next,
     startFromLanding,
     nextIsReveal,
@@ -1196,6 +1273,18 @@ function App() {
   // In the native app the first screen mounts as the launch splash starts to dissolve, not under it,
   // so its rows spring in while the splash fades out: one continuous move into the app.
   const [launched, setLaunched] = useState(!isNative)
+
+  if (model.showLanding) {
+    return (
+      <ModelContext.Provider value={model}>
+        <div className="app app--wide">
+          <main className="screen__body">
+            <LandingPage onGetStarted={() => model.setShowLanding(false)} onSkip={() => model.setShowLanding(false)} />
+          </main>
+        </div>
+      </ModelContext.Provider>
+    )
+  }
 
   const Current = SCREENS[model.screen]
   return (

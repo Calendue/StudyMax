@@ -1,6 +1,6 @@
 import { buildTranscriptParsePrompt, parseTranscriptResponse } from '../src/lib/transcriptParse.js'
 import { catalogueCourses } from '../src/data/courses.js'
-import { OpenAIError, openAIKey, respond } from './_openai.js'
+import { openAIKey, respond, sendFailure } from './_openai.js'
 
 const CATALOGUE_CODES = catalogueCourses.map((c) => c.code)
 
@@ -37,15 +37,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     text = await respond(
       apiKey,
       [
-        { type: 'input_file', filename: 'transcript.pdf', file_data: `data:application/pdf;base64,${body.pdfBase64}` },
-        { type: 'input_text', text: buildTranscriptParsePrompt() },
+        { type: 'file', file: { filename: 'transcript.pdf', file_data: `data:application/pdf;base64,${body.pdfBase64}` } },
+        { type: 'text', text: buildTranscriptParsePrompt() },
       ],
-      // A full multi-term transcript is a long JSON answer, and reasoning shares this budget.
       4096,
     )
   } catch (err) {
-    // The status alone lets the app tell "our side" (401/403) from "try again"; nothing else is sent.
-    res.status(502).json({ error: 'upstream error', status: err instanceof OpenAIError ? err.status : 0 })
+    // The app tells the student whether the problem is on our side (401/403) from the status alone.
+    sendFailure(res, err)
     return
   }
 

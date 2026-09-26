@@ -24,15 +24,20 @@ model UserInfo {
 }
 
 model StudentProfile {
-  profileId     BigInt  @id @default(autoincrement())
-  userId        BigInt  @unique
-  studentType   String  @db.VarChar // "starting" | "existing" — validated app-side, no DB enum
+  profileId     BigInt @id @default(autoincrement())
+  userId        BigInt @unique
+  studentType   String @db.VarChar // "first-year" | "existing" — validated app-side, no DB enum. Matches OnboardingProfile.studentType.
   institutionId BigInt
-  degree        String  @db.VarChar
-  major         String  @db.VarChar
-  minor         String? @db.VarChar
-  concentration String? @db.VarChar
-  // Only set when studentType = "starting"; null for "existing". Mirrors lib/plan.ts's TermStart shape.
+  degree        String @db.VarChar
+  // Program.id slugs from the static catalogue (e.g. "computer-science"), not freeform names — no FK,
+  // catalogue is static. Matches OnboardingProfile.majorProgramId/minorProgramId exactly.
+  majorProgramId   String   @db.VarChar
+  minorProgramId   String?  @db.VarChar
+  // Specialization.id slugs the student is targeting alongside their major — matches
+  // OnboardingProfile.concentrationIds. Optional/multi-select; empty when the major has no
+  // specialization data or the student skipped it.
+  concentrationIds String[]
+  // Only set when studentType = "first-year"; null for "existing". Mirrors lib/plan.ts's TermStart shape.
   startingTermSeason String?  @db.VarChar // "Fall" | "Winter"
   startingTermYear   Int?
   goals              String?  @db.Text

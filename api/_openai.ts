@@ -1,15 +1,16 @@
 // The one place StudyMax talks to OpenAI. The underscore keeps Vercel from serving this file as a
 // route. Every AI route goes through here so two rules hold everywhere:
 // · The key only ever travels in the Authorization header. It is never logged or echoed.
-// · OpenAI's error text never leaves the server. An auth failure quotes part of the key back, so a
-//   route gets the status code and a safe error code, and passes on nothing else.
+// · OpenAI's error text never leaves the server. An auth failure quotes part of the key back and a
+//   rate-limit error names the organization, so a route gets the status code and passes on nothing
+//   else, and the log keeps only the status and OpenAI's error code.
 
-const RESPONSES_URL = 'https://api.openai.com/v1/responses'
+const CHAT_URL = 'https://api.openai.com/v1/chat/completions'
 export const OPENAI_MODEL = 'gpt-5-mini'
 
 export type InputContent =
-  | { type: 'input_text'; text: string }
-  | { type: 'input_file'; filename: string; file_data: string }
+  | { type: 'text'; text: string }
+  | { type: 'file'; file: { filename: string; file_data: string } }
 
 /** A failed call, carrying only what's safe to act on: the HTTP status (0 when unreachable). */
 export class OpenAIError extends Error {
@@ -25,23 +26,42 @@ export function openAIKey(): string | null {
   return process.env.OPENAI_API_KEY || null
 }
 
+interface ErrorResponse {
+  status: (code: number) => { json: (body: unknown) => void }
+}
+
+/** Answers a failed AI route: the upstream status for an OpenAI failure, nothing else ever. */
+export function sendFailure(res: ErrorResponse, err: unknown): void {
+  if (err instanceof OpenAIError) {
+    res.status(502).json({ error: 'upstream error', status: err.status })
+    return
+  }
+  console.error('ai route failed')
+  res.status(500).json({ error: 'server error' })
+}
+
 /**
- * One request, one reply's text. Reasoning stays low: these are extraction and short writing
- * tasks, and the student is waiting. Nothing is stored on OpenAI's side (store: false), since the
+ * One request, one reply's text. Nothing is stored on OpenAI's side (store: false), since the
  * inputs include student transcripts.
+ *
+ * Chat Completions with reasoning_effort "minimal": uncapped, gpt-5-mini can spend the whole token
+ * budget on hidden reasoning and return empty text. Measured on a synthetic transcript, a "why you"
+ * batch and a guidance request, six runs each: minimal was correct every time and 2-5x faster than
+ * low, and Chat Completions read the transcript right 6/6 where the Responses API filed an
+ * in-progress course as completed once.
  */
 export async function respond(apiKey: string, content: string | InputContent[], maxOutputTokens: number): Promise<string> {
   let upstream: Response
   try {
-    upstream = await fetch(RESPONSES_URL, {
+    upstream = await fetch(CHAT_URL, {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
         model: OPENAI_MODEL,
-        reasoning: { effort: 'low' },
-        max_output_tokens: maxOutputTokens,
+        reasoning_effort: 'minimal',
+        max_completion_tokens: maxOutputTokens,
         store: false,
-        input: [{ role: 'user', content }],
+        messages: [{ role: 'user', content }],
       }),
     })
   } catch {
@@ -50,8 +70,7 @@ export async function respond(apiKey: string, content: string | InputContent[], 
   }
 
   if (!upstream.ok) {
-    // Log the status and OpenAI's error code (e.g. "invalid_api_key", "rate_limit_exceeded"),
-    // never its message.
+    // e.g. "invalid_api_key", "rate_limit_exceeded": a code, never the message.
     const code = await upstream
       .json()
       .then((d) => String(d?.error?.code ?? d?.error?.type ?? ''))
@@ -60,17 +79,16 @@ export async function respond(apiKey: string, content: string | InputContent[], 
     throw new OpenAIError(upstream.status)
   }
 
-  return outputText(await upstream.json())
-}
-
-/** The reply's text: every output_text part of every message item, in order. */
-function outputText(data: unknown): string {
-  const output = (data as { output?: unknown[] })?.output
-  if (!Array.isArray(output)) return ''
-  let text = ''
-  for (const item of output as { type?: string; content?: { type?: string; text?: string }[] }[]) {
-    if (item?.type !== 'message' || !Array.isArray(item.content)) continue
-    for (const part of item.content) if (part?.type === 'output_text' && typeof part.text === 'string') text += part.text
+  // A body that isn't JSON is treated as a failure; the parse error would quote the body.
+  const data = await upstream.json().catch(() => null)
+  if (data === null) {
+    console.error('openai unreadable reply')
+    throw new OpenAIError(502)
+  }
+  const text = data?.choices?.[0]?.message?.content
+  if (typeof text !== 'string' || !text) {
+    console.error(`openai empty reply ${String(data?.choices?.[0]?.finish_reason ?? '').replace(/[^a-z_]/g, '')}`)
+    return ''
   }
   return text
 }
