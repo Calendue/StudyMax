@@ -60,3 +60,5 @@ Ranked by what actually swings judges, in order of what to protect first:
 
 TEAM_EMAIL=ayotundeogunade13@gmail.com,michealsalam06@gmail.com,lafiajisamuel@gmail.com,Ibraheem.Islam.2016@gmail.com,support@calendue.ai,calendue.dev@gmail.com
 
+"SM" = "StudyMax"
+

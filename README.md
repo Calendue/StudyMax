@@ -48,6 +48,17 @@ vercel dev
 | `BLAND_VOICE` | voice preset, defaults to `maya` | no |
 | `BLAND_FROM_NUMBER` | pins caller ID to one owned Bland number instead of their shared pool | no |
 
+Google/Apple sign-in (the onboarding wizard) needs a Firebase project with those two providers turned on, and reads its config from four client-side `VITE_FIREBASE_*` variables instead:
+
+| Variable | Used by | Required |
+| --- | --- | --- |
+| `VITE_FIREBASE_API_KEY` | Google/Apple sign-in | yes, for sign-in |
+| `VITE_FIREBASE_AUTH_DOMAIN` | Google/Apple sign-in | yes, for sign-in |
+| `VITE_FIREBASE_PROJECT_ID` | Google/Apple sign-in | yes, for sign-in |
+| `VITE_FIREBASE_APP_ID` | Google/Apple sign-in | yes, for sign-in |
+
+Without them, the "Continue with Google/Apple" buttons show a clear "sign-in isn't set up yet" message rather than failing silently — onboarding itself, and the rest of the app, work fully without an account either way ("Continue without an account" / "Skip onboarding, just let me in").
+
 Under plain `npm run dev` the upload button returns a clear message saying the reader is a serverless function, rather than failing silently.
 
 ## Checks

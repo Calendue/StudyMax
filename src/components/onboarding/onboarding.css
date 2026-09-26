@@ -1,0 +1,112 @@
+/* Onboarding wizard shell — deliberately separate from App.css so it stays a portable, self
+   contained component rather than more lines in the app's one big stylesheet. */
+
+.onboarding {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  padding: var(--space-xl) clamp(1rem, 4vw, 1.5rem);
+  background: var(--color-paper);
+}
+
+.onboarding__shell {
+  width: 100%;
+  max-width: 32rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.onboarding__mark {
+  align-self: center;
+}
+
+.onboarding__progress {
+  display: flex;
+  gap: var(--space-2xs);
+  justify-content: center;
+}
+
+.onboarding__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-paper-3);
+}
+
+.onboarding__dot--done {
+  background: var(--color-accent-deep);
+}
+
+.onboarding__step {
+  background: var(--color-paper-2);
+  border-radius: var(--radius-card);
+  padding: var(--space-lg);
+}
+
+.onboarding__choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+  margin-top: var(--space-md);
+}
+
+.onboarding__choices--stack {
+  margin-top: var(--space-lg);
+}
+
+.onboarding__choice {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2em;
+  text-align: left;
+  padding: var(--space-sm) var(--space-md);
+  border: 2px solid transparent;
+  border-radius: var(--radius-input);
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font: inherit;
+  cursor: pointer;
+  transition:
+    border-color var(--dur-short) var(--ease-out),
+    background var(--dur-short) var(--ease-out);
+}
+
+.onboarding__choice:hover {
+  border-color: var(--color-accent-deep);
+}
+
+.onboarding__choice:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.onboarding__choice--selected {
+  border-color: var(--color-accent-deep);
+  background: color-mix(in srgb, var(--color-accent) 22%, var(--color-paper));
+}
+
+.onboarding__choice--disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.onboarding__choice-title {
+  font-weight: 600;
+}
+
+.onboarding__choice-hint {
+  color: var(--color-ink-2);
+  font-size: var(--text-sm);
+}
+
+.onboarding__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.onboarding__skip {
+  align-self: center;
+  font-size: var(--text-sm);
+}

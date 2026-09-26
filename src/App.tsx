@@ -14,6 +14,10 @@ import { computeCredentials } from './lib/credentials.ts'
 import { searchCourses, catalogueTitle, courseCode } from './lib/courseSearch.ts'
 import { courseInfo } from './data/prereqs.ts'
 import { catalogueCourses, artsAndScienceSubjects } from './data/courses.ts'
+import { CourseCheck } from './components/CourseCheck.tsx'
+import { OnboardingFlow } from './components/onboarding/OnboardingFlow.tsx'
+import type { OnboardingProfile } from './components/onboarding/types.ts'
+import { onAuthChange, signOutUser, type AuthUser } from './lib/auth.ts'
 import './App.css'
 
 function fileToBase64(file: File): Promise<string> {
@@ -80,6 +84,10 @@ interface SavedState {
   programId: string
   completed: string[]
   revealed: boolean
+  /** Whether the onboarding wizard has already run — a guest who skipped it counts as onboarded too. */
+  onboarded: boolean
+  /** First-years skip the transcript/course-upload step; there's nothing to upload yet. */
+  firstYear: boolean
 }
 
 // Intake selections survive a refresh so a half-finished session isn't lost. The phone number is
@@ -115,18 +123,6 @@ function ProgressBar({ done, total }: { done: number; total: number }) {
         <span key={i} className={`bar__seg ${i < done ? 'bar__seg--done' : 'bar__seg--gap'}`} />
       ))}
     </div>
-  )
-}
-
-function CourseCheck({ label, checked, onToggle }: { label: string; checked: boolean; onToggle: () => void }) {
-  return (
-    <li>
-      <label className="check">
-        <input type="checkbox" checked={checked} onChange={onToggle} />
-        <span className="check__box" aria-hidden />
-        <span className="check__label">{label}</span>
-      </label>
-    </li>
   )
 }
 
@@ -188,6 +184,29 @@ function App() {
   const [universityId, setUniversityId] = useState<UniversityChoice>(saved.universityId ?? '')
   const [programId, setProgramId] = useState(saved.programId ?? '')
   const [revealed, setRevealed] = useState(saved.revealed ?? false)
+
+  // --- onboarding: sign-in + first-year/existing/university/degree/major/minor/concentration ---
+  const [onboarded, setOnboarded] = useState(saved.onboarded ?? false)
+  const [firstYear, setFirstYear] = useState(saved.firstYear ?? false)
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null)
+
+  useEffect(() => onAuthChange(setAuthUser), [])
+
+  function completeOnboarding(profile: OnboardingProfile, user: AuthUser | null) {
+    setAuthUser(user)
+    setUniversityId('usask')
+    setProgramId(profile.majorProgramId)
+    setCompleted(new Set())
+    setUploadStatus('idle')
+    // Concentrations first (the student's actual academic goal), then any declared minor — both
+    // just seed the same multi-target plan the "Add another one you're close to" picker builds.
+    const ids = [...profile.concentrationIds, profile.minorProgramId].filter((id): id is string => Boolean(id))
+    setHeroId(ids[0] ?? null)
+    setExtraTargetIds(ids.slice(1))
+    setFirstYear(profile.studentType === 'first-year')
+    setRevealed(profile.studentType === 'first-year')
+    setOnboarded(true)
+  }
 
   const selectedSchool = universityId === 'usask' ? usask : null
   const availablePrograms = useMemo(() => selectedSchool?.programs ?? [], [selectedSchool])
@@ -280,13 +299,13 @@ function App() {
   completedRef.current = completed
 
   useEffect(() => {
-    const state: SavedState = { universityId, programId, completed: [...completed], revealed }
+    const state: SavedState = { universityId, programId, completed: [...completed], revealed, onboarded, firstYear }
     try {
       localStorage.setItem(SAVE_KEY, JSON.stringify(state))
     } catch {
       // storage full or blocked (private mode) — the app works fine without persistence
     }
-  }, [universityId, programId, completed, revealed])
+  }, [universityId, programId, completed, revealed, onboarded, firstYear])
   const matches = useMemo(
     () => computeMatches(selectedProgram?.specializations ?? [], completed),
     [selectedProgram, completed],
@@ -599,6 +618,10 @@ function App() {
 
   const hasProgramData = (selectedProgram?.specializations.length ?? 0) > 0
 
+  if (!onboarded) {
+    return <OnboardingFlow onComplete={completeOnboarding} onSkip={() => setOnboarded(true)} />
+  }
+
   return (
     <div className="page">
       <header className="nav">
@@ -606,6 +629,14 @@ function App() {
           <span className="nav__dot" aria-hidden />
           StudyMax
         </span>
+        {authUser && (
+          <span className="nav__user">
+            {authUser.name ?? authUser.email ?? 'Signed in'}
+            <button type="button" className="linkish" onClick={() => signOutUser().then(() => setAuthUser(null))}>
+              Sign out
+            </button>
+          </span>
+        )}
       </header>
 
       <main>
@@ -712,6 +743,7 @@ function App() {
           )}
         </section>
 
+        {!firstYear && (
         <section className="checklist-section section section--band intake" data-band="lavender">
           <div className="step">
             <span className="step__badge" aria-hidden>
@@ -873,13 +905,16 @@ function App() {
             </div>
           </div>
         </section>
+        )}
 
-        {/* The number is asked for once, at the end, where the call is actually offered. */}
+        {/* First-years already got an instant reveal from onboarding — nothing to press here. */}
+        {!firstYear && (
         <section className="section section--band intake" data-band="cyan">
           <button type="button" className="btn intake__reveal" disabled={!selectedProgram} onClick={() => setRevealed(true)}>
             Reveal what my school hides
           </button>
         </section>
+        )}
 
         {revealed && selectedProgram && (
           <>
