@@ -62,7 +62,7 @@ export function AwardsTab() {
               </a>
               <p className="award__what">{award.whatItIs}</p>
               <WhyYou
-                loading={!lookup || lookup.loadingWhy}
+                loading={!lookup || (lookup.loadingWhy && !lookup.whyYou[award.id])}
                 text={lookup?.whyYou[award.id]}
                 fallback={award.whyRelevant}
               />

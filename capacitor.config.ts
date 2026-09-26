@@ -25,7 +25,7 @@ const config: CapacitorConfig = {
     StatusBar: { overlaysWebView: true, style: 'LIGHT' },
     // The web app hides the splash on first render; the duration is only a safety net.
     SplashScreen: {
-      launchShowDuration: 1500,
+      launchShowDuration: 3000,
       launchAutoHide: true,
       launchFadeOutDuration: 200,
       backgroundColor: OLD_LACE,

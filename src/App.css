@@ -244,8 +244,10 @@
 
 .spotlight {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   justify-items: start;
   gap: var(--s2);
+  margin-bottom: var(--s4);
   padding: var(--s5) var(--s4);
   border-radius: var(--r3);
   background: var(--surface);
@@ -440,8 +442,26 @@
 
 .award {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: start;
   gap: var(--s2);
   padding: var(--s4);
+}
+
+.award > * {
+  max-width: 100%;
+}
+
+/* A deadline can be a sentence ("Not listed, the department page needs a login"), so it wraps. */
+.award .chip,
+.spotlight .chip {
+  white-space: normal;
+  align-items: flex-start;
+}
+
+.chip svg {
+  flex: none;
+  margin-top: 2px;
 }
 
 .award__head {

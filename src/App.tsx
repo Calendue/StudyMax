@@ -61,6 +61,9 @@ const EMPTY_MATCH: SpecializationMatch = { spec: EMPTY_SPEC, totalRequired: 0, d
 // margin under it and fail before the upload rather than after.
 const MAX_TRANSCRIPT_BYTES = 3_000_000
 
+// Awards per "why you" request; see findResources.
+const WHY_BATCH = 3
+
 /** An upload failure whose message is safe and useful to show the student verbatim. */
 class UploadError extends Error {}
 
@@ -492,35 +495,53 @@ function useStudyMax() {
   const [schoolQuery, setSchoolQuery] = useState('')
   const [programQuery, setProgramQuery] = useState('')
   const [lookup, setLookup] = useState<Lookup | null>(null)
+  const lookupToken = useRef(0)
 
   async function findResources(schoolName: string, programName: string) {
     const matched = findSchool(schoolName)
 
     if (matched) {
+      const token = ++lookupToken.current
       const hasResources = matched.resources.length > 0
       setLookup({ kind: 'verified', school: matched, whyYou: {}, loadingWhy: hasResources })
-      if (hasResources) {
-        try {
-          const res = await fetch(api('/api/why-you'), {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({
-              context: {
-                school: matched.name,
-                program: selectedProgram?.name ?? 'their program',
-                closestSpecialization: hero.spec.name,
-                coursesRemaining: hero.remaining,
-                topOverlapCourse: topOverlap?.course,
-                otherCloseSpecializations,
-              },
-              resources: matched.resources.map((r) => ({ id: r.id, name: r.name, whatItIs: r.whatItIs })),
-            }),
-          })
-          const data = res.ok ? await res.json() : { whyYou: {} }
-          setLookup((prev) => (prev?.kind === 'verified' ? { ...prev, whyYou: data.whyYou ?? {}, loadingWhy: false } : prev))
-        } catch {
-          setLookup((prev) => (prev?.kind === 'verified' ? { ...prev, loadingWhy: false } : prev))
-        }
+      if (!hasResources) return
+      const context = {
+        school: matched.name,
+        program: selectedProgram?.name ?? 'their program',
+        closestSpecialization: hero.spec.name,
+        coursesRemaining: hero.remaining,
+        topOverlapCourse: topOverlap?.course,
+        otherCloseSpecializations,
+      }
+      // The route asks Claude for every line in one reply under a fixed token budget, and twenty
+      // awards overflow it (the reply is cut off and parses to nothing). Small batches, sent
+      // together in deadline order, each fit, and each award's line arrives as its batch lands.
+      const ranked = rankByUrgency(matched.resources, today)
+      const batches: (typeof ranked)[] = []
+      for (let i = 0; i < ranked.length; i += WHY_BATCH) batches.push(ranked.slice(i, i + WHY_BATCH))
+      await Promise.all(
+        batches.map(async (batch) => {
+          try {
+            const res = await fetch(api('/api/why-you'), {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({
+                context,
+                resources: batch.map((r) => ({ id: r.id, name: r.name, whatItIs: r.whatItIs })),
+              }),
+            })
+            const data = res.ok ? await res.json() : { whyYou: {} }
+            if (lookupToken.current !== token) return
+            setLookup((prev) =>
+              prev?.kind === 'verified' ? { ...prev, whyYou: { ...prev.whyYou, ...(data.whyYou ?? {}) } } : prev,
+            )
+          } catch {
+            // this batch's awards fall back to their own description
+          }
+        }),
+      )
+      if (lookupToken.current === token) {
+        setLookup((prev) => (prev?.kind === 'verified' ? { ...prev, loadingWhy: false } : prev))
       }
       return
     }
