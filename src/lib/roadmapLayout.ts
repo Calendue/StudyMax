@@ -1,6 +1,6 @@
 import type { PlannedTerm } from './plan.ts'
 
-export type RoadmapNodeState = 'done' | 'in-progress' | 'requirement' | 'prerequisite'
+export type RoadmapNodeState = 'requirement' | 'prerequisite'
 
 export interface RoadmapNodeLayout {
   code: string
@@ -8,14 +8,17 @@ export interface RoadmapNodeLayout {
   neededBy?: string
   prerequisiteText?: string
   alsoAdvances: string[]
-  col: number
+  /** Which term (top to bottom). */
   row: number
+  /** Position within the term (left to right). */
+  col: number
+  /** How many courses share this term, so the row can split the full width between them. */
+  rowSize: number
 }
 
-export interface RoadmapColumn {
+export interface RoadmapRow {
   key: string
   label: string
-  collapsible: boolean
   codes: string[]
 }
 
@@ -25,86 +28,69 @@ export interface RoadmapEdge {
 }
 
 export interface RoadmapLayout {
-  columns: RoadmapColumn[]
+  rows: RoadmapRow[]
   nodes: RoadmapNodeLayout[]
   edges: RoadmapEdge[]
 }
 
 /**
- * Turns the plan's term buckets into fixed grid coordinates: a leading "Completed" column for done
- * courses relevant to the credential, an "In progress" column for the ones the student is sitting
- * in now (the plan counts them as passed by its first term, so they'd otherwise vanish), then one
- * column per term, rows in the order the plan already computed. Pure and React-free — `buildPlan`
- * already did the hard part (topological order, term batching); this only assigns (col, row)
- * positions to what it produced.
+ * Turns the plan's term buckets into grid positions: one row per term, top to bottom, courses
+ * spread across the row in the order the plan already computed. Pure and React-free — `buildPlan`
+ * already did the hard part (topological order, term batching); this only assigns positions.
  */
-export function buildRoadmapLayout(
-  terms: PlannedTerm[],
-  completedRelevant: string[],
-  inProgressRelevant: string[] = [],
-): RoadmapLayout {
-  const columns: RoadmapColumn[] = []
+export function buildRoadmapLayout(terms: PlannedTerm[]): RoadmapLayout {
+  const rows: RoadmapRow[] = []
   const nodes: RoadmapNodeLayout[] = []
   const neededByCode = new Map<string, string>()
 
-  let col = 0
-  if (completedRelevant.length > 0) {
-    const codes = [...completedRelevant].sort()
-    columns.push({ key: 'completed', label: 'Completed', collapsible: true, codes })
-    codes.forEach((code, row) => nodes.push({ code, state: 'done', alsoAdvances: [], col, row }))
-    col++
-  }
-
-  if (inProgressRelevant.length > 0) {
-    const codes = [...inProgressRelevant].sort()
-    columns.push({ key: 'in-progress', label: 'In progress', collapsible: false, codes })
-    codes.forEach((code, row) => nodes.push({ code, state: 'in-progress', alsoAdvances: [], col, row }))
-    col++
-  }
-
-  for (const term of terms) {
-    const codes = term.courses.map((c) => c.code)
-    columns.push({ key: term.label, label: term.label, collapsible: false, codes })
-    term.courses.forEach((c, row) => {
+  terms.forEach((term, row) => {
+    rows.push({ key: term.label, label: term.label, codes: term.courses.map((c) => c.code) })
+    term.courses.forEach((c, col) => {
       nodes.push({
         code: c.code,
         state: c.reason === 'prerequisite' ? 'prerequisite' : 'requirement',
         neededBy: c.neededBy,
         prerequisiteText: c.prerequisiteText,
         alsoAdvances: c.alsoAdvances,
-        col,
         row,
+        col,
+        rowSize: term.courses.length,
       })
       if (c.neededBy) neededByCode.set(c.code, c.neededBy)
     })
-    col++
-  }
+  })
 
   // `neededBy` always points at a course still being planned (a satisfied prerequisite is never
-  // queued), so both ends of every edge are guaranteed to be in `nodes` — the filter is just a
-  // defensive guard against a future data shape change, not something expected to trigger today.
+  // queued), and `buildPlan` never schedules a course in the same term as its prerequisite, so every
+  // edge runs strictly downward. The filter is only a guard against a future data shape change.
   const knownCodes = new Set(nodes.map((n) => n.code))
   const edges: RoadmapEdge[] = [...neededByCode.entries()]
     .filter(([, to]) => knownCodes.has(to))
     .map(([from, to]) => ({ from, to }))
 
-  return { columns, nodes, edges }
+  return { rows, nodes, edges }
 }
 
 /**
- * Fixed pixel geometry for the column layout and edge overlay, on the app's 4pt rhythm (tokens.css
- * --s2/--s3/--s5) so edges never need a ResizeObserver/layout pass to stay aligned.
+ * Fixed vertical geometry on the app's 4pt rhythm; the width comes from the measured container, so
+ * a term's courses always split the full column between them.
  */
-export const COLUMN_WIDTH = 192
-export const COLUMN_GAP = 24 // --s5
-export const HEADER_HEIGHT = 32
-export const NODE_HEIGHT = 56
-export const NODE_GAP = 8 // --s2
+export const LABEL_HEIGHT = 32
+export const NODE_HEIGHT = 84
+export const NODE_GAP = 12 // --s3
+export const ROW_GAP = 40 // room for the connectors to curve between terms
+export const ROW_PITCH = LABEL_HEIGHT + NODE_HEIGHT + ROW_GAP
 
-export function columnX(col: number): number {
-  return col * (COLUMN_WIDTH + COLUMN_GAP)
+export function graphHeight(rowCount: number): number {
+  return rowCount > 0 ? rowCount * ROW_PITCH - ROW_GAP : 0
 }
 
-export function nodeCenterY(row: number): number {
-  return HEADER_HEIGHT + row * (NODE_HEIGHT + NODE_GAP) + NODE_HEIGHT / 2
+export function nodeBox(node: RoadmapNodeLayout, width: number) {
+  const w = (width - (node.rowSize - 1) * NODE_GAP) / node.rowSize
+  return {
+    x: node.col * (w + NODE_GAP),
+    y: node.row * ROW_PITCH + LABEL_HEIGHT,
+    w,
+    h: NODE_HEIGHT,
+  }
 }

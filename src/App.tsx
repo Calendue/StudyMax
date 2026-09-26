@@ -17,6 +17,7 @@ import { courseInfo } from './data/prereqs.ts'
 import { artsAndScienceSubjects } from './data/courses.ts'
 import { api, haptic, isNative, onBackButton } from './platform.ts'
 import { cachedFeatures, fetchFeatures } from './features.ts'
+import { useClassTracker } from './useClassTracker.ts'
 import { currentAccount, isAuthConfigured, signIn, signInErrorMessage, signOut, type Account, type Provider } from './auth.ts'
 import { ModelContext } from './model.ts'
 import { courseCode, type TargetKind } from './format.ts'
@@ -70,7 +71,7 @@ export type Screen =
   | 'reveal'
   | 'results'
   | 'call'
-export type Tab = 'overview' | 'plan' | 'awards'
+export type Tab = 'overview' | 'plan' | 'awards' | 'classes'
 /** First-years have no courses to add yet, so they go from onboarding straight to the reveal. */
 export type StudentType = 'first-year' | 'existing'
 
@@ -1039,8 +1040,13 @@ function useStudyMax() {
     if (screen === 'results' && lookup === null && universityId === 'usask') loadAwards.current()
   }, [screen, lookup, universityId])
 
+  // Watching full USask sections for an open seat (the Classes tab). Lives up here so an opening is
+  // heard from any tab.
+  const classes = useClassTracker()
+
   return {
     features,
+    classes,
     // account
     account,
     authBusy,

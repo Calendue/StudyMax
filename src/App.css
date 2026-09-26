@@ -478,154 +478,187 @@
   color: var(--on-accent);
 }
 
-/* The graph: courses as nodes in term columns, prerequisites as connectors. A horizontal swipe
-   between columns reads the same way flipping through a term-by-term timeline does, but a
-   connector makes the hidden cost of a prerequisite visible instead of just noted in text. */
+/* The graph: terms stacked top to bottom, each term's courses sharing the full width, and
+   prerequisite connectors flowing down between them, so the hidden cost of a prerequisite is a
+   line you can follow instead of a note you have to read. */
 .roadmap {
   margin-top: var(--s5);
 }
 
-.roadmap__scroll {
-  overflow-x: auto;
-  margin: 0 calc(var(--s4) * -1);
-  padding: 0 var(--s4) var(--s2);
+.roadmap__done {
+  margin-bottom: var(--s5);
 }
 
-.roadmap__track {
-  position: relative;
+.roadmap__done-toggle {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  width: 100%;
+  min-height: 48px;
+  padding: 0 var(--s4);
+  border-radius: var(--r3);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-weight: 500;
+  text-align: left;
+}
+
+.roadmap__done-toggle > span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.roadmap__done-toggle > svg {
+  flex: none;
+  transition: transform var(--d-fast) var(--settle);
+}
+
+.roadmap__done-toggle[aria-expanded='true'] > svg {
+  transform: rotate(90deg);
+}
+
+.roadmap__done-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin-top: var(--s3);
+}
+
+.roadmap__graph {
+  position: relative;
 }
 
 .roadmap__edges {
   position: absolute;
-  top: 0;
-  left: 0;
+  inset: 0;
+  overflow: visible;
   pointer-events: none;
 }
 
-.roadmap__edge {
+.roadmap__edge path {
   fill: none;
   stroke: var(--track);
   stroke-width: 2;
   transition: stroke var(--d-med) var(--settle);
 }
 
-.roadmap__edge--active {
+.roadmap__edge circle {
+  fill: var(--track);
+  transition: fill var(--d-med) var(--settle);
+}
+
+.roadmap__edge--active path {
   stroke: var(--accent);
+  stroke-width: 2.5;
 }
 
-.roadmap__column {
-  position: relative;
-  flex: 0 0 auto;
+.roadmap__edge--active circle {
+  fill: var(--accent);
 }
 
-/* 24px tall plus the --s2 below it: the 32px header roadmapLayout's HEADER_HEIGHT draws edges from. */
-.roadmap__column-label {
-  height: 24px;
-  margin: 0 0 var(--s2);
-  font: 600 var(--fs-section) / 24px var(--font-brand);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--ink-2);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.roadmap__row {
+  position: absolute;
+  left: 0;
+  right: 0;
 }
 
-.roadmap__nodes {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s2);
-}
-
-.roadmap__collapse {
-  align-self: flex-start;
-  padding: 0 0 var(--s2);
-  font-size: var(--fs-caption);
-  color: var(--ink-2);
-}
-
-.roadmap__summary {
+.roadmap__row-label {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: var(--s1);
-  width: 100%;
-  height: 44px;
-  border-radius: var(--r2);
-  background: var(--surface);
+  margin: 0;
+  font: 600 var(--fs-section) / 1 var(--font-brand);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   color: var(--ink-2);
-  font-size: var(--fs-caption);
 }
 
+.roadmap__row-nodes {
+  display: grid;
+}
+
+/* Nodes are opaque, so a connector that spans several terms passes cleanly behind them. */
 .roadmap__node {
-  position: relative;
-  width: 100%;
-  height: 56px;
-  padding: var(--s2) var(--s3);
-  border-radius: var(--r2);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--s1);
+  min-width: 0;
+  height: 100%;
+  padding: var(--s3) var(--s4);
+  border-radius: var(--r3);
   background: var(--surface);
   text-align: left;
   overflow: hidden;
   transition:
     background-color var(--d-fast) var(--settle),
     box-shadow var(--d-fast) var(--settle),
-    opacity var(--d-fast) var(--settle);
+    color var(--d-fast) var(--settle);
+}
+
+.roadmap__node:active {
+  background: var(--surface-2);
+}
+
+.roadmap__node-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
 }
 
 .roadmap__node-code {
-  display: block;
-  font: 600 var(--fs-caption) / 1.2 var(--font-brand);
-}
-
-/* One line: the 56px node (NODE_HEIGHT) holds the code and one line of title, and a second line
-   would be cut through the middle. The full title is in the course's sheet. */
-.roadmap__node-title {
-  display: -webkit-box;
-  -webkit-line-clamp: 1;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  margin-top: 2px;
-  font-size: var(--fs-caption);
-  line-height: 1.25;
-  color: var(--ink-2);
+  font: 600 var(--fs-body) / 1.2 var(--font-brand);
+  white-space: nowrap;
 }
 
 .roadmap__node-dot {
-  position: absolute;
-  top: var(--s2);
-  right: var(--s2);
-  width: 6px;
-  height: 6px;
+  flex: none;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: var(--accent);
+}
+
+.roadmap__node-tag {
+  flex: none;
+  margin-left: auto;
+  padding: 2px 6px;
+  border-radius: var(--r1);
+  background: var(--bg);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.roadmap__node-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 0.875rem;
+  line-height: 1.3;
+  color: var(--ink-2);
 }
 
 .roadmap__node--prerequisite {
   background: var(--surface-2);
 }
 
-.roadmap__node--done {
-  background: var(--surface-2);
-}
-
-.roadmap__node--in-progress {
-  box-shadow: inset 0 0 0 2px var(--track);
-}
-
-.roadmap__node--done .roadmap__node-code,
-.roadmap__node--done .roadmap__node-title {
-  color: var(--ink-2);
-}
-
 .roadmap__node--active {
-  background: var(--selected);
+  background: linear-gradient(var(--selected), var(--selected)), var(--bg);
   box-shadow: inset 0 0 0 2px var(--accent);
 }
 
-.roadmap__node--dimmed {
-  opacity: 0.4;
+/* Dimmed by tone, not opacity, so the node stays opaque over the connectors behind it. */
+.roadmap__node--dimmed,
+.roadmap__node--dimmed .roadmap__node-title {
+  color: var(--ink-3);
+}
+
+.roadmap__node--dimmed .roadmap__node-dot {
+  background: var(--taupe);
 }
 
 .plan-text {
@@ -871,7 +904,8 @@
   position: relative;
   z-index: 2;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   padding: var(--s1) calc(var(--s2) + var(--sar)) calc(var(--s1) + var(--sab)) calc(var(--s2) + var(--sal));
   background: var(--bg);
   border-radius: var(--r4) var(--r4) 0 0;
@@ -1120,3 +1154,58 @@
   font: 600 var(--fs-title) / 1.3 var(--font-brand);
   color: var(--accent);
 }
+
+/* ─────────────────────────────────────────────────────────── tab badge */
+
+.tab__icon {
+  position: relative;
+  display: inline-grid;
+}
+
+.tab__badge {
+  position: absolute;
+  top: -1px;
+  right: -3px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--bg);
+}
+
+/* ─────────────────────────────────────────────────────────── results: classes */
+
+.classes__terms {
+  margin-bottom: var(--s2);
+}
+
+.classes__search {
+  margin-top: var(--s4);
+}
+
+.classes__status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  margin-top: var(--s1);
+  color: var(--ink-2);
+}
+
+.classes__watching {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.classes__alert {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.classes__alert .btn {
+  margin-top: var(--s2);
+}
+
