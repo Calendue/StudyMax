@@ -33,9 +33,9 @@ export function PlanRoadmap() {
     const counted = new Set(m.targets.flatMap((t) => t.spec.requirements.flatMap((g) => g.courses)))
     return {
       completedRelevant: [...counted].filter((code) => m.completed.has(code)).sort(),
-      inProgressRelevant: m.uploadInProgress.filter((code) => counted.has(code) && !m.completed.has(code)).sort(),
+      inProgressRelevant: m.inProgressCourses.filter((code) => counted.has(code) && !m.completed.has(code)).sort(),
     }
-  }, [m.targets, m.completed, m.uploadInProgress])
+  }, [m.targets, m.completed, m.inProgressCourses])
   const doneSummary =
     (completedRelevant.length > 0 ? `${plural(completedRelevant.length, 'course')} already done` : '') +
     (completedRelevant.length > 0 && inProgressRelevant.length > 0 ? ' and ' : '') +

@@ -5,6 +5,11 @@
     "moduleResolution": "NodeNext",
     "esModuleInterop": true,
     "types": ["node"],
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    // `vercel dev` runs these routes through its bundled ts-node with the project's TypeScript 6,
+    // which refuses to start without an explicit rootDir (the routes import from ../src) and on
+    // ts-node's default ES5 target. Without these two lines every route fails locally before running.
+    "rootDir": "..",
+    "ignoreDeprecations": "6.0"
   }
 }

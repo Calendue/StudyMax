@@ -14,7 +14,7 @@ import { buildStudentPlan, termsFrom, upcomingTerm, type TermStart } from './lib
 import { computeCredentials } from './lib/credentials.ts'
 import { searchCourses, catalogueTitle } from './lib/courseSearch.ts'
 import { courseInfo } from './data/prereqs.ts'
-import { artsAndScienceSubjects } from './data/courses.ts'
+import { artsAndScienceSubjects, catalogueCourses } from './data/courses.ts'
 import { api, haptic, isNative, onAppUrlOpen, onBackButton } from './platform.ts'
 import { cachedFeatures, fetchFeatures } from './features.ts'
 import { buildWidgetSnapshot } from './lib/widgetSnapshot.ts'
@@ -22,14 +22,24 @@ import { currentDeadlineWatch, startDeadlineWatch, stopDeadlineWatch, syncWidget
 import { useClassTracker } from './useClassTracker.ts'
 import { currentAccount, isAuthConfigured, signIn, signInErrorMessage, signOut, type Account, type Provider } from './auth.ts'
 import { ModelContext } from './model.ts'
-import { courseCode, type TargetKind } from './format.ts'
+import { courseCode, registeredCode, type TargetKind } from './format.ts'
 import { DUR, INSTANT, SETTLE } from './ui/motion.ts'
 import { Intro } from './screens/Intro.tsx'
 import { LandingScreen } from './screens/LandingScreen.tsx'
 import { LandingPage } from './components/landing/LandingPage.tsx'
 import { WelcomeScreen } from './screens/WelcomeScreen.tsx'
 import { AccountSheet } from './screens/AccountSheet.tsx'
-import { ConcentrationScreen, DegreeScreen, MajorScreen, MinorScreen, StudentScreen, UniversityScreen } from './screens/Onboarding.tsx'
+import {
+  ConcentrationScreen,
+  DegreeScreen,
+  GraduationScreen,
+  MajorScreen,
+  MinorScreen,
+  PhoneScreen,
+  RegisteredScreen,
+  StudentScreen,
+  UniversityScreen,
+} from './screens/Onboarding.tsx'
 import { CoursesScreen } from './screens/CoursesScreen.tsx'
 import { ReadingScreen } from './screens/ReadingScreen.tsx'
 import { RevealScreen } from './screens/RevealScreen.tsx'
@@ -56,7 +66,8 @@ type UniversityChoice = '' | 'usask' | 'other'
 
 /**
  * The flow, in order. Onboarding asks one question per screen (student type, university, degree,
- * major, minor, concentrations); existing students then add courses. Results is tabbed; the call is
+ * graduation year, major, minor, concentrations, this term's courses, phone number); existing
+ * students then add courses. Results is tabbed; the call is
  * the last step.
  */
 export type Screen =
@@ -65,9 +76,12 @@ export type Screen =
   | 'student'
   | 'university'
   | 'degree'
+  | 'graduation'
   | 'major'
   | 'minor'
   | 'concentration'
+  | 'registered'
+  | 'phone'
   | 'courses'
   | 'reading'
   | 'reveal'
@@ -131,6 +145,19 @@ interface SavedState {
   degree: string
   minorId: string | null
   concentrationIds: string[]
+  /** Expected year of graduation. Descriptive only, like the degree. */
+  gradYear?: number | null
+  /** Catalogue codes of the courses the student is registered in this term. */
+  registered?: string[]
+}
+
+
+const CATALOGUE_CODES = new Set(catalogueCourses.map((c) => c.code))
+
+/** Saved registered courses, keeping only real catalogue codes (older saves held typed text). */
+function registeredFrom(saved?: string[]): string[] {
+  const codes = (saved ?? []).map(registeredCode).filter((code): code is string => code !== null && CATALOGUE_CODES.has(code))
+  return [...new Set(codes)]
 }
 
 /** The targets onboarding seeds the plan with: the concentrations first, then a declared minor. */
@@ -184,6 +211,8 @@ function useStudyMax() {
   const [degree, setDegree] = useState(saved.degree ?? '')
   const [minorId, setMinorId] = useState<string | null>(saved.minorId ?? null)
   const [concentrationIds, setConcentrationIds] = useState<string[]>(saved.concentrationIds ?? [])
+  const [gradYear, setGradYear] = useState<number | null>(saved.gradYear ?? null)
+  const [registered, setRegistered] = useState<string[]>(() => registeredFrom(saved.registered))
 
   const selectedSchool = universityId === 'usask' ? usask : null
   const availablePrograms = useMemo(() => selectedSchool?.programs ?? [], [selectedSchool])
@@ -298,6 +327,8 @@ function useStudyMax() {
     degree,
     minorId,
     concentrationIds,
+    gradYear,
+    registered,
   }
   const snapshotJson = JSON.stringify(snapshot)
   useEffect(() => {
@@ -429,8 +460,19 @@ function useStudyMax() {
 
   function chooseStudentType(type: StudentType) {
     haptic.selection()
+    // A first-year has no transcript: one being read from the first question is dropped.
+    if (type === 'first-year' && uploadStatus === 'uploading') cancelUpload()
     setStudentType(type)
     requestAdvance()
+  }
+
+  /** The first question's upload: an existing student, their transcript read while onboarding goes on. */
+  function chooseTranscript(file: File) {
+    haptic.selection()
+    setStudentType('existing')
+    void handleTranscriptFile(file, true)
+    // Too big a file is refused on the spot; the notice shows on this question instead of later.
+    if (file.size <= MAX_TRANSCRIPT_BYTES) requestAdvance()
   }
 
   function chooseDegree(value: string) {
@@ -438,6 +480,35 @@ function useStudyMax() {
     setDegree(value)
     requestAdvance()
   }
+
+  function chooseGradYear(year: number) {
+    haptic.selection()
+    setGradYear(year)
+    requestAdvance()
+  }
+
+  // This term's courses are picked from the catalogue search, so a mistyped number can't get in:
+  // only a course the catalogue lists can be added. The list stays open while the student ticks
+  // several ("CMPT" lists every CMPT course), and it's roomy enough to hold a whole subject.
+  const [registeredQuery, setRegisteredQuery] = useState('')
+  const registeredResults = useMemo(() => searchCourses(registeredQuery, 80), [registeredQuery])
+
+  function toggleRegistered(code: string) {
+    haptic.selection()
+    setRegistered((codes) => (codes.includes(code) ? codes.filter((c) => c !== code) : [...codes, code]))
+  }
+
+  function removeRegistered(code: string) {
+    haptic.selection()
+    setRegistered((codes) => codes.filter((c) => c !== code))
+  }
+
+  // Courses the student said they're registered in count exactly like a transcript's in-progress
+  // ones: not done yet, but never planned again, and already unlocking what they lead to.
+  const inProgressCourses = useMemo(
+    () => [...new Set([...uploadInProgress, ...registered])],
+    [uploadInProgress, registered],
+  )
 
   function chooseMinor(id: string | null) {
     haptic.selection()
@@ -484,8 +555,16 @@ function useStudyMax() {
   // Bumped to abandon an upload in flight (Back on the reading screen): its answer is then ignored.
   const uploadToken = useRef(0)
 
-  async function handleTranscriptFile(file: File) {
-    if (!selectedProgram) return
+  // The screen as of the last render, for an upload that finishes after the student has moved on.
+  const screenRef = useRef<Screen>('landing')
+
+  /**
+   * Reads a transcript. `early` is the upload offered on onboarding's first question: it runs in the
+   * background while the student answers the rest, so it doesn't navigate unless the student is
+   * already waiting on the reading screen, and it leaves the targets to onboarding to seed.
+   */
+  async function handleTranscriptFile(file: File, early = false) {
+    if (!selectedProgram && !early) return
     // Vercel caps a function's request body at 4.5 MB, and base64 inflates a file by a third, so a
     // file that can't make it is refused here, before the reading screen ever opens.
     if (file.size > MAX_TRANSCRIPT_BYTES) {
@@ -505,7 +584,7 @@ function useStudyMax() {
     setUploadStatus('uploading')
     setUploadError(null)
     setReadPhase('preparing')
-    go('reading')
+    if (!early) go('reading')
     try {
       const pdfBase64 = await fileToBase64(file)
       if (!live()) return
@@ -547,10 +626,11 @@ function useStudyMax() {
       setCompleted((prev) => new Set(replacing ? codes : [...prev, ...codes]))
       setUploadInProgress((prev) => (replacing ? inProgressCodes : [...new Set([...prev, ...inProgressCodes])]))
       setFoundCount(codes.length)
-      seedTargets(targetSeed)
+      if (!early) seedTargets(targetSeed)
       setReadPhase('found')
       setUploadStatus('success')
       haptic.light()
+      if (early && screenRef.current !== 'reading') return
       await wait(1200)
       if (live()) go('courses', -1)
     } catch (err) {
@@ -562,7 +642,7 @@ function useStudyMax() {
           ? err.message
           : "Couldn't reach the transcript reader. Check your connection, or add your courses by search.",
       )
-      go('courses', -1)
+      if (!early || screenRef.current === 'reading') go('courses', -1)
     }
   }
 
@@ -614,11 +694,11 @@ function useStudyMax() {
         targets.map((t) => t.spec),
         planningSpecs,
         completed,
-        uploadInProgress,
+        inProgressCourses,
         coursesPerTerm,
         startTerm,
       ),
-    [targets, planningSpecs, completed, uploadInProgress, coursesPerTerm, startTerm],
+    [targets, planningSpecs, completed, inProgressCourses, coursesPerTerm, startTerm],
   )
   const [planCopied, setPlanCopied] = useState(false)
   // Clipboard writes are blocked in some browsers and contexts. Rather than a button that appears to
@@ -824,6 +904,8 @@ function useStudyMax() {
     setDegree(state.degree ?? '')
     setMinorId(state.minorId ?? null)
     setConcentrationIds(state.concentrationIds ?? [])
+    setGradYear(state.gradYear ?? null)
+    setRegistered(registeredFrom(state.registered))
     setUploadStatus('idle')
     seedTargets(seedOf(state))
     setLookup(null)
@@ -902,6 +984,7 @@ function useStudyMax() {
         ? 'welcome'
         : resumeScreen(saved),
   )
+  screenRef.current = screen
   const [direction, setDirection] = useState<1 | -1>(1)
   const [advanceSignal, setAdvanceSignal] = useState(0)
   const [tab, setTabState] = useState<Tab>(() => (hasProgramData ? 'overview' : 'awards'))
@@ -934,10 +1017,12 @@ function useStudyMax() {
   const onboardingSteps: Screen[] = [
     'student',
     'university',
-    ...(universityId !== 'other' ? (['degree', 'major', 'minor'] as const) : []),
+    ...(universityId !== 'other' ? (['degree', 'graduation', 'major', 'minor'] as const) : (['graduation'] as const)),
     ...(universityId !== 'other' && (!selectedProgram || concentrationOptions.length > 0)
       ? (['concentration'] as const)
       : []),
+    'registered',
+    'phone',
   ]
   const flow: Screen[] = [
     ...(isAuthConfigured && !account ? (['welcome'] as const) : []),
@@ -953,7 +1038,9 @@ function useStudyMax() {
   function next() {
     if (screen === onboardingSteps[onboardingSteps.length - 1]) completeOnboarding()
     const to = flow[flowIndex + 1]
-    if (to) go(to)
+    // A transcript uploaded on the first question and still being read: wait for it there.
+    if (to === 'courses' && uploadStatus === 'uploading') go('reading')
+    else if (to) go(to)
     else startReveal()
   }
 
@@ -970,6 +1057,12 @@ function useStudyMax() {
 
   function requestAdvance() {
     setAdvanceSignal((s) => s + 1)
+  }
+
+  /** Back out of the flow to the landing page, from its first step. */
+  function toLanding() {
+    haptic.selection()
+    go('landing', -1)
   }
 
   /** The landing page's call to action: into the flow at its first step. */
@@ -1007,6 +1100,9 @@ function useStudyMax() {
     setDegree('')
     setMinorId(null)
     setConcentrationIds([])
+    setGradYear(null)
+    setRegistered([])
+    setRegisteredQuery('')
     setUniversityId('')
     setProgramId('')
     setCompleted(new Set())
@@ -1101,6 +1197,8 @@ function useStudyMax() {
       return true
     }
     switch (screen) {
+      case 'landing':
+        return false
       case 'reading':
         cancelUpload()
         go('courses', -1)
@@ -1164,6 +1262,7 @@ function useStudyMax() {
     // onboarding
     studentType,
     chooseStudentType,
+    chooseTranscript,
     degree,
     chooseDegree,
     minorId,
@@ -1172,6 +1271,15 @@ function useStudyMax() {
     concentrationIds,
     concentrationOptions,
     toggleConcentration,
+    gradYear,
+    chooseGradYear,
+    registered,
+    registeredQuery,
+    setRegisteredQuery,
+    registeredResults,
+    toggleRegistered,
+    removeRegistered,
+    inProgressCourses,
     // courses
     completed,
     takenCourses,
@@ -1249,6 +1357,7 @@ function useStudyMax() {
     setShowLanding,
     next,
     startFromLanding,
+    toLanding,
     nextIsReveal,
     canGoBack: flowIndex > 0,
     stepIndex,
@@ -1271,6 +1380,9 @@ const SCREENS: Record<Screen, ComponentType> = {
   major: MajorScreen,
   minor: MinorScreen,
   concentration: ConcentrationScreen,
+  graduation: GraduationScreen,
+  registered: RegisteredScreen,
+  phone: PhoneScreen,
   courses: CoursesScreen,
   reading: ReadingScreen,
   reveal: RevealScreen,

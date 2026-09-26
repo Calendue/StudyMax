@@ -1008,6 +1008,10 @@
   padding: calc(var(--sat) + var(--s6)) calc(var(--s5) + var(--sar)) var(--s5) calc(var(--s5) + var(--sal));
 }
 
+.welcome__home {
+  align-self: center;
+}
+
 .welcome__mark {
   display: block;
   color: var(--accent);
