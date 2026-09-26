@@ -24,3 +24,16 @@ dist-ssr
 *.sw?
 
 .vercel
+
+# Native builds: signed artifacts, signing secrets, local SDK paths
+release/
+android/keystore.properties
+*.jks
+*.keystore
+android/local.properties
+ios/App/build
+ios/DerivedData
+*.xcarchive
+*.ipa
+*.apk
+*.aab

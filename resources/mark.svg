@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- StudyMax mark: a progress ring most of the way round, closing on its target. -->
+  <path d="M32 12 A20 20 0 1 1 12.3 28.53" fill="none" stroke="#982649" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="32" cy="32" r="6.5" fill="#982649"/>
+</svg>
