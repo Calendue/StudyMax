@@ -1147,6 +1147,10 @@ function App() {
   backRef.current = model.back
   useEffect(() => onBackButton(() => backRef.current()), [])
 
+  // In the native app the first screen mounts as the launch splash starts to dissolve, not under it,
+  // so its rows spring in while the splash fades out: one continuous move into the app.
+  const [launched, setLaunched] = useState(!isNative)
+
   if (model.showLanding) {
     return (
       <ModelContext.Provider value={model}>
@@ -1163,6 +1167,7 @@ function App() {
   return (
     <ModelContext.Provider value={model}>
       <div className={`app${model.screen === 'landing' ? ' app--wide' : ''}`}>
+        {launched && (
         <AnimatePresence mode="wait" initial={false} custom={model.direction}>
           <motion.div
             key={model.screen}
@@ -1176,9 +1181,10 @@ function App() {
             <Current />
           </motion.div>
         </AnimatePresence>
+        )}
       </div>
       {model.account && <AccountSheet />}
-      <Intro />
+      <Intro onReveal={() => setLaunched(true)} />
     </ModelContext.Provider>
   )
 }
