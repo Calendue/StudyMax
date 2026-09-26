@@ -57,6 +57,14 @@ The app is a screen flow, not one page. `src/App.tsx` owns the state in one `use
 - A new piece of UI gets its own file with clearly typed props (or reads the model), not another inline block in `App.tsx`. Logic that isn't UI (matching, planning, credentials) stays in `src/lib/`.
 - `src/platform.ts` wraps everything native (haptics, Android back button, splash, keyboard, the API base URL); `src/auth.ts` is the one sign-in module for native and web.
 
+## Database
+
+Schema lives in `prisma/schema.prisma`, migrated onto the team's shared remote Supabase Postgres — see `docs/databaseSpec.md` for what each table is for and what's deliberately not in the DB (the course catalogue/programs/scholarships stay static files).
+
+- **Use `prisma migrate deploy`, never `prisma migrate dev`.** There's no local/shadow database here — only the one shared remote instance — and `migrate dev` provisions a shadow DB to diff against, which isn't the right model for four people hitting the same remote schema. Write migration SQL with `prisma migrate diff` (or by hand for something simple like a rename), then apply it with `npm run db:migrate` (wraps `prisma migrate deploy`).
+- Prisma's CLI doesn't read `.env.local` — `db:migrate`/`db:studio` are wrapped in `dotenv-cli` for this reason. Don't add a plain `.env` with the same values instead.
+- `Institution`/`Major` are seeded reference tables (`npm run db:seed`), not something to hand-edit rows into for testing — add to the JSON files in `scripts/` and reseed if a row is missing.
+
 ## Why we're not done: the three gaps to a winning submission
 
 Ranked by what actually swings judges, in order of what to protect first:
