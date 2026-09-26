@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useReducedMotion } from 'motion/react'
 import { useModel } from '../model.ts'
 import { plural } from '../format.ts'
-import { Mark } from '../ui/Icon.tsx'
+import { Mark } from '../ui/Brand.tsx'
 import { StatusLines, type StatusLine } from './StatusLines.tsx'
 
 // The beat between adding courses and seeing results. The matching itself is instant, so these lines

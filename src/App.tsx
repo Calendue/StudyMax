@@ -15,12 +15,13 @@ import { computeCredentials } from './lib/credentials.ts'
 import { searchCourses, catalogueTitle } from './lib/courseSearch.ts'
 import { courseInfo } from './data/prereqs.ts'
 import { artsAndScienceSubjects } from './data/courses.ts'
-import { api, haptic, onBackButton } from './platform.ts'
+import { api, haptic, isNative, onBackButton } from './platform.ts'
 import { currentAccount, isAuthConfigured, signIn, signInErrorMessage, signOut, type Account, type Provider } from './auth.ts'
 import { ModelContext } from './model.ts'
 import { courseCode, type TargetKind } from './format.ts'
 import { DUR, INSTANT, SETTLE } from './ui/motion.ts'
 import { Intro } from './screens/Intro.tsx'
+import { LandingScreen } from './screens/LandingScreen.tsx'
 import { WelcomeScreen } from './screens/WelcomeScreen.tsx'
 import { AccountSheet } from './screens/AccountSheet.tsx'
 import { ConcentrationScreen, DegreeScreen, MajorScreen, MinorScreen, StudentScreen, UniversityScreen } from './screens/Onboarding.tsx'
@@ -54,6 +55,7 @@ type UniversityChoice = '' | 'usask' | 'other'
  * the last step.
  */
 export type Screen =
+  | 'landing'
   | 'welcome'
   | 'student'
   | 'university'
@@ -806,7 +808,12 @@ function useStudyMax() {
   const [screen, setScreen] = useState<Screen>(() =>
     // With sign-in on offer (native, or a configured web build) launches start at the welcome screen;
     // otherwise straight into onboarding as a guest, or back to the results.
-    isAuthConfigured ? 'welcome' : resumeScreen(saved),
+    // A first-time visitor on the web meets the landing page first; the apps have their own welcome.
+    !isNative && !saved.revealed && !saved.studentType
+      ? 'landing'
+      : isAuthConfigured
+        ? 'welcome'
+        : resumeScreen(saved),
   )
   const [direction, setDirection] = useState<1 | -1>(1)
   const [tab, setTabState] = useState<Tab>(() => (hasProgramData ? 'overview' : 'awards'))
@@ -857,6 +864,12 @@ function useStudyMax() {
     const to = flow[flowIndex + 1]
     if (to) go(to)
     else startReveal()
+  }
+
+  /** The landing page's call to action: into the flow at its first step. */
+  function startFromLanding() {
+    haptic.selection()
+    go(flow[0])
   }
 
   function completeOnboarding() {
@@ -1044,6 +1057,7 @@ function useStudyMax() {
     setSheet,
     openSheet,
     next,
+    startFromLanding,
     nextIsReveal,
     canGoBack: flowIndex > 0,
     stepIndex,
@@ -1058,6 +1072,7 @@ function useStudyMax() {
 export type Model = ReturnType<typeof useStudyMax>
 
 const SCREENS: Record<Screen, ComponentType> = {
+  landing: LandingScreen,
   welcome: WelcomeScreen,
   student: StudentScreen,
   university: UniversityScreen,
@@ -1097,7 +1112,7 @@ function App() {
   const Current = SCREENS[model.screen]
   return (
     <ModelContext.Provider value={model}>
-      <div className="app">
+      <div className={`app${model.screen === 'landing' ? ' app--wide' : ''}`}>
         <AnimatePresence mode="wait" initial={false} custom={model.direction}>
           <motion.div
             key={model.screen}

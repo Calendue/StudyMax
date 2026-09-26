@@ -1,6 +1,6 @@
 import { useModel } from '../model.ts'
 import type { Provider } from '../auth.ts'
-import { Mark } from '../ui/Icon.tsx'
+import { Wordmark } from '../ui/Brand.tsx'
 import { Appear, Button } from '../ui/primitives.tsx'
 
 function AppleLogo() {
@@ -54,7 +54,7 @@ export function WelcomeScreen() {
     <>
       <main className="welcome">
         <Appear index={0} className="welcome__brand">
-          <Mark size={56} className="welcome__mark" />
+          <Wordmark height={56} className="welcome__mark" />
         </Appear>
         <Appear index={1}>
           <h1 className="welcome__title">See what your school hides</h1>

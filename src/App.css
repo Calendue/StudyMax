@@ -25,13 +25,12 @@
 
 .intro__word {
   position: absolute;
-  top: calc(100% + var(--s4));
+  top: calc(100% + var(--s3));
   left: -120px;
   right: -120px;
-  text-align: center;
-  font: 700 1.625rem/1 var(--font-brand);
-  letter-spacing: -0.02em;
-  color: var(--ink);
+  display: flex;
+  justify-content: center;
+  color: var(--accent);
 }
 
 /* ─────────────────────────────────────────────────────────── onboarding */
@@ -134,14 +133,32 @@
   padding-top: calc(var(--sat) + var(--s5));
 }
 
+/* The "paper hop" symbol hops while there's waiting: transform only, still under reduced motion. */
 .wait__mark {
   color: var(--accent);
   margin-bottom: var(--s2);
-  animation: turn 1.6s linear infinite;
+  animation: hop 1.2s ease-in-out infinite;
 }
 
 .wait__mark--reveal {
-  animation: turn 1.1s var(--settle) infinite;
+  animation-duration: 0.9s;
+}
+
+@keyframes hop {
+  0%,
+  70%,
+  100% {
+    transform: translateY(0) rotate(0);
+  }
+  30% {
+    transform: translateY(-14px) rotate(-6deg);
+  }
+  50% {
+    transform: translateY(0) rotate(0);
+  }
+  60% {
+    transform: translateY(-4px) rotate(-1deg);
+  }
 }
 
 .wait__mark--done {
@@ -758,7 +775,7 @@
 .welcome__mark {
   display: block;
   color: var(--accent);
-  margin-bottom: var(--s2);
+  margin: 0 0 var(--s2) -4px;
 }
 
 .welcome__title {

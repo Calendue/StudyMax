@@ -107,13 +107,3 @@ export function Icon({ name, size = 22, className }: { name: IconName; size?: nu
     </svg>
   )
 }
-
-/** The StudyMax mark: a progress ring most of the way round, closing on its target. */
-export function Mark({ size = 28, className }: { size?: number; className?: string }) {
-  return (
-    <svg className={className} width={size} height={size} viewBox="0 0 64 64" aria-hidden focusable="false">
-      <path d="M32 12 A20 20 0 1 1 12.3 28.53" fill="none" stroke="currentColor" strokeWidth={8} strokeLinecap="round" />
-      <circle cx="32" cy="32" r="6.5" fill="currentColor" />
-    </svg>
-  )
-}

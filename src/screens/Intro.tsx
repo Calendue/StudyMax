@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { Mark } from '../ui/Icon.tsx'
+import { Mark, Wordmark } from '../ui/Brand.tsx'
 import { DUR, SPRING, prefersReducedMotion } from '../ui/motion.ts'
 import { hideSplash } from '../platform.ts'
 
@@ -32,7 +32,7 @@ export function Intro() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: DUR.med, ease: SPRING, delay: 0.12 }}
             >
-              StudyMax
+              <Wordmark height={44} />
             </motion.span>
           </motion.div>
         </motion.div>

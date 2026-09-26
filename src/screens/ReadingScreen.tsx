@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useModel } from '../model.ts'
 import { plural } from '../format.ts'
 import { TopBar } from '../ui/chrome.tsx'
-import { Mark } from '../ui/Icon.tsx'
+import { Mark } from '../ui/Brand.tsx'
 import { Appear, Button } from '../ui/primitives.tsx'
 import { StatusLines, type StatusLine } from './StatusLines.tsx'
 

@@ -181,16 +181,10 @@ header,
   background: var(--surface);
 }
 
+/* The Caveat wordmark, on its own as the brand pack asks, in berry on the light page. */
 .wordmark {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s2);
-  padding-left: var(--s2);
-  font: 700 1.125rem/1 var(--font-brand);
-  letter-spacing: -0.02em;
-}
-
-.wordmark__mark {
+  display: block;
+  margin-left: var(--s2);
   color: var(--accent);
 }
 
@@ -777,4 +771,9 @@ header,
   flex: none;
   margin-top: 1px;
   color: var(--accent);
+}
+
+/* The landing page is a full-width web page; every other screen keeps the phone-width column. */
+.app--wide {
+  max-width: none;
 }

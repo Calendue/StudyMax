@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
-import { Icon, Mark } from './Icon.tsx'
+import { Icon } from './Icon.tsx'
+import { Wordmark } from './Brand.tsx'
 import { useModel } from '../model.ts'
 import { initial, type Account } from '../auth.ts'
 
@@ -40,10 +41,7 @@ export function TopBar({ onBack, backLabel = 'Back', right, brand }: { onBack?: 
           </button>
         )}
         {brand && (
-          <span className="wordmark">
-            <Mark size={22} className="wordmark__mark" />
-            StudyMax
-          </span>
+          <Wordmark height={30} className="wordmark" />
         )}
       </div>
       <div className="topbar__side topbar__side--end">
