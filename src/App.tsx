@@ -9,9 +9,9 @@ import type { School } from './data/schools/types.ts'
 import { computerScience } from './data/programs/computerScience.ts'
 import type { Program } from './data/programs/types.ts'
 import { buildCallScript, type CallContext } from './lib/callScript.ts'
-import { buildPlan, upcomingTerm } from './lib/plan.ts'
+import { PlanSection } from './components/PlanSection.tsx'
 import { computeCredentials } from './lib/credentials.ts'
-import { searchCourses, catalogueTitle, catalogueUrl } from './lib/courseSearch.ts'
+import { searchCourses, catalogueTitle, courseCode } from './lib/courseSearch.ts'
 import { courseInfo } from './data/prereqs.ts'
 import { catalogueCourses, artsAndScienceSubjects } from './data/courses.ts'
 import './App.css'
@@ -94,10 +94,6 @@ function loadSaved(): Partial<SavedState> {
 
 function formatDate(date: Date) {
   return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
-}
-
-function courseCode(code: string) {
-  return code.replace(/([A-Z]+)(\d+)/, '$1 $2')
 }
 
 // Arts & Science courses only, grouped by subject — the college this app's programs live in. The
@@ -307,12 +303,8 @@ function App() {
     () => computeCredentials(selectedSchool?.programs ?? [], completed, selectedProgram?.id),
     [selectedSchool, completed, selectedProgram],
   )
-
-  // Everything a planned course could advance: the program's specializations plus the credentials.
-  const planningSpecs = useMemo(
-    () => [...(selectedProgram?.specializations ?? []), ...credentials.map((c) => c.spec)],
-    [selectedProgram, credentials],
-  )
+  // Everything the plan can target or credit: the program's specializations plus the credentials.
+  const planCandidates = useMemo(() => [...matches, ...credentials], [matches, credentials])
 
   const hero =
     matches.find((m) => m.spec.id === heroId) ??
@@ -493,74 +485,6 @@ function App() {
   }
 
   const today = useMemo(() => new Date(), [])
-
-  // --- term-by-term path to the closest specialization ---
-  const [coursesPerTerm, setCoursesPerTerm] = useState(2)
-  // Extra targets the student added to the same plan. Only ids from what they're already close to;
-  // an id that stops resolving (they switched program) simply drops out.
-  const [extraTargetIds, setExtraTargetIds] = useState<string[]>([])
-  const addableTargets = useMemo(
-    () =>
-      [...matches, ...credentials].filter(
-        (m) => m.remaining > 0 && m.spec.id !== hero.spec.id && !extraTargetIds.includes(m.spec.id),
-      ),
-    [matches, credentials, hero, extraTargetIds],
-  )
-  const targets = useMemo(() => {
-    const byId = new Map([...matches, ...credentials].map((m) => [m.spec.id, m]))
-    return [hero, ...extraTargetIds.map((id) => byId.get(id)).filter((m) => m !== undefined)].filter(
-      (m) => m.remaining > 0,
-    )
-  }, [hero, matches, credentials, extraTargetIds])
-  const plan = useMemo(
-    () =>
-      targets.length > 0 ? buildPlan(targets, planningSpecs, completed, coursesPerTerm, upcomingTerm(today)) : [],
-    [targets, planningSpecs, completed, coursesPerTerm, today],
-  )
-  const [planCopied, setPlanCopied] = useState(false)
-  // Clipboard writes are blocked in some browsers and contexts. Rather than a button that appears to
-  // do nothing, the plan text is shown for the student to select by hand.
-  const [planText, setPlanText] = useState<string | null>(null)
-
-  const hiddenPrereqs = useMemo(
-    () => plan.flatMap((t) => t.courses).filter((c) => c.reason === 'prerequisite'),
-    [plan],
-  )
-
-  async function copyPlan() {
-    const required = plan.flatMap((t) => t.courses).filter((c) => c.reason === 'requirement').length
-    const lines = [
-      `StudyMax plan — ${targets.map((t) => t.spec.name).join(' + ')} (${selectedProgram?.name ?? ''})`,
-      `${required} required course${required === 1 ? '' : 's'} outstanding` +
-        (hiddenPrereqs.length > 0
-          ? `, plus ${hiddenPrereqs.length} prerequisite${hiddenPrereqs.length === 1 ? '' : 's'} not listed on the specialization page`
-          : '') +
-        `. ${coursesPerTerm} per term.`,
-      '',
-      ...plan.flatMap((term) => [
-        `${term.label}:`,
-        ...term.courses.map((c) => {
-          const notes = [
-            c.reason === 'prerequisite' ? `prerequisite for ${courseCode(c.neededBy ?? '')}` : null,
-            c.alsoAdvances.length > 0 ? `also counts toward: ${c.alsoAdvances.join(', ')}` : null,
-          ].filter(Boolean)
-          return `  - ${courseLabel(c.code)}${notes.length > 0 ? ` (${notes.join('; ')})` : ''}`
-        }),
-      ]),
-      '',
-      'Prerequisites and sequencing from catalogue.usask.ca. Confirm course offerings by term with an advisor.',
-    ]
-    const text = lines.join('\n')
-    try {
-      await navigator.clipboard.writeText(text)
-    } catch {
-      setPlanText(text)
-      return
-    }
-    setPlanText(null)
-    setPlanCopied(true)
-    setTimeout(() => setPlanCopied(false), 2000)
-  }
 
   const otherCloseSpecializations = useMemo(
     () =>
@@ -1005,145 +929,15 @@ function App() {
                   </section>
                 )}
 
-                {plan.length > 0 && (
-                  <section className="section section--band plan" data-band="lavender">
-                    <div className="plan__head">
-                      <h2 className="section__title">
-                        Your path to {targets.map((t) => t.spec.name).join(' + ')}
-                      </h2>
-                      <label className="plan__control">
-                        <span>Courses per term</span>
-                        <select
-                          className="resources__input"
-                          value={coursesPerTerm}
-                          onChange={(e) => setCoursesPerTerm(Number(e.target.value))}
-                        >
-                          {[1, 2, 3, 4].map((n) => (
-                            <option key={n} value={n}>
-                              {n}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    </div>
-                    <div className="plan__targets">
-                      <div className="chips">
-                        {targets.map((t) => (
-                          <span key={t.spec.id} className="chip">
-                            {t.spec.name}
-                            {t.spec.id !== hero.spec.id && (
-                              <button
-                                type="button"
-                                className="chip__remove"
-                                aria-label={`Remove ${t.spec.name} from this plan`}
-                                onClick={() =>
-                                  setExtraTargetIds((ids) => ids.filter((id) => id !== t.spec.id))
-                                }
-                              >
-                                ×
-                              </button>
-                            )}
-                          </span>
-                        ))}
-                      </div>
-                      {addableTargets.length > 0 && (
-                        <label className="plan__control">
-                          <span className="sr-only">Add another target to this plan</span>
-                          <select
-                            className="resources__input"
-                            value=""
-                            onChange={(e) => {
-                              const id = e.target.value
-                              if (id) setExtraTargetIds((ids) => [...ids, id])
-                            }}
-                          >
-                            <option value="">+ Add another one you&rsquo;re close to…</option>
-                            {addableTargets.map((m) => (
-                              <option key={m.spec.id} value={m.spec.id}>
-                                {m.spec.name} — {m.remaining} left
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                      )}
-                    </div>
-                    <p className="hint">
-                      Finishes in {plan.length} term{plan.length === 1 ? '' : 's'} — by{' '}
-                      <strong>{plan[plan.length - 1].label}</strong>. Where a requirement let you choose, we picked the
-                      option that also counts toward the most other credentials.
-                    </p>
-                    {hiddenPrereqs.length > 0 && (
-                      <p className="plan__hidden-cost">
-                        <strong>
-                          {hiddenPrereqs.length} course{hiddenPrereqs.length === 1 ? '' : 's'} below{' '}
-                          {hiddenPrereqs.length === 1 ? 'is' : 'are'} not on the specialization page
-                        </strong>{' '}
-                        — {hiddenPrereqs.length === 1 ? "it's a prerequisite" : "they're prerequisites"} you need before
-                        you&rsquo;re allowed to register for the ones that are. That&rsquo;s the real cost.
-                      </p>
-                    )}
-
-                    <ol className="plan__terms">
-                      {plan.map((term, i) => (
-                        <li key={term.label} className={`plan__term plan__term--${ACCENTS[i % ACCENTS.length]}`}>
-                          <p className="plan__term-label">{term.label}</p>
-                          <ul className="plan__courses">
-                            {term.courses.map((c) => (
-                              <li key={c.code} className={`plan__course plan__course--${c.reason}`}>
-                                <a
-                                  className="plan__course-name"
-                                  href={catalogueUrl(c.code)}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                >
-                                  {courseLabel(c.code)}
-                                  <span className="external-mark" aria-hidden>
-                                    {' ↗'}
-                                  </span>
-                                  <span className="sr-only"> (opens the USask catalogue)</span>
-                                </a>
-                                {c.reason === 'prerequisite' && (
-                                  <span className="plan__prereq">
-                                    Prerequisite for {courseCode(c.neededBy ?? '')}
-                                    {c.prerequisiteText && (
-                                      <em className="plan__prereq-rule">
-                                        {courseCode(c.neededBy ?? '')} requires: {c.prerequisiteText}
-                                      </em>
-                                    )}
-                                  </span>
-                                )}
-                                {c.alsoAdvances.length > 0 && (
-                                  <span className="plan__double-dip">
-                                    Also counts toward: {c.alsoAdvances.join(', ')}
-                                  </span>
-                                )}
-                              </li>
-                            ))}
-                          </ul>
-                        </li>
-                      ))}
-                    </ol>
-
-                    <div className="plan__actions">
-                      <button type="button" className="btn" onClick={copyPlan}>
-                        {planCopied ? '✓ Copied' : 'Copy plan for my advisor'}
-                      </button>
-                    </div>
-                    {planText !== null && (
-                      <>
-                        <p className="hint">
-                          Your browser blocked the copy — select the plan below and copy it yourself.
-                        </p>
-                        <textarea className="plan__fallback" readOnly rows={8} value={planText} />
-                      </>
-                    )}
-                    <p className="plan__caveat">
-                      Prerequisites come from catalogue.usask.ca verbatim; nothing here is inferred. What we
-                      can&rsquo;t know is which terms a course is actually offered in — confirm that with your advisor
-                      before you register.
-                    </p>
-                  </section>
-                )}
+                <PlanSection
+                  hero={hero}
+                  candidates={planCandidates}
+                  completed={completed}
+                  inProgress={uploadInProgress}
+                  programName={selectedProgram.name}
+                  courseLabel={courseLabel}
+                  today={today}
+                />
 
                 {credentials.length > 0 && (
                   <section className="section section--band credentials" data-band="mint">

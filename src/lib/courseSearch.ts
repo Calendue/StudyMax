@@ -69,6 +69,11 @@ export function searchCourses(
     .slice(0, limit)
 }
 
+/** "CMPT280" -> "CMPT 280", for display. */
+export function courseCode(code: string): string {
+  return code.replace(/([A-Z]+)(\d+)/, '$1 $2')
+}
+
 const titlesByCode = new Map(catalogueCourses.map((c) => [c.code, c.title]))
 
 /** Catalogue title for a code, or undefined if the catalogue doesn't list it. */
