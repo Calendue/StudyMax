@@ -10,7 +10,7 @@ import type { School } from './data/schools/types.ts'
 import { computerScience } from './data/programs/computerScience.ts'
 import type { Program } from './data/programs/types.ts'
 import { buildCallScript, type CallContext } from './lib/callScript.ts'
-import { buildPlan, upcomingTerm } from './lib/plan.ts'
+import { buildStudentPlan, termsFrom, upcomingTerm, type TermStart } from './lib/plan.ts'
 import { computeCredentials } from './lib/credentials.ts'
 import { searchCourses, catalogueTitle } from './lib/courseSearch.ts'
 import { courseInfo } from './data/prereqs.ts'
@@ -131,7 +131,9 @@ interface SavedState {
 
 /** The targets onboarding seeds the plan with: the concentrations first, then a declared minor. */
 function seedOf(state: Pick<Partial<SavedState>, 'concentrationIds' | 'minorId'>): string[] {
-  return [...(state.concentrationIds ?? []), state.minorId].filter((id): id is string => Boolean(id))
+  // The minor is a program; the plan targets its requirement lists (specializations) by id.
+  const minorSpecIds = usask.programs?.find((p) => p.id === state.minorId)?.specializations.map((s) => s.id) ?? []
+  return [...(state.concentrationIds ?? []), ...minorSpecIds]
 }
 
 // Intake selections survive a refresh so a half-finished session isn't lost. The phone number is
@@ -578,10 +580,20 @@ function useStudyMax() {
       (m) => m.remaining > 0,
     )
   }, [hero, matches, credentials, extraTargetIds])
+  // The plan starts in a term the student picks; in-progress courses count as passed by then.
+  const startChoices = useMemo(() => termsFrom(upcomingTerm(today), 6), [today])
+  const [startTerm, setStartTerm] = useState<TermStart>(startChoices[0])
   const plan = useMemo(
     () =>
-      targets.length > 0 ? buildPlan(targets, planningSpecs, completed, coursesPerTerm, upcomingTerm(today)) : [],
-    [targets, planningSpecs, completed, coursesPerTerm, today],
+      buildStudentPlan(
+        targets.map((t) => t.spec),
+        planningSpecs,
+        completed,
+        uploadInProgress,
+        coursesPerTerm,
+        startTerm,
+      ),
+    [targets, planningSpecs, completed, uploadInProgress, coursesPerTerm, startTerm],
   )
   const [planCopied, setPlanCopied] = useState(false)
   // Clipboard writes are blocked in some browsers and contexts. Rather than a button that appears to
@@ -601,7 +613,7 @@ function useStudyMax() {
         (hiddenPrereqs.length > 0
           ? `, plus ${hiddenPrereqs.length} prerequisite${hiddenPrereqs.length === 1 ? '' : 's'} not listed on the specialization page`
           : '') +
-        `. ${coursesPerTerm} per term.`,
+        `. ${coursesPerTerm} per term, starting ${startTerm.season} ${startTerm.year}.`,
       '',
       ...plan.flatMap((term) => [
         `${term.label}:`,
@@ -1096,6 +1108,9 @@ function useStudyMax() {
     plan,
     coursesPerTerm,
     setCoursesPerTerm,
+    startChoices,
+    startTerm,
+    setStartTerm,
     hiddenPrereqs,
     copyPlan,
     planCopied,
@@ -1182,6 +1197,10 @@ function App() {
   backRef.current = model.back
   useEffect(() => onBackButton(() => backRef.current()), [])
 
+  // In the native app the first screen mounts as the launch splash starts to dissolve, not under it,
+  // so its rows spring in while the splash fades out: one continuous move into the app.
+  const [launched, setLaunched] = useState(!isNative)
+
   if (model.showLanding) {
     return (
       <ModelContext.Provider value={model}>
@@ -1198,6 +1217,7 @@ function App() {
   return (
     <ModelContext.Provider value={model}>
       <div className={`app${model.screen === 'landing' ? ' app--wide' : ''}`}>
+        {launched && (
         <AnimatePresence mode="wait" initial={false} custom={model.direction}>
           <motion.div
             key={model.screen}
@@ -1211,9 +1231,10 @@ function App() {
             <Current />
           </motion.div>
         </AnimatePresence>
+        )}
       </div>
       {model.account && <AccountSheet />}
-      <Intro />
+      <Intro onReveal={() => setLaunched(true)} />
     </ModelContext.Provider>
   )
 }

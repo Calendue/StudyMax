@@ -4,6 +4,7 @@ import {
   type WhyYouContext,
   type WhyYouResourceInput,
 } from '../src/lib/scholarshipAi.js'
+import { openAIKey, respond, sendFailure } from './_openai.js'
 
 interface VercelRequest {
   method?: string
@@ -21,7 +22,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return
   }
 
-  const apiKey = process.env.OPENAI_API_KEY
+  const apiKey = openAIKey()
   if (!apiKey) {
     res.status(500).json({ error: 'OPENAI_API_KEY not configured' })
     return
@@ -33,31 +34,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return
   }
 
-  const prompt = buildWhyYouPrompt(body.context, body.resources)
-
-  const upstream = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: 'gpt-5-mini',
-      // Uncapped, gpt-5-mini spends the whole token budget on hidden reasoning and returns empty
-      // content — this is one-sentence copywriting, not a task that needs it.
-      reasoning_effort: 'minimal',
-      max_completion_tokens: 2048,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  })
-
-  if (!upstream.ok) {
-    res.status(502).json({ error: 'upstream error' })
+  let text: string
+  try {
+    text = await respond(apiKey, buildWhyYouPrompt(body.context, body.resources), 2048)
+  } catch (err) {
+    sendFailure(res, err)
     return
   }
 
-  const data = await upstream.json()
-  const text = data?.choices?.[0]?.message?.content ?? ''
   const whyYou = parseWhyYouResponse(
     text,
     body.resources.map((r) => r.id),

@@ -26,19 +26,23 @@ import { Sheet } from '../ui/Sheet.tsx'
 export function PlanRoadmap() {
   const m = useModel()
 
-  // Completed courses that count toward what's being planned, so the graph reads as a whole
-  // journey rather than only what's left.
-  const completedRelevant = useMemo(() => {
-    const relevant = new Set<string>()
-    for (const target of m.targets) {
-      for (const group of target.spec.requirements) {
-        for (const code of group.courses) {
-          if (m.completed.has(code)) relevant.add(code)
-        }
-      }
+  // Completed and in-progress courses that count toward what's being planned, so the graph reads
+  // as a whole journey rather than only what's left. The plan counts in-progress courses as passed
+  // by its first term, so without this list they would appear nowhere.
+  const { completedRelevant, inProgressRelevant } = useMemo(() => {
+    const counted = new Set(m.targets.flatMap((t) => t.spec.requirements.flatMap((g) => g.courses)))
+    return {
+      completedRelevant: [...counted].filter((code) => m.completed.has(code)).sort(),
+      inProgressRelevant: m.uploadInProgress.filter((code) => counted.has(code) && !m.completed.has(code)).sort(),
     }
-    return [...relevant].sort()
-  }, [m.targets, m.completed])
+  }, [m.targets, m.completed, m.uploadInProgress])
+  const doneSummary =
+    (completedRelevant.length > 0 ? `${plural(completedRelevant.length, 'course')} already done` : '') +
+    (completedRelevant.length > 0 && inProgressRelevant.length > 0 ? ' and ' : '') +
+    (inProgressRelevant.length > 0
+      ? `${completedRelevant.length > 0 ? inProgressRelevant.length : plural(inProgressRelevant.length, 'course')} in progress`
+      : '') +
+    ' toward this'
 
   const { rows, nodes, edges } = useMemo(() => buildRoadmapLayout(m.plan), [m.plan])
   const nodesByCode = useMemo(() => new Map(nodes.map((n) => [n.code, n])), [nodes])
@@ -81,7 +85,7 @@ export function PlanRoadmap() {
 
   return (
     <Appear index={3} className="roadmap">
-      {completedRelevant.length > 0 && (
+      {completedRelevant.length + inProgressRelevant.length > 0 && (
         <div className="roadmap__done">
           <button
             type="button"
@@ -91,7 +95,7 @@ export function PlanRoadmap() {
           >
             <span>
               <Icon name="check" size={18} />
-              {plural(completedRelevant.length, 'course')} already done toward this
+              {doneSummary}
             </span>
             <Icon name="chevron" size={18} />
           </button>
@@ -102,7 +106,17 @@ export function PlanRoadmap() {
                   {courseCode(code)}
                 </span>
               ))}
+              {inProgressRelevant.map((code) => (
+                <span key={code} className="chip chip--quiet roadmap__in-progress" title={m.courseTitle(code)}>
+                  {courseCode(code)} · in progress
+                </span>
+              ))}
             </div>
+          )}
+          {doneOpen && inProgressRelevant.length > 0 && (
+            <p className="footnote">
+              The plan counts in-progress courses as passed from {m.startTerm.season} {m.startTerm.year}.
+            </p>
           )}
         </div>
       )}

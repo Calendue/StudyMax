@@ -448,18 +448,6 @@ header,
   color: var(--ink-2);
 }
 
-.row__note {
-  margin-top: 2px;
-  font-size: var(--fs-caption);
-  line-height: 1.4;
-  color: var(--ink-2);
-}
-
-.row__note--plus {
-  color: var(--accent);
-  font-weight: 500;
-}
-
 .row__trailing,
 .row__meta {
   flex: none;
