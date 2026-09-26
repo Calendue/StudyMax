@@ -907,6 +907,12 @@
   font-weight: 600;
 }
 
+/* The same three destinations as the bottom bar, as a top strip instead. Hidden below the
+   "desktop width" breakpoint, where the bottom bar (a thumb's reach away) is the better fit. */
+.topnav {
+  display: none;
+}
+
 /* ─────────────────────────────────────────────────────────── desktop width */
 
 @media (min-width: 700px) {
@@ -919,10 +925,34 @@
     font-size: 2.125rem;
   }
 
-  .actionbar,
-  .tabbar {
+  .actionbar {
     margin-bottom: var(--s4);
     border-radius: var(--r4);
+  }
+
+  .tabbar {
+    display: none;
+  }
+
+  .topnav {
+    display: flex;
+    gap: var(--s5);
+    padding: 0 calc(var(--s5) + var(--sal)) 0 calc(var(--s5) + var(--sar));
+    border-bottom: 1px solid var(--divider);
+  }
+
+  .topnav .tab {
+    display: inline-flex;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--s1);
+    min-height: 48px;
+    padding: 0;
+    border-bottom: 2px solid transparent;
+  }
+
+  .topnav .tab--active {
+    border-bottom-color: var(--accent);
   }
 }
 
