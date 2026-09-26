@@ -14,6 +14,7 @@ import { computeCredentials } from './lib/credentials.ts'
 import { searchCourses, catalogueTitle, catalogueUrl } from './lib/courseSearch.ts'
 import { courseInfo } from './data/prereqs.ts'
 import { catalogueCourses, artsAndScienceSubjects } from './data/courses.ts'
+import { AuthControls } from './components/AuthControls.tsx'
 import './App.css'
 
 function fileToBase64(file: File): Promise<string> {
@@ -681,6 +682,9 @@ function App() {
         <span className="nav__mark">
           <span className="nav__dot" aria-hidden />
           StudyMax
+        </span>
+        <span className="nav__auth">
+          <AuthControls />
         </span>
       </header>
 

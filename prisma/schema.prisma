@@ -1,0 +1,100 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"] // matches the Vercel deploy target (see api/*.ts)
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL") // pooled (pgbouncer), used at runtime
+  directUrl = env("DIRECT_URL") // direct connection, used by the migration engine
+}
+
+model UserInfo {
+  userId    BigInt   @id @default(autoincrement())
+  clerkId   String   @unique @db.VarChar
+  firstName String?  @db.VarChar
+  lastName  String?  @db.VarChar
+  email     String?  @db.VarChar
+  createdAt DateTime @default(now()) @db.Timestamp(6)
+  updatedAt DateTime @updatedAt @db.Timestamp(6)
+
+  profile StudentProfile?
+  courses StudentCourse[]
+  plan    GeneratedPlan?
+}
+
+model StudentProfile {
+  profileId     BigInt  @id @default(autoincrement())
+  userId        BigInt  @unique
+  studentType   String  @db.VarChar // "starting" | "existing" — validated app-side, no DB enum
+  institutionId BigInt
+  degree        String  @db.VarChar
+  major         String  @db.VarChar
+  minor         String? @db.VarChar
+  concentration String? @db.VarChar
+  // Only set when studentType = "starting"; null for "existing". Mirrors lib/plan.ts's TermStart shape.
+  startingTermSeason String?  @db.VarChar // "Fall" | "Winter"
+  startingTermYear   Int?
+  goals              String?  @db.Text
+  createdAt          DateTime @default(now()) @db.Timestamp(6)
+  updatedAt          DateTime @updatedAt @db.Timestamp(6)
+
+  user        UserInfo    @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  institution Institution @relation(fields: [institutionId], references: [institutionId], onDelete: Restrict)
+
+  @@index([institutionId])
+}
+
+model StudentCourse {
+  studentCourseId BigInt   @id @default(autoincrement())
+  userId          BigInt
+  courseCode      String   @db.VarChar // matches static catalogue codes, e.g. "CMPT145"
+  status          String   @db.VarChar // "completed" | "in_progress" — validated app-side
+  source          String   @default("manual") @db.VarChar // "manual" | "transcript_upload"
+  createdAt       DateTime @default(now()) @db.Timestamp(6)
+  updatedAt       DateTime @updatedAt @db.Timestamp(6)
+
+  user UserInfo @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  // Same code can have one completed row AND one in_progress row (a retake) — never two of the same status.
+  // This compound unique also serves as the userId index (leftmost-prefix), so no separate @@index is needed.
+  @@unique([userId, courseCode, status])
+}
+
+model GeneratedPlan {
+  planId                  BigInt   @id @default(autoincrement())
+  userId                  BigInt   @unique // one current plan per student — replaces the localStorage blob
+  targetProgramId         String   @db.VarChar // Program.id slug, e.g. "computer-science" — no FK, catalogue is static
+  targetSpecializationIds String[] // Specialization.id slugs
+  coursesPerTerm          Int      @default(2)
+  startSeason             String   @db.VarChar // "Fall" | "Winter"
+  startYear               Int
+  terms                   Json // PlannedTerm[] snapshot from lib/plan.ts's buildPlan()
+  createdAt               DateTime @default(now()) @db.Timestamp(6)
+  updatedAt               DateTime @updatedAt @db.Timestamp(6)
+
+  user UserInfo @relation(fields: [userId], references: [userId], onDelete: Cascade)
+}
+
+// Seeded from scripts/canadian-institutions-seed.json — mirrors calendue_demo's Institution model.
+model Institution {
+  institutionId BigInt           @id @default(autoincrement())
+  name          String           @unique @db.VarChar
+  province      String?          @db.VarChar
+  city          String?          @db.VarChar
+  country       String?          @db.VarChar
+  timezone      String           @db.VarChar
+  isCustom      Boolean          @default(false) // true when typed in by a user; excluded from the seeded dropdown
+  profiles      StudentProfile[]
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+}
+
+// Seeded from scripts/institution-majors.json — mirrors calendue_demo's Major model.
+model Major {
+  majorId   BigInt   @id @default(autoincrement())
+  name      String   @unique @db.VarChar
+  isCustom  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

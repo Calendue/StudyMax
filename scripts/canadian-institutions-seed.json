@@ -1,0 +1,688 @@
+[
+  {
+    "name": "Memorial University of Newfoundland and Labrador",
+    "province": "Newfoundland and Labrador",
+    "city": "St. John's",
+    "country": "Canada",
+    "timezone": "America/St_Johns"
+  },
+  {
+    "name": "University of Prince Edward Island",
+    "province": "Prince Edward Island",
+    "city": "Charlottetown",
+    "country": "Canada",
+    "timezone": "America/Halifax"
+  },
+  {
+    "name": "Acadia University",
+    "province": "Nova Scotia",
+    "city": "Wolfville",
+    "country": "Canada",
+    "timezone": "America/Halifax"
+  },
+  {
+    "name": "Cape Breton University",
+    "province": "Nova Scotia",
+    "city": "Sydney",
+    "country": "Canada",
+    "timezone": "America/Halifax"
+  },
+  {
+    "name": "Dalhousie University",
+    "province": "Nova Scotia",
+    "city": "Halifax",
+    "country": "Canada",
+    "timezone": "America/Halifax"
+  },
+  {
+    "name": "Mount Saint Vincent University",
+    "province": "Nova Scotia",
+    "city": "Halifax",
+    "country": "Canada",
+    "timezone": "America/Halifax"
+  },
+  {
+    "name": "NSCAD University",
+    "province": "Nova Scotia",
+    "city": "Halifax",
+    "country": "Canada",
+    "timezone": "America/Halifax"
+  },
+  {
+    "name": "Saint Mary's University",
+    "province": "Nova Scotia",
+    "city": "Halifax",
+    "country": "Canada",
+    "timezone": "America/Halifax"
+  },
+  {
+    "name": "St. Francis Xavier University",
+    "province": "Nova Scotia",
+    "city": "Antigonish",
+    "country": "Canada",
+    "timezone": "America/Halifax"
+  },
+  {
+    "name": "Université Sainte-Anne",
+    "province": "Nova Scotia",
+    "city": "Pointe-de-l'Église",
+    "country": "Canada",
+    "timezone": "America/Halifax"
+  },
+  {
+    "name": "University of King's College",
+    "province": "Nova Scotia",
+    "city": "Halifax",
+    "country": "Canada",
+    "timezone": "America/Halifax"
+  },
+  {
+    "name": "Mount Allison University",
+    "province": "New Brunswick",
+    "city": "Sackville",
+    "country": "Canada",
+    "timezone": "America/Moncton"
+  },
+  {
+    "name": "St. Thomas University",
+    "province": "New Brunswick",
+    "city": "Fredericton",
+    "country": "Canada",
+    "timezone": "America/Moncton"
+  },
+  {
+    "name": "Université de Moncton",
+    "province": "New Brunswick",
+    "city": "Moncton",
+    "country": "Canada",
+    "timezone": "America/Moncton"
+  },
+  {
+    "name": "University of New Brunswick",
+    "province": "New Brunswick",
+    "city": "Fredericton",
+    "country": "Canada",
+    "timezone": "America/Moncton"
+  },
+  {
+    "name": "Bishop's University",
+    "province": "Quebec",
+    "city": "Sherbrooke",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "Concordia University",
+    "province": "Quebec",
+    "city": "Montreal",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "HEC Montréal",
+    "province": "Quebec",
+    "city": "Montreal",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "McGill University",
+    "province": "Quebec",
+    "city": "Montreal",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "Polytechnique Montréal",
+    "province": "Quebec",
+    "city": "Montreal",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "Université de Montréal",
+    "province": "Quebec",
+    "city": "Montreal",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "Université de Sherbrooke",
+    "province": "Quebec",
+    "city": "Sherbrooke",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "Université Laval",
+    "province": "Quebec",
+    "city": "Quebec City",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "Université du Québec à Chicoutimi",
+    "province": "Quebec",
+    "city": "Saguenay",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "Université du Québec à Montréal",
+    "province": "Quebec",
+    "city": "Montreal",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "Université du Québec à Rimouski",
+    "province": "Quebec",
+    "city": "Rimouski",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "Université du Québec à Trois-Rivières",
+    "province": "Quebec",
+    "city": "Trois-Rivières",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "Université du Québec en Abitibi-Témiscamingue",
+    "province": "Quebec",
+    "city": "Rouyn-Noranda",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "Université du Québec en Outaouais",
+    "province": "Quebec",
+    "city": "Gatineau",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "Université de technologie supérieure",
+    "province": "Quebec",
+    "city": "Montreal",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "École nationale d'administration publique",
+    "province": "Quebec",
+    "city": "Quebec City",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "Institut national de la recherche scientifique",
+    "province": "Quebec",
+    "city": "Quebec City",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "Université TÉLUQ",
+    "province": "Quebec",
+    "city": "Quebec City",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "Algoma University",
+    "province": "Ontario",
+    "city": "Sault Ste. Marie",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "Brock University",
+    "province": "Ontario",
+    "city": "St. Catharines",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "Carleton University",
+    "province": "Ontario",
+    "city": "Ottawa",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "Lakehead University",
+    "province": "Ontario",
+    "city": "Thunder Bay",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "Laurentian University",
+    "province": "Ontario",
+    "city": "Sudbury",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "McMaster University",
+    "province": "Ontario",
+    "city": "Hamilton",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "Nipissing University",
+    "province": "Ontario",
+    "city": "North Bay",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "OCAD University",
+    "province": "Ontario",
+    "city": "Toronto",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "Ontario Tech University",
+    "province": "Ontario",
+    "city": "Oshawa",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "Queen's University",
+    "province": "Ontario",
+    "city": "Kingston",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "Toronto Metropolitan University",
+    "province": "Ontario",
+    "city": "Toronto",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "Trent University",
+    "province": "Ontario",
+    "city": "Peterborough",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "University of Guelph",
+    "province": "Ontario",
+    "city": "Guelph",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "University of Ottawa",
+    "province": "Ontario",
+    "city": "Ottawa",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "University of Toronto",
+    "province": "Ontario",
+    "city": "Toronto",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "University of Waterloo",
+    "province": "Ontario",
+    "city": "Waterloo",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "University of Windsor",
+    "province": "Ontario",
+    "city": "Windsor",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "Western University",
+    "province": "Ontario",
+    "city": "London",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "Wilfrid Laurier University",
+    "province": "Ontario",
+    "city": "Waterloo",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "York University",
+    "province": "Ontario",
+    "city": "Toronto",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "Royal Military College of Canada",
+    "province": "Ontario",
+    "city": "Kingston",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "Université de l'Ontario français",
+    "province": "Ontario",
+    "city": "Toronto",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "NOSM University",
+    "province": "Ontario",
+    "city": "Sudbury",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "Brandon University",
+    "province": "Manitoba",
+    "city": "Brandon",
+    "country": "Canada",
+    "timezone": "America/Winnipeg"
+  },
+  {
+    "name": "Canadian Mennonite University",
+    "province": "Manitoba",
+    "city": "Winnipeg",
+    "country": "Canada",
+    "timezone": "America/Winnipeg"
+  },
+  {
+    "name": "Université de Saint-Boniface",
+    "province": "Manitoba",
+    "city": "Winnipeg",
+    "country": "Canada",
+    "timezone": "America/Winnipeg"
+  },
+  {
+    "name": "University of Manitoba",
+    "province": "Manitoba",
+    "city": "Winnipeg",
+    "country": "Canada",
+    "timezone": "America/Winnipeg"
+  },
+  {
+    "name": "University of Winnipeg",
+    "province": "Manitoba",
+    "city": "Winnipeg",
+    "country": "Canada",
+    "timezone": "America/Winnipeg"
+  },
+  {
+    "name": "First Nations University of Canada",
+    "province": "Saskatchewan",
+    "city": "Regina",
+    "country": "Canada",
+    "timezone": "America/Regina"
+  },
+  {
+    "name": "University of Regina",
+    "province": "Saskatchewan",
+    "city": "Regina",
+    "country": "Canada",
+    "timezone": "America/Regina"
+  },
+  {
+    "name": "University of Saskatchewan",
+    "province": "Saskatchewan",
+    "city": "Saskatoon",
+    "country": "Canada",
+    "timezone": "America/Regina"
+  },
+  {
+    "name": "Athabasca University",
+    "province": "Alberta",
+    "city": "Athabasca",
+    "country": "Canada",
+    "timezone": "America/Edmonton"
+  },
+  {
+    "name": "Concordia University of Edmonton",
+    "province": "Alberta",
+    "city": "Edmonton",
+    "country": "Canada",
+    "timezone": "America/Edmonton"
+  },
+  {
+    "name": "MacEwan University",
+    "province": "Alberta",
+    "city": "Edmonton",
+    "country": "Canada",
+    "timezone": "America/Edmonton"
+  },
+  {
+    "name": "Mount Royal University",
+    "province": "Alberta",
+    "city": "Calgary",
+    "country": "Canada",
+    "timezone": "America/Edmonton"
+  },
+  {
+    "name": "St. Mary's University",
+    "province": "Alberta",
+    "city": "Calgary",
+    "country": "Canada",
+    "timezone": "America/Edmonton"
+  },
+  {
+    "name": "The King's University",
+    "province": "Alberta",
+    "city": "Edmonton",
+    "country": "Canada",
+    "timezone": "America/Edmonton"
+  },
+  {
+    "name": "University of Alberta",
+    "province": "Alberta",
+    "city": "Edmonton",
+    "country": "Canada",
+    "timezone": "America/Edmonton"
+  },
+  {
+    "name": "University of Calgary",
+    "province": "Alberta",
+    "city": "Calgary",
+    "country": "Canada",
+    "timezone": "America/Edmonton"
+  },
+  {
+    "name": "University of Lethbridge",
+    "province": "Alberta",
+    "city": "Lethbridge",
+    "country": "Canada",
+    "timezone": "America/Edmonton"
+  },
+  {
+    "name": "Capilano University",
+    "province": "British Columbia",
+    "city": "North Vancouver",
+    "country": "Canada",
+    "timezone": "America/Vancouver"
+  },
+  {
+    "name": "Emily Carr University of Art + Design",
+    "province": "British Columbia",
+    "city": "Vancouver",
+    "country": "Canada",
+    "timezone": "America/Vancouver"
+  },
+  {
+    "name": "Kwantlen Polytechnic University",
+    "province": "British Columbia",
+    "city": "Surrey",
+    "country": "Canada",
+    "timezone": "America/Vancouver"
+  },
+  {
+    "name": "Royal Roads University",
+    "province": "British Columbia",
+    "city": "Colwood",
+    "country": "Canada",
+    "timezone": "America/Vancouver"
+  },
+  {
+    "name": "Simon Fraser University",
+    "province": "British Columbia",
+    "city": "Burnaby",
+    "country": "Canada",
+    "timezone": "America/Vancouver"
+  },
+  {
+    "name": "Thompson Rivers University",
+    "province": "British Columbia",
+    "city": "Kamloops",
+    "country": "Canada",
+    "timezone": "America/Vancouver"
+  },
+  {
+    "name": "Trinity Western University",
+    "province": "British Columbia",
+    "city": "Langley",
+    "country": "Canada",
+    "timezone": "America/Vancouver"
+  },
+  {
+    "name": "University of British Columbia",
+    "province": "British Columbia",
+    "city": "Vancouver",
+    "country": "Canada",
+    "timezone": "America/Vancouver"
+  },
+  {
+    "name": "University of Northern British Columbia",
+    "province": "British Columbia",
+    "city": "Prince George",
+    "country": "Canada",
+    "timezone": "America/Vancouver"
+  },
+  {
+    "name": "University of the Fraser Valley",
+    "province": "British Columbia",
+    "city": "Abbotsford",
+    "country": "Canada",
+    "timezone": "America/Vancouver"
+  },
+  {
+    "name": "University of Victoria",
+    "province": "British Columbia",
+    "city": "Victoria",
+    "country": "Canada",
+    "timezone": "America/Vancouver"
+  },
+  {
+    "name": "Vancouver Island University",
+    "province": "British Columbia",
+    "city": "Nanaimo",
+    "country": "Canada",
+    "timezone": "America/Vancouver"
+  },
+  {
+    "name": "Yukon University",
+    "province": "Yukon",
+    "city": "Whitehorse",
+    "country": "Canada",
+    "timezone": "America/Whitehorse"
+  },
+  {
+    "name": "British Columbia Institute of Technology",
+    "province": "British Columbia",
+    "city": "Burnaby",
+    "country": "Canada",
+    "timezone": "America/Vancouver"
+  },
+  {
+    "name": "Northern Alberta Institute of Technology",
+    "province": "Alberta",
+    "city": "Edmonton",
+    "country": "Canada",
+    "timezone": "America/Edmonton"
+  },
+  {
+    "name": "Southern Alberta Institute of Technology",
+    "province": "Alberta",
+    "city": "Calgary",
+    "country": "Canada",
+    "timezone": "America/Edmonton"
+  },
+  {
+    "name": "Saskatchewan Polytechnic",
+    "province": "Saskatchewan",
+    "city": "Saskatoon",
+    "country": "Canada",
+    "timezone": "America/Regina"
+  },
+  {
+    "name": "Red River College Polytechnic",
+    "province": "Manitoba",
+    "city": "Winnipeg",
+    "country": "Canada",
+    "timezone": "America/Winnipeg"
+  },
+  {
+    "name": "Algonquin College",
+    "province": "Ontario",
+    "city": "Ottawa",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "Conestoga College",
+    "province": "Ontario",
+    "city": "Kitchener",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "Fanshawe College",
+    "province": "Ontario",
+    "city": "London",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "George Brown Polytechnic",
+    "province": "Ontario",
+    "city": "Toronto",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "Humber Polytechnic",
+    "province": "Ontario",
+    "city": "Toronto",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "Seneca Polytechnic",
+    "province": "Ontario",
+    "city": "Toronto",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  },
+  {
+    "name": "Sheridan College",
+    "province": "Ontario",
+    "city": "Oakville",
+    "country": "Canada",
+    "timezone": "America/Toronto"
+  }
+]

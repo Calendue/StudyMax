@@ -7,9 +7,18 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "db:migrate": "dotenv -e .env.local -- prisma migrate deploy",
+    "db:generate": "prisma generate",
+    "db:studio": "dotenv -e .env.local -- prisma studio",
+    "db:seed:institutions": "node --experimental-strip-types --env-file=.env.local scripts/seed-institutions.ts",
+    "db:seed:majors": "node --experimental-strip-types --env-file=.env.local scripts/seed-majors.ts",
+    "db:seed": "npm run db:seed:institutions && npm run db:seed:majors",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@clerk/react": "^6.17.2",
+    "@prisma/client": "^6.19.3",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
@@ -18,8 +27,16 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.4",
+    "dotenv-cli": "^11.0.0",
     "oxlint": "^1.75.0",
+    "prisma": "^6.19.3",
     "typescript": "~6.0.2",
     "vite": "^8.2.0"
+  },
+  "allowScripts": {
+    "@prisma/client@6.19.3": true,
+    "fsevents@2.3.3": true,
+    "prisma@6.19.3": true,
+    "@prisma/engines@6.19.3": true
   }
 }

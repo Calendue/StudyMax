@@ -21,6 +21,10 @@
   padding-block: var(--space-lg) var(--space-xl);
 }
 
+.nav__auth {
+  margin-left: auto;
+}
+
 .nav__mark {
   display: inline-flex;
   align-items: center;
