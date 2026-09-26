@@ -1,52 +1,94 @@
-/* Hallmark · theme: Hum (playful) · tokens */
+/* StudyMax tokens. Kamu's design system, re-coloured.
+ *
+ * THE RULE: no component invents a colour, a size, a gap, a radius or a duration. It asks here,
+ * so changing a number moves the whole app together, on purpose.
+ *
+ * THREE COLOURS and tonal variations of them, nothing else:
+ *   Old Lace #FFF8EB    the page, and the text on an accent fill
+ *   #12262B             text, and high-emphasis controls that aren't the accent
+ *   Cherry Rose #982649 the ONE accent: active, selected, progress, the primary button.
+ *                       If everything is emphasised, nothing is.
+ * Rosy Taupe #C38D94 is the accent's tonal partner: ring tracks, selected tints, dividers and
+ * inactive states. It is never text on Old Lace (2.6:1).
+ */
 :root {
-  --color-paper: oklch(97% 0.012 95);
-  --color-paper-2: oklch(94% 0.016 95);
-  --color-paper-3: oklch(91% 0.020 95);
-  --color-ink: oklch(20% 0.012 250);
-  --color-ink-2: oklch(38% 0.012 250);
+  color-scheme: light;
 
-  --color-accent: oklch(86% 0.18 95);
-  --color-accent-deep: oklch(72% 0.17 95);
-  --color-accent-ink: var(--color-ink);
-  --color-accent-2: oklch(66% 0.18 235);
-  --color-accent-2-deep: oklch(52% 0.16 235);
-  --color-accent-3: oklch(68% 0.24 18);
-  --color-mint: oklch(80% 0.16 150);
-  --color-lavender: oklch(74% 0.16 305);
-  --color-focus: oklch(45% 0.15 235);
+  /* ── colour ── */
+  --old-lace: #fff8eb;
+  --ink: #12262b; /* 14.9:1 on Old Lace */
+  --cherry: #982649; /* 7.3:1 on Old Lace, and Old Lace on it */
+  --taupe: #c38d94;
 
-  --font-display: 'Plus Jakarta Sans', system-ui, sans-serif;
-  --font-body: 'Plus Jakarta Sans', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --bg: var(--old-lace);
+  /* Grouped surfaces are Old Lace stepped toward Rosy Taupe, slightly darker than the page: the
+     role Kamu's surfaceMuted plays. Grouping is tone and whitespace, not boxes and borders. */
+  --surface: #f9ede2;
+  --surface-2: #f3e3d9; /* pressed rows, skeletons */
+  --ink-2: rgb(18 38 43 / 0.7); /* secondary text, 5.7:1 */
+  --ink-3: rgb(18 38 43 / 0.45); /* placeholders ONLY, 2.7:1 */
+  --edge: rgb(18 38 43 / 0.18); /* a hairline for real edges: inputs */
+  --divider: rgb(195 141 148 / 0.42); /* hairlines between rows on a surface */
+  --accent: var(--cherry);
+  --on-accent: var(--old-lace);
+  --track: rgb(195 141 148 / 0.5); /* ring tracks, the timeline spine */
+  --selected: rgb(195 141 148 / 0.26); /* selected rows and quiet chips */
+  --inactive: var(--taupe); /* a disabled primary button */
+  --scrim: rgb(18 38 43 / 0.34);
 
-  --space-3xs: 0.25rem;
-  --space-2xs: 0.5rem;
-  --space-xs: 0.75rem;
-  --space-sm: 1rem;
-  --space-md: 1.5rem;
-  --space-lg: 2rem;
-  --space-xl: 3rem;
-  --space-2xl: 4.5rem;
-  --space-3xl: 7rem;
+  /* ONE elevation recipe, tinted with ink, only for things that float above the page: the
+     bottom action bar, the tab bar, a sheet. Never on a card. */
+  --shadow-float: 0 8px 24px rgb(18 38 43 / 0.08), 0 1px 4px rgb(18 38 43 / 0.06);
 
-  --text-xs: 0.75rem;
-  --text-sm: 0.875rem;
-  --text-md: 1.125rem;
-  --text-lg: 1.375rem;
-  --text-xl: 1.75rem;
-  --text-2xl: 2.25rem;
-  --text-display: clamp(3.5rem, 6vw + 1rem, 6.5rem);
+  /* ── type: two voices ──
+     BRAND (Plus Jakarta Sans): the wordmark, screen titles, section labels.
+     TEXT (the platform face: SF Pro on iOS, Roboto on Android): body, inputs, buttons.
+     Hierarchy comes from size, tone and space first, weight last. */
+  --font-brand: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-text: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 
-  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
-  --ease-snap: cubic-bezier(0.22, 1, 0.36, 1);
-  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
-  --dur-short: 140ms;
-  --dur-med: 220ms;
-  --dur-tick: 1200ms;
+  --fs-figure: 3.25rem; /* the hero count */
+  --fs-display: 1.75rem; /* screen titles */
+  --fs-title: 1.0625rem; /* sheet titles, the hero target's name */
+  --fs-body: 0.9375rem; /* 15px, at 1.55: the single biggest readability lever */
+  --fs-input: 1rem; /* 16px, so iOS never zooms into a focused field */
+  --fs-label: 0.9375rem;
+  --fs-caption: 0.8125rem;
+  --fs-section: 0.75rem;
+  --lh-body: 1.55;
 
-  --radius-card: 20px;
-  --radius-pill: 999px;
-  --radius-input: 12px;
+  /* ── space: a 4pt rhythm. Seven numbers, not thirty. ── */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
+  --s7: 48px;
+
+  --r1: 8px;
+  --r2: 12px;
+  --r3: 16px;
+  --r4: 24px;
+
+  /* ── motion: one vocabulary ──
+     The spring is for things that APPEAR, and animates transform and opacity only. The settle
+     (ease-out-cubic) is for anything that changes size. Durations follow the size of the change. */
+  --spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  --settle: cubic-bezier(0.33, 1, 0.68, 1);
+  --d-fast: 160ms; /* presses */
+  --d-med: 280ms; /* sheets, chips */
+  --d-slow: 380ms; /* full-screen changes */
+
+  --column: 640px;
+}
+
+/* Safe areas, declared on body so they resolve wherever SystemBars puts its values (html or body).
+   SystemBars injects --safe-area-inset-* on Android WebViews whose env() is wrong; everywhere else
+   env() is right. */
+body {
+  --sat: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --sab: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+  --sal: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
+  --sar: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
 }

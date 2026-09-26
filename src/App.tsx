@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { computeMatches, computeCourseOverlap, type SpecializationMatch } from './lib/match.ts'
-import { rankByUrgency, daysUntil, urgencyTier, formatCountdown } from './lib/resources.ts'
+import { rankByUrgency, daysUntil, formatCountdown } from './lib/resources.ts'
 import type { GuidanceResult } from './lib/scholarshipAi.ts'
 import type { Specialization } from './data/specializations.ts'
 import { findSchool } from './data/schools/index.ts'
@@ -11,9 +12,20 @@ import type { Program } from './data/programs/types.ts'
 import { buildCallScript, type CallContext } from './lib/callScript.ts'
 import { buildPlan, upcomingTerm } from './lib/plan.ts'
 import { computeCredentials } from './lib/credentials.ts'
-import { searchCourses, catalogueTitle, catalogueUrl } from './lib/courseSearch.ts'
+import { searchCourses, catalogueTitle } from './lib/courseSearch.ts'
 import { courseInfo } from './data/prereqs.ts'
-import { catalogueCourses, artsAndScienceSubjects } from './data/courses.ts'
+import { artsAndScienceSubjects } from './data/courses.ts'
+import { api, haptic, onBackButton } from './platform.ts'
+import { ModelContext } from './model.ts'
+import { courseCode, type TargetKind } from './format.ts'
+import { DUR, INSTANT, SETTLE } from './ui/motion.ts'
+import { Intro } from './screens/Intro.tsx'
+import { SchoolScreen } from './screens/SchoolScreen.tsx'
+import { CoursesScreen } from './screens/CoursesScreen.tsx'
+import { ReadingScreen } from './screens/ReadingScreen.tsx'
+import { RevealScreen } from './screens/RevealScreen.tsx'
+import { ResultsScreen } from './screens/ResultsScreen.tsx'
+import { CallScreen } from './screens/CallScreen.tsx'
 import './App.css'
 
 function fileToBase64(file: File): Promise<string> {
@@ -25,31 +37,23 @@ function fileToBase64(file: File): Promise<string> {
   })
 }
 
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
 type Lookup =
   | { kind: 'verified'; school: School; whyYou: Record<string, string>; loadingWhy: boolean }
   | { kind: 'guidance'; schoolName: string; program: string; loading: boolean; result: GuidanceResult | null; error: string | null }
 
 type UniversityChoice = '' | 'usask' | 'other'
 
-const WHY_IT_MATTERS: Record<TargetKind, string> = {
-  specialization:
-    'Specializations appear on your official transcript and signal focused expertise to employers — beyond the base CS degree.',
-  certificate:
-    'A certificate is a separate credential with its own line on your transcript — earned alongside your degree, not instead of part of it.',
-  minor:
-    'A minor is a separate credential with its own line on your transcript — earned alongside your degree, not instead of part of it.',
-}
+/** The flow, in order. Results is tabbed; the call is the last step. */
+export type Screen = 'school' | 'courses' | 'reading' | 'reveal' | 'results' | 'call'
+export type Tab = 'overview' | 'plan' | 'awards'
 
-type TargetKind = 'specialization' | 'certificate' | 'minor'
-
-const ACCENTS = ['pear', 'cyan', 'mint'] as const
-
-// Selected when the student picks "Other university" — no course-matching data exists for it,
-// so it routes straight to the AI-guidance fallback in the resources section.
+// Selected when the student picks "Other university": no course-matching data exists for it, so it
+// routes straight to the AI-guidance fallback on the awards tab.
 const OTHER_PROGRAM: Program = { id: 'other', name: 'your program', specializations: [], courseTitles: {} }
 
-// Safe fallback so hero/resources/call never crash when there's no program data yet — never rendered
-// as the actual reveal (hero/insight/feed are gated off in that case), only keeps other sections safe.
+// Safe fallback so the overview, awards and call never crash when there's no program data yet.
 const EMPTY_SPEC: Specialization = { id: 'none', name: 'your program', requirements: [] }
 const EMPTY_MATCH: SpecializationMatch = { spec: EMPTY_SPEC, totalRequired: 0, doneCount: 0, remaining: 0, unsatisfied: [] }
 
@@ -64,12 +68,12 @@ class UploadError extends Error {}
 // the choice survives a refresh the same way a real program id does.
 const SUBJECT_PROGRAM_PREFIX = 'subject:'
 
-interface ProgramOption {
+export interface ProgramOption {
   id: string
   name: string
   /** Present only for programs derived from an Arts & Science subject. */
   subjectCode?: string
-  /** Whether StudyMax has requirement data — i.e. whether it can build a plan, or only find money. */
+  /** Whether StudyMax has requirement data, i.e. whether it can build a plan or only find money. */
   hasData: boolean
 }
 
@@ -83,7 +87,7 @@ interface SavedState {
 }
 
 // Intake selections survive a refresh so a half-finished session isn't lost. The phone number is
-// deliberately excluded — it never touches storage.
+// deliberately excluded: it never touches storage.
 function loadSaved(): Partial<SavedState> {
   try {
     return JSON.parse(localStorage.getItem(SAVE_KEY) ?? '{}')
@@ -92,101 +96,7 @@ function loadSaved(): Partial<SavedState> {
   }
 }
 
-function formatDate(date: Date) {
-  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
-}
-
-function courseCode(code: string) {
-  return code.replace(/([A-Z]+)(\d+)/, '$1 $2')
-}
-
-// Arts & Science courses only, grouped by subject — the college this app's programs live in. The
-// rest of USask's catalogue stays reachable through search, not this list.
-const AS_SUBJECT_CODES = new Set(artsAndScienceSubjects.map((s) => s.code))
-const COURSES_BY_SUBJECT = new Map<string, typeof catalogueCourses>()
-for (const course of catalogueCourses) {
-  const subject = course.code.match(/^[A-Z]+/)?.[0] ?? ''
-  if (!AS_SUBJECT_CODES.has(subject)) continue
-  const list = COURSES_BY_SUBJECT.get(subject)
-  if (list) list.push(course)
-  else COURSES_BY_SUBJECT.set(subject, [course])
-}
-
-function ProgressBar({ done, total }: { done: number; total: number }) {
-  return (
-    <div className="bar" role="img" aria-label={`${done} of ${total} courses done`}>
-      {Array.from({ length: total }, (_, i) => (
-        <span key={i} className={`bar__seg ${i < done ? 'bar__seg--done' : 'bar__seg--gap'}`} />
-      ))}
-    </div>
-  )
-}
-
-function CourseCheck({ label, checked, onToggle }: { label: string; checked: boolean; onToggle: () => void }) {
-  return (
-    <li>
-      <label className="check">
-        <input type="checkbox" checked={checked} onChange={onToggle} />
-        <span className="check__box" aria-hidden />
-        <span className="check__label">{label}</span>
-      </label>
-    </li>
-  )
-}
-
-function OptionList({ options, label }: { options: string[]; label: (code: string) => string }) {
-  // Some slots offer a dozen interchangeable courses. Showing all of them buries the ones that
-  // matter, so name a few and let the student open the rest.
-  const SHOWN = 3
-  if (options.length <= SHOWN) return <>{options.map(label).join(' or ')}</>
-  return (
-    <>
-      {options.slice(0, SHOWN).map(label).join(' or ')}{' '}
-      <details className="options-more">
-        <summary>or {options.length - SHOWN} other options</summary>
-        <ul>
-          {options.slice(SHOWN).map((code) => (
-            <li key={code}>{label(code)}</li>
-          ))}
-        </ul>
-      </details>
-    </>
-  )
-}
-
-function useTickUp(target: number) {
-  const [value, setValue] = useState(target)
-  const prev = useRef(target)
-
-  useEffect(() => {
-    const from = prev.current
-    prev.current = target
-    if (from === target) return
-
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    if (reduceMotion) {
-      setValue(target)
-      return
-    }
-
-    const duration = 500
-    const start = performance.now()
-    let frame: number
-
-    function tick(now: number) {
-      const t = Math.min(1, (now - start) / duration)
-      const eased = 1 - Math.pow(1 - t, 3)
-      setValue(Math.round(from + (target - from) * eased))
-      if (t < 1) frame = requestAnimationFrame(tick)
-    }
-    frame = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(frame)
-  }, [target])
-
-  return value
-}
-
-function App() {
+function useStudyMax() {
   // --- intake: university → program → courses (the number is asked for later, with the call) ---
   const saved = useRef(loadSaved()).current
   const [universityId, setUniversityId] = useState<UniversityChoice>(saved.universityId ?? '')
@@ -213,12 +123,10 @@ function App() {
         : null
 
   const programOptions = useMemo<ProgramOption[]>(() => {
-    const fromSchool = availablePrograms.map((p) => ({
-      id: p.id,
-      name: p.name,
-      hasData: p.specializations.length > 0,
-    }))
-    const named = new Set(fromSchool.map((p) => p.name.toLowerCase()))
+    const fromSchool = availablePrograms
+      .filter((p) => p.kind !== 'certificate' && p.kind !== 'minor')
+      .map((p) => ({ id: p.id, name: p.name, hasData: p.specializations.length > 0 }))
+    const named = new Set(availablePrograms.map((p) => p.name.toLowerCase()))
     const fromSubjects = artsAndScienceSubjects
       .filter((subject) => !named.has(subject.name.toLowerCase()))
       .map((subject) => ({
@@ -231,8 +139,6 @@ function App() {
   }, [availablePrograms])
 
   const [programPickQuery, setProgramPickQuery] = useState('')
-  const [programOpen, setProgramOpen] = useState(false)
-  const programSearchRef = useRef<HTMLDivElement>(null)
 
   // Name match first, then subject code ("PSY"), so both ways of thinking about a program work.
   // Programs StudyMax can actually plan sort above the rest of the college.
@@ -258,25 +164,20 @@ function App() {
           Number(b.option.hasData) - Number(a.option.hasData) ||
           a.option.name.localeCompare(b.option.name),
       )
-      .slice(0, 8)
+      .slice(0, 40)
       .map((hit) => hit.option)
   }, [programOptions, programPickQuery])
 
-  useEffect(() => {
-    if (!programOpen) return
-    function onPointerDown(e: PointerEvent) {
-      if (!programSearchRef.current?.contains(e.target as Node)) setProgramOpen(false)
-    }
-    document.addEventListener('pointerdown', onPointerDown)
-    return () => document.removeEventListener('pointerdown', onPointerDown)
-  }, [programOpen])
-
   function courseLabel(code: string) {
-    // Prerequisites can pull in courses from outside the program's own title map — fall back to the
-    // scraped catalogue so they don't render as a bare code.
-    const title = selectedProgram?.courseTitles[code] ?? courseInfo[code]?.title ?? catalogueTitle(code)
+    // Prerequisites can pull in courses from outside the program's own title map, so fall back to
+    // the scraped catalogue so they don't render as a bare code.
+    const title = courseTitle(code)
     const display = courseCode(code)
-    return title ? `${display} — ${title}` : display
+    return title ? `${display}, ${title}` : display
+  }
+
+  function courseTitle(code: string) {
+    return selectedProgram?.courseTitles[code] ?? courseInfo[code]?.title ?? catalogueTitle(code)
   }
 
   const [completed, setCompleted] = useState<Set<string>>(() => new Set(saved.completed ?? []))
@@ -288,9 +189,10 @@ function App() {
     try {
       localStorage.setItem(SAVE_KEY, JSON.stringify(state))
     } catch {
-      // storage full or blocked (private mode) — the app works fine without persistence
+      // storage full or blocked (private mode): the app works fine without persistence
     }
   }, [universityId, programId, completed, revealed])
+
   const matches = useMemo(
     () => computeMatches(selectedProgram?.specializations ?? [], completed),
     [selectedProgram, completed],
@@ -302,7 +204,7 @@ function App() {
   }, [heroId, matches])
 
   // Certificates and minors the student is partway through without having declared them. Ranked
-  // and planned by the same engine as the specializations — they are just requirement lists.
+  // and planned by the same engine as the specializations: they are just requirement lists.
   const credentials = useMemo(
     () => computeCredentials(selectedSchool?.programs ?? [], completed, selectedProgram?.id),
     [selectedSchool, completed, selectedProgram],
@@ -320,22 +222,20 @@ function App() {
     matches[0] ??
     EMPTY_MATCH
   const rest = matches.filter((m) => m.spec.id !== hero.spec.id)
-  // A credential target ('certificate' / 'minor') reads differently from a specialization, and the
-  // hero copy has to follow. computeCredentials only ever returns those two kinds.
-  const heroCredentialKind = credentials.find((c) => c.spec.id === hero.spec.id)?.program.kind
-  const heroKind: TargetKind =
-    heroCredentialKind === 'certificate' || heroCredentialKind === 'minor' ? heroCredentialKind : 'specialization'
-  const tickValue = useTickUp(hero.remaining)
 
-  const [burst, setBurst] = useState(false)
+  function kindOf(specId: string): TargetKind {
+    // computeCredentials only ever returns certificates and minors.
+    const kind = credentials.find((c) => c.spec.id === specId)?.program.kind
+    return kind === 'certificate' || kind === 'minor' ? kind : 'specialization'
+  }
+  const heroKind = kindOf(hero.spec.id)
+
+  // When the student finishes their target (by adding its last course), hold the "done" state, then
+  // promote the next-closest specialization, recomputed fresh in case they kept editing meanwhile.
   const prevRemaining = useRef<number | null>(null)
   useEffect(() => {
     if (prevRemaining.current !== null && prevRemaining.current > 0 && hero.remaining === 0) {
       const doneHeroId = hero.spec.id
-      setBurst(true)
-      const burstId = setTimeout(() => setBurst(false), 420)
-      // hold the celebratory "done" state, then promote the next-closest specialization —
-      // recomputed fresh from live data in case the student kept toggling during the hold.
       const promoteId = setTimeout(() => {
         const freshMatches = computeMatches(selectedProgram?.specializations ?? [], completedRef.current)
         const next = freshMatches
@@ -343,10 +243,7 @@ function App() {
           .sort((a, b) => a.remaining - b.remaining || a.spec.name.localeCompare(b.spec.name))[0]
         if (next) setHeroId(next.spec.id)
       }, 1800)
-      return () => {
-        clearTimeout(burstId)
-        clearTimeout(promoteId)
-      }
+      return () => clearTimeout(promoteId)
     }
     prevRemaining.current = hero.remaining
   }, [hero.spec.id, hero.remaining, selectedProgram])
@@ -356,37 +253,20 @@ function App() {
     return overlap[0] && overlap[0].specs.length >= 2 ? overlap[0] : null
   }, [selectedProgram, completed])
 
-  const closenessRange = useMemo(() => {
-    const remainings = rest.map((m) => m.remaining)
-    return remainings.length > 0 ? { min: Math.min(...remainings), max: Math.max(...remainings) } : { min: 0, max: 0 }
-  }, [rest])
-
-  // Everything the student has, including courses added by search that this program never asks for
-  // — those still count toward certificates, minors and other specializations.
+  // Everything the student has, including courses added by search that this program never asks for:
+  // those still count toward certificates, minors and other specializations.
   const takenCourses = useMemo(() => [...completed].sort(), [completed])
 
   const [courseQuery, setCourseQuery] = useState('')
-  const [resultsOpen, setResultsOpen] = useState(false)
-  const searchRef = useRef<HTMLDivElement>(null)
   const courseResults = useMemo(() => searchCourses(courseQuery), [courseQuery])
 
   // Adding deliberately leaves the query and the list alone: one search usually turns up several
   // courses a student took ("phil 24" is both symbolic logic courses), and clearing after each add
-  // would make them retype it. The list closes on Escape or a click outside — never on clicking the
-  // input itself, which is where they go to edit the query.
+  // would make them retype it.
   function addCourse(code: string) {
     setCompleted((prev) => new Set(prev).add(code))
-    setResultsOpen(true)
+    haptic.selection()
   }
-
-  useEffect(() => {
-    if (!resultsOpen) return
-    function onPointerDown(e: PointerEvent) {
-      if (!searchRef.current?.contains(e.target as Node)) setResultsOpen(false)
-    }
-    document.addEventListener('pointerdown', onPointerDown)
-    return () => document.removeEventListener('pointerdown', onPointerDown)
-  }, [resultsOpen])
 
   function toggleCourse(code: string) {
     setCompleted((prev) => {
@@ -395,20 +275,30 @@ function App() {
       else next.add(code)
       return next
     })
+    haptic.selection()
   }
 
-  function handleUniversityChange(id: string) {
-    setUniversityId(id as UniversityChoice)
+  function handleUniversityChange(id: UniversityChoice) {
+    if (id === universityId) return
+    setUniversityId(id)
     setProgramId('')
     setCompleted(new Set())
+    setUploadInProgress([])
     setHeroId(null)
+    setExtraTargetIds([])
     setUploadStatus('idle')
+    haptic.selection()
   }
 
   function handleProgramChange(id: string) {
+    setSheet(null)
+    haptic.selection()
+    if (id === programId) return
     setProgramId(id)
     setCompleted(new Set())
+    setUploadInProgress([])
     setHeroId(null)
+    setExtraTargetIds([])
     setUploadStatus('idle')
   }
 
@@ -418,78 +308,105 @@ function App() {
     setCompleted(new Set(computerScience.sampleTranscript ?? []))
     setUploadInProgress(computerScience.sampleInProgress ?? [])
     setHeroId(null)
+    setExtraTargetIds([])
     // The sample is a real audit reduced to course codes, so it lands in the same state a finished
-    // upload does: completed courses counted, in-progress ones named, review list open.
-    setUploadStatus('success')
-    setRevealed(true)
+    // upload does: completed courses counted, in-progress ones named, the list ready to review.
+    setUploadStatus('sample')
+    setUploadError(null)
+    haptic.light()
+    if (screen !== 'courses') go('courses')
   }
 
-  const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle')
+  const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'sample' | 'error'>('idle')
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploadInProgress, setUploadInProgress] = useState<string[]>([])
+  // What the reading screen says, and only ever what is actually happening.
+  const [readPhase, setReadPhase] = useState<'preparing' | 'reading' | 'found'>('preparing')
+  // Bumped to abandon an upload in flight (Back on the reading screen): its answer is then ignored.
+  const uploadToken = useRef(0)
 
-  async function handleTranscriptUpload(e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    e.target.value = '' // allow re-uploading the same filename later
-    if (!file || !selectedProgram) return
+  async function handleTranscriptFile(file: File) {
+    if (!selectedProgram) return
+    // Vercel caps a function's request body at 4.5 MB, and base64 inflates a file by a third, so a
+    // file that can't make it is refused here, before the reading screen ever opens.
+    if (file.size > MAX_TRANSCRIPT_BYTES) {
+      setUploadStatus('error')
+      setUploadError(
+        `That PDF is ${(file.size / 1e6).toFixed(1)} MB, and the reader accepts up to ` +
+          `${(MAX_TRANSCRIPT_BYTES / 1e6).toFixed(1)} MB. Export a smaller copy, or add your courses by search.`,
+      )
+      return
+    }
 
+    const token = ++uploadToken.current
+    const live = () => uploadToken.current === token
     setUploadStatus('uploading')
     setUploadError(null)
+    setReadPhase('preparing')
+    go('reading')
     try {
-      // Vercel caps a function's request body at 4.5 MB, and base64 inflates a file by a third.
-      if (file.size > MAX_TRANSCRIPT_BYTES) {
-        throw new UploadError(
-          `That PDF is ${(file.size / 1e6).toFixed(1)} MB — the reader accepts up to ` +
-            `${(MAX_TRANSCRIPT_BYTES / 1e6).toFixed(1)} MB. Export a smaller copy, or add your courses below.`,
-        )
-      }
-
       const pdfBase64 = await fileToBase64(file)
-      const res = await fetch('/api/parse-transcript', {
+      if (!live()) return
+      setReadPhase('reading')
+      const res = await fetch(api('/api/parse-transcript'), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ pdfBase64 }),
       })
+      if (!live()) return
 
       if (res.status === 404) {
         throw new UploadError(
-          'Transcript reading runs as a serverless function, which the local dev server ' +
-            "doesn't host — it works on the deployed site, or under `vercel dev`. Add your courses below for now.",
+          "Transcript reading runs on StudyMax's server, which this local preview doesn't include. " +
+            'Add your courses by search for now.',
         )
       }
       if (!res.ok) {
         const detail = await res.json().catch(() => null)
         throw new UploadError(
           detail?.status === 401 || detail?.status === 403
-            ? "The transcript reader's API key was rejected — that's ours to fix, not yours. Add your courses below."
-            : `The transcript reader failed${detail?.status ? ` (${detail.status})` : ''}. Add your courses below.`,
+            ? "The transcript reader is having trouble on our side, not yours. Add your courses by search for now."
+            : "The transcript reader couldn't finish that one. Try again, or add your courses by search.",
         )
       }
 
       const data = await res.json()
+      if (!live()) return
       const codes: string[] = data.completed ?? []
       const inProgressCodes: string[] = data.inProgress ?? []
       if (codes.length === 0) {
         throw new UploadError(
           data.sawText === false
-            ? 'That PDF has no readable text — a scan or photo needs to be exported as text, or entered below.'
-            : "We read the file but couldn't find any recognizable completed courses in it. " +
-              'If it was the right transcript, add the courses below.',
+            ? 'That PDF has no readable text. A scan or photo needs to be exported as text, or added by search.'
+            : "We read the file but couldn't find any completed courses in it. If it was the right transcript, add them by search.",
         )
       }
 
       setCompleted(new Set(codes))
       setUploadInProgress(inProgressCodes)
       setHeroId(null)
+      setExtraTargetIds([])
+      setReadPhase('found')
       setUploadStatus('success')
+      haptic.light()
+      await wait(1200)
+      if (live()) go('courses', -1)
     } catch (err) {
+      if (!live()) return
       setUploadStatus('error')
+      // Only our own sentences reach the student, never a raw error.
       setUploadError(
         err instanceof UploadError
           ? err.message
-          : "Couldn't read that file — add your courses below instead.",
+          : "Couldn't reach the transcript reader. Check your connection, or add your courses by search.",
       )
+      go('courses', -1)
     }
+  }
+
+  function cancelUpload() {
+    uploadToken.current++
+    setUploadStatus('idle')
   }
 
   const today = useMemo(() => new Date(), [])
@@ -530,7 +447,7 @@ function App() {
   async function copyPlan() {
     const required = plan.flatMap((t) => t.courses).filter((c) => c.reason === 'requirement').length
     const lines = [
-      `StudyMax plan — ${targets.map((t) => t.spec.name).join(' + ')} (${selectedProgram?.name ?? ''})`,
+      `StudyMax plan: ${targets.map((t) => t.spec.name).join(' + ')} (${selectedProgram?.name ?? ''})`,
       `${required} required course${required === 1 ? '' : 's'} outstanding` +
         (hiddenPrereqs.length > 0
           ? `, plus ${hiddenPrereqs.length} prerequisite${hiddenPrereqs.length === 1 ? '' : 's'} not listed on the specialization page`
@@ -559,6 +476,7 @@ function App() {
     }
     setPlanText(null)
     setPlanCopied(true)
+    haptic.light()
     setTimeout(() => setPlanCopied(false), 2000)
   }
 
@@ -571,20 +489,19 @@ function App() {
     [rest],
   )
 
-  const [schoolQuery, setSchoolQuery] = useState('University of Saskatchewan')
+  const [schoolQuery, setSchoolQuery] = useState('')
   const [programQuery, setProgramQuery] = useState('')
   const [lookup, setLookup] = useState<Lookup | null>(null)
 
-  async function handleFindResources(e: FormEvent) {
-    e.preventDefault()
-    const matched = findSchool(schoolQuery)
+  async function findResources(schoolName: string, programName: string) {
+    const matched = findSchool(schoolName)
 
     if (matched) {
       const hasResources = matched.resources.length > 0
       setLookup({ kind: 'verified', school: matched, whyYou: {}, loadingWhy: hasResources })
       if (hasResources) {
         try {
-          const res = await fetch('/api/why-you', {
+          const res = await fetch(api('/api/why-you'), {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({
@@ -608,36 +525,38 @@ function App() {
       return
     }
 
-    setLookup({ kind: 'guidance', schoolName: schoolQuery, program: programQuery, loading: true, result: null, error: null })
+    setLookup({ kind: 'guidance', schoolName, program: programName, loading: true, result: null, error: null })
     try {
-      const res = await fetch('/api/scholarship-guidance', {
+      const res = await fetch(api('/api/scholarship-guidance'), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ school: schoolQuery, program: programQuery }),
+        body: JSON.stringify({ school: schoolName, program: programName }),
       })
       if (!res.ok) throw new Error('guidance request failed')
       const result: GuidanceResult = await res.json()
-      setLookup({ kind: 'guidance', schoolName: schoolQuery, program: programQuery, loading: false, result, error: null })
+      setLookup({ kind: 'guidance', schoolName, program: programName, loading: false, result, error: null })
+      haptic.light()
     } catch {
       setLookup({
         kind: 'guidance',
-        schoolName: schoolQuery,
-        program: programQuery,
+        schoolName,
+        program: programName,
         loading: false,
         result: null,
-        error: "Couldn't reach the guidance service — try again in a moment.",
+        error: "Couldn't reach the guidance service. Try again in a moment.",
       })
     }
   }
 
-  // --- additive: one-way scripted phone reminder (does not read or affect lookup/resources state) ---
-  const topAward = useMemo(() => rankByUrgency(usask.resources, today)[0], [today])
+  // --- one-way scripted phone reminder about the award closing soonest ---
+  const rankedAwards = useMemo(() => rankByUrgency(usask.resources, today), [today])
+  const topAward = rankedAwards[0]
   const topAwardDeadlineText = useMemo(() => {
     if (!topAward) return undefined
     const days = daysUntil(topAward, today)
     return days !== null ? formatCountdown(days) : topAward.deadline
   }, [topAward, today])
-  // The call reads the deadline aloud mid-sentence, so it only gets a real countdown — a raw date
+  // The call reads the deadline aloud mid-sentence, so it only gets a real countdown: a raw date
   // string ("May 20, 2026") or a "not listed" note would be spoken as nonsense.
   const spokenDeadline = useMemo(
     () => (topAward && daysUntil(topAward, today) !== null ? topAwardDeadlineText : undefined),
@@ -657,768 +576,274 @@ function App() {
   const [phone, setPhone] = useState('')
   const [callStatus, setCallStatus] = useState<'idle' | 'calling' | 'success' | 'error'>('idle')
 
-  async function handleCallMe(e: FormEvent) {
-    e.preventDefault()
+  async function callMe() {
     setCallStatus('calling')
+    haptic.medium()
     try {
-      const res = await fetch('/api/call-me', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ phoneNumber: phone, context: callContext }),
-      })
+      // The calling state stays up long enough to be read, however fast the provider answers.
+      const [res] = await Promise.all([
+        fetch(api('/api/call-me'), {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ phoneNumber: phone, context: callContext }),
+        }),
+        wait(1600),
+      ])
       if (!res.ok) throw new Error('call failed')
       setCallStatus('success')
+      haptic.light()
     } catch {
       setCallStatus('error')
     }
   }
 
   const hasProgramData = (selectedProgram?.specializations.length ?? 0) > 0
+  // Only a mapped program has a course step; everyone else goes straight to what we can find them.
+  const hasCourseStep = universityId === 'usask' && hasProgramData
 
+  // --- navigation: one screen at a time, a direction for the transition, and at most one sheet ---
+  const [screen, setScreen] = useState<Screen>(() =>
+    saved.revealed && saved.universityId && saved.programId !== undefined ? 'results' : 'school',
+  )
+  const [direction, setDirection] = useState<1 | -1>(1)
+  const [tab, setTabState] = useState<Tab>(() => (hasProgramData ? 'overview' : 'awards'))
+  const [sheet, setSheet] = useState<string | null>(null)
+
+  function go(next: Screen, dir: 1 | -1 = 1) {
+    setDirection(dir)
+    setSheet(null)
+    setScreen(next)
+  }
+
+  function setTab(next: Tab) {
+    if (next === tab) return
+    haptic.selection()
+    setTabState(next)
+  }
+
+  function openSheet(id: string) {
+    haptic.selection()
+    setSheet(id)
+  }
+
+  function continueFromSchool() {
+    if (!selectedProgram) return
+    if (hasCourseStep) go('courses')
+    else startReveal()
+  }
+
+  function startReveal() {
+    setLookup(null)
+    setCallStatus('idle')
+    setTabState(hasProgramData ? 'overview' : 'awards')
+    go('reveal')
+  }
+
+  function finishReveal() {
+    setRevealed(true)
+    haptic.medium()
+    go('results')
+  }
+
+  function startOver() {
+    setRevealed(false)
+    setUniversityId('')
+    setProgramId('')
+    setCompleted(new Set())
+    setUploadInProgress([])
+    setUploadStatus('idle')
+    setHeroId(null)
+    setExtraTargetIds([])
+    setLookup(null)
+    setCallStatus('idle')
+    haptic.selection()
+    go('school', -1)
+  }
+
+  function planTarget(specId: string) {
+    setHeroId(specId)
+    setExtraTargetIds((ids) => ids.filter((id) => id !== specId))
+    setSheet(null)
+    haptic.selection()
+    setTabState('plan')
+  }
+
+  /** One step back through the flow. Returns false on the first screen, where Back exits. */
+  function back(): boolean {
+    if (sheet) {
+      setSheet(null)
+      return true
+    }
+    switch (screen) {
+      case 'school':
+        return false
+      case 'courses':
+        go('school', -1)
+        return true
+      case 'reading':
+        cancelUpload()
+        go('courses', -1)
+        return true
+      case 'reveal':
+        return true // it's over in a second; there's nothing to go back to mid-reveal
+      case 'results':
+        if (hasProgramData && tab !== 'overview') {
+          setTabState('overview')
+          return true
+        }
+        go(hasCourseStep ? 'courses' : 'school', -1)
+        return true
+      case 'call':
+        if (callStatus === 'calling') return true
+        go('results', -1)
+        return true
+    }
+  }
+
+  // The awards list is looked up for mapped schools as soon as results open, so it's ready (and
+  // Claude's "why you" notes are on their way) by the time the student gets to that tab.
+  // It goes through a ref because findResources is a new function every render.
+  const loadAwards = useRef(() => {})
+  loadAwards.current = () => void findResources('University of Saskatchewan', selectedProgram?.name ?? '')
+  useEffect(() => {
+    if (screen === 'results' && lookup === null && universityId === 'usask') loadAwards.current()
+  }, [screen, lookup, universityId])
+
+  return {
+    // intake
+    universityId,
+    handleUniversityChange,
+    programId,
+    selectedProgram,
+    hasProgramData,
+    hasCourseStep,
+    programPickQuery,
+    setProgramPickQuery,
+    programResults,
+    handleProgramChange,
+    loadSampleStudent,
+    // courses
+    completed,
+    takenCourses,
+    courseQuery,
+    setCourseQuery,
+    courseResults,
+    addCourse,
+    toggleCourse,
+    courseLabel,
+    courseTitle,
+    uploadStatus,
+    uploadError,
+    uploadInProgress,
+    readPhase,
+    handleTranscriptFile,
+    // results
+    matches,
+    credentials,
+    hero,
+    heroKind,
+    kindOf,
+    rest,
+    topOverlap,
+    planTarget,
+    targets,
+    addableTargets,
+    extraTargetIds,
+    setExtraTargetIds,
+    plan,
+    coursesPerTerm,
+    setCoursesPerTerm,
+    hiddenPrereqs,
+    copyPlan,
+    planCopied,
+    planText,
+    today,
+    lookup,
+    schoolQuery,
+    setSchoolQuery,
+    programQuery,
+    setProgramQuery,
+    findResources,
+    rankedAwards,
+    // the call
+    topAward,
+    topAwardDeadlineText,
+    callFallbackScript,
+    phone,
+    setPhone,
+    callStatus,
+    setCallStatus,
+    callMe,
+    // navigation
+    screen,
+    direction,
+    go,
+    back,
+    tab,
+    setTab,
+    sheet,
+    setSheet,
+    openSheet,
+    continueFromSchool,
+    startReveal,
+    finishReveal,
+    startOver,
+  }
+}
+
+export type Model = ReturnType<typeof useStudyMax>
+
+const SCREENS: Record<Screen, ComponentType> = {
+  school: SchoolScreen,
+  courses: CoursesScreen,
+  reading: ReadingScreen,
+  reveal: RevealScreen,
+  results: ResultsScreen,
+  call: CallScreen,
+}
+
+// A screen change runs on ONE timeline: the outgoing screen is gone before the incoming one is
+// substantially visible, so two screens are never on top of each other. AnimatePresence's "wait"
+// mode makes the halves strictly sequential: 380ms in all, out on ease-in over the first 40%, in on
+// the settle over the rest. The direction follows the direction of travel.
+const screenVariants = {
+  enter: (dir: number) => ({ opacity: 0, x: dir * 20 }),
+  shown: { opacity: 1, x: 0, transition: { duration: DUR.slow * 0.6, ease: SETTLE } },
+  leave: (dir: number) => ({ opacity: 0, x: dir * -20, transition: { duration: DUR.slow * 0.4, ease: 'easeIn' as const } }),
+}
+const instantVariants = {
+  enter: { opacity: 1, x: 0 },
+  shown: { opacity: 1, x: 0, transition: INSTANT },
+  leave: { opacity: 0, transition: INSTANT },
+}
+
+function App() {
+  const model = useStudyMax()
+  const reduce = useReducedMotion()
+  const backRef = useRef(model.back)
+  backRef.current = model.back
+  useEffect(() => onBackButton(() => backRef.current()), [])
+
+  const Current = SCREENS[model.screen]
   return (
-    <div className="page">
-      <header className="nav">
-        <span className="nav__mark">
-          <span className="nav__dot" aria-hidden />
-          StudyMax
-        </span>
-      </header>
-
-      <main>
-        <section className="section section--band intake" data-band="pear">
-          <h2 className="section__title">Tell us about you</h2>
-          <p className="hint">Start with your university, then your program.</p>
-
-          <div className="step">
-            <span className="step__badge" aria-hidden>
-              1
-            </span>
-            <div className="step__body">
-              <label className="step__label" htmlFor="intake-university">
-                University
-              </label>
-              <select
-                id="intake-university"
-                className="resources__input"
-                value={universityId}
-                onChange={(e) => handleUniversityChange(e.target.value)}
-              >
-                <option value="">Select your university</option>
-                <option value="usask">University of Saskatchewan</option>
-                <option value="other">Other university</option>
-              </select>
-            </div>
-          </div>
-
-          {universityId === 'usask' && (
-            <div className="step">
-              <span className="step__badge" aria-hidden>
-                2
-              </span>
-              <div className="step__body">
-                <label className="step__label" htmlFor="intake-program">
-                  Program
-                </label>
-                <div className="course-search program-picker" ref={programSearchRef}>
-                  <input
-                    id="intake-program"
-                    type="text"
-                    className="resources__input"
-                    value={programOpen ? programPickQuery : (selectedProgram?.name ?? '')}
-                    onChange={(e) => {
-                      setProgramPickQuery(e.target.value)
-                      setProgramOpen(true)
-                    }}
-                    onFocus={() => {
-                      setProgramPickQuery('')
-                      setProgramOpen(true)
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Escape') setProgramOpen(false)
-                      if (e.key === 'Enter' && programResults.length > 0) {
-                        e.preventDefault()
-                        handleProgramChange(programResults[0].id)
-                        setProgramOpen(false)
-                      }
-                    }}
-                    placeholder="Type your program — e.g. “psychology”, “computer science”"
-                    autoComplete="off"
-                    role="combobox"
-                    aria-expanded={programOpen}
-                    aria-controls="program-results"
-                  />
-                  {programOpen && (
-                    <ul className="course-search__results" id="program-results">
-                      {programResults.length === 0 ? (
-                        <li className="course-search__empty">
-                          No Arts &amp; Science program matches &ldquo;{programPickQuery}&rdquo;.
-                        </li>
-                      ) : (
-                        programResults.map((option) => (
-                          <li key={option.id}>
-                            <button
-                              type="button"
-                              className="course-search__hit"
-                              onClick={() => {
-                                handleProgramChange(option.id)
-                                setProgramOpen(false)
-                              }}
-                            >
-                              <span className="course-search__code">{option.subjectCode ?? ''}</span>
-                              <span className="course-search__title">{option.name}</span>
-                              <span className="course-search__add">
-                                {option.hasData ? 'full plan' : 'scholarships only'}
-                              </span>
-                            </button>
-                          </li>
-                        ))
-                      )}
-                    </ul>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {universityId === 'other' && (
-            <p className="hint">
-              We don&rsquo;t have course-matching data for this school yet — you can still get AI-guided scholarship
-              direction after revealing.
-            </p>
-          )}
-        </section>
-
-        <section className="checklist-section section section--band intake" data-band="lavender">
-          <div className="step">
-            <span className="step__badge" aria-hidden>
-              3
-            </span>
-            <div className="step__body">
-              <label className="step__label">Courses taken</label>
-              {!selectedProgram ? (
-                <p className="hint">Pick your university and program above to see its course list.</p>
-              ) : !hasProgramData ? (
-                <p className="hint">No course data yet for {selectedProgram.name} — check back soon.</p>
-              ) : (
-                <>
-                  <label htmlFor="transcript-upload" className="upload-dropzone">
-                    <input
-                      id="transcript-upload"
-                      type="file"
-                      accept="application/pdf"
-                      className="upload-dropzone__input"
-                      onChange={handleTranscriptUpload}
-                    />
-                    <span className="upload-dropzone__icon" aria-hidden>
-                      📄
-                    </span>
-                    <span className="upload-dropzone__title">Upload your transcript and we&rsquo;ll read it for you</span>
-                    <span className="upload-dropzone__hint">PDF — DegreeWorks audit or unofficial transcript</span>
-                  </label>
-                  {uploadStatus === 'uploading' && <p className="hint">Reading your transcript…</p>}
-                  {uploadStatus === 'success' && (
-                    <p className="upload-status upload-status--success">
-                      ✓ Found {completed.size} completed course{completed.size === 1 ? '' : 's'}
-                      {uploadInProgress.length > 0
-                        ? ` and ${uploadInProgress.length} in progress (${uploadInProgress.map(courseCode).join(', ')})`
-                        : ''}{' '}
-                      — review below.
-                    </p>
-                  )}
-                  {uploadStatus === 'error' && <p className="upload-status upload-status--error">{uploadError}</p>}
-
-                  <div className="course-search" ref={searchRef}>
-                    <label className="step__label" htmlFor="course-search-input">
-                      Add any course you&rsquo;ve taken
-                    </label>
-                    <p className="hint">
-                      Search all {catalogueCourses.length.toLocaleString()} USask undergraduate courses by code or
-                      title — including ones your program never asks for. Those are often what puts a certificate or
-                      minor within reach.
-                    </p>
-                    <input
-                      id="course-search-input"
-                      className="resources__input"
-                      value={courseQuery}
-                      onChange={(e) => {
-                        setCourseQuery(e.target.value)
-                        setResultsOpen(true)
-                      }}
-                      onFocus={() => setResultsOpen(true)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Escape') {
-                          setResultsOpen(false)
-                          return
-                        }
-                        // Enter takes the top hit that isn't already added, so holding it down walks
-                        // the list instead of re-adding the same course.
-                        const next = courseResults.find((c) => !completed.has(c.code))
-                        if (e.key === 'Enter' && next) {
-                          e.preventDefault()
-                          addCourse(next.code)
-                        }
-                      }}
-                      placeholder={'e.g. CMPT 280, or “data structures”'}
-                      autoComplete="off"
-                      aria-label="Search for a course by code or title"
-                    />
-                    {resultsOpen && courseQuery.trim().length > 0 && (
-                      <ul className="course-search__results">
-                        {courseResults.length === 0 ? (
-                          <li className="course-search__empty">
-                            No course in the catalogue matches &ldquo;{courseQuery}&rdquo;.
-                          </li>
-                        ) : (
-                          courseResults.map((c) => (
-                            <li key={c.code}>
-                              <button
-                                type="button"
-                                className="course-search__hit"
-                                disabled={completed.has(c.code)}
-                                onClick={() => addCourse(c.code)}
-                              >
-                                <span className="course-search__code">{courseCode(c.code)}</span>
-                                <span className="course-search__title">{c.title}</span>
-                                <span className="course-search__add">{completed.has(c.code) ? '✓ added' : '+ add'}</span>
-                              </button>
-                            </li>
-                          ))
-                        )}
-                        {courseResults.length > 0 && (
-                          <li className="course-search__foot">
-                            <span>Keeps showing so you can add several — Esc or click away to close.</span>
-                            <button type="button" className="linkish" onClick={() => setResultsOpen(false)}>
-                              Done
-                            </button>
-                          </li>
-                        )}
-                      </ul>
-                    )}
-                  </div>
-
-                  <details className="subject-browser">
-                    <summary>Or browse the Arts &amp; Science course list</summary>
-                    <p className="hint">
-                      All {artsAndScienceSubjects.length} Arts &amp; Science subjects, closed. Open one to tick off what
-                      you took — same list as your courses above.
-                    </p>
-                    <ul className="subject-browser__subjects">
-                      {artsAndScienceSubjects.map((subject) => {
-                        const subjectCourses = COURSES_BY_SUBJECT.get(subject.code) ?? []
-                        const takenHere = subjectCourses.filter((c) => completed.has(c.code)).length
-                        return (
-                          <li key={subject.code}>
-                            <details>
-                              <summary>
-                                <span className="subject-browser__code">{subject.code}</span>
-                                <span className="subject-browser__name">{subject.name}</span>
-                                {takenHere > 0 && <span className="subject-browser__count">{takenHere} ✓</span>}
-                              </summary>
-                              <ul className="checklist subject-browser__courses">
-                                {subjectCourses.map((c) => (
-                                  <CourseCheck
-                                    key={c.code}
-                                    label={`${courseCode(c.code)} — ${c.title}`}
-                                    checked={completed.has(c.code)}
-                                    onToggle={() => toggleCourse(c.code)}
-                                  />
-                                ))}
-                              </ul>
-                            </details>
-                          </li>
-                        )
-                      })}
-                    </ul>
-                  </details>
-
-                  {takenCourses.length > 0 && (
-                    <details className="intake__manual" open={uploadStatus === 'success' || uploadStatus === 'error'}>
-                      <summary>
-                        ✓ {takenCourses.length} course{takenCourses.length === 1 ? '' : 's'} taken — review or edit
-                      </summary>
-                      <p className="hint">Untick anything that isn&rsquo;t yours.</p>
-                      <ul className="checklist">
-                        {takenCourses.map((code) => (
-                          <CourseCheck key={code} label={courseLabel(code)} checked onToggle={() => toggleCourse(code)} />
-                        ))}
-                      </ul>
-                    </details>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-        </section>
-
-        {/* The number is asked for once, at the end, where the call is actually offered. */}
-        <section className="section section--band intake" data-band="cyan">
-          <button type="button" className="btn intake__reveal" disabled={!selectedProgram} onClick={() => setRevealed(true)}>
-            Reveal what my school hides
-          </button>
-        </section>
-
-        {revealed && selectedProgram && (
-          <>
-            {hasProgramData ? (
-              <>
-                <section className="hero section section--band" data-band="pear">
-                  <div className="hero__statement">
-                    <div className="hero__figure tnum" style={{ position: 'relative' }}>
-                      {tickValue}
-                      {burst && <span className="star-burst" aria-hidden />}
-                    </div>
-                    <div className="hero__statement-text">
-                      <h1 className="hero__headline">
-                        {hero.remaining === 0
-                          ? `${hero.spec.name} — done. It'll show on your transcript.`
-                          : `course${hero.remaining === 1 ? '' : 's'} from ${heroKind === 'specialization' ? `the ${hero.spec.name} specialization` : hero.spec.name}.`}
-                      </h1>
-                      <p className="hero__why">{WHY_IT_MATTERS[heroKind]}</p>
-                    </div>
-                  </div>
-                  <div className="hero__bar">
-                    <ProgressBar done={hero.doneCount} total={hero.totalRequired} />
-                  </div>
-                  {hero.remaining > 0 && (
-                    <ul className="hero__remaining">
-                      {hero.unsatisfied.map((g, i) => (
-                        <li key={i}><OptionList options={g.options} label={courseLabel} /></li>
-                      ))}
-                    </ul>
-                  )}
-                </section>
-
-                {topOverlap && (
-                  <section className="insight">
-                    <p className="insight__text">
-                      <strong>{courseCode(topOverlap.course)}</strong> counts toward{' '}
-                      <strong>{topOverlap.specs.length} specializations</strong> — more than any other course you
-                      haven&rsquo;t taken.
-                    </p>
-                    <div className="chips">
-                      {topOverlap.specs.map((s) => (
-                        <span key={s.id} className="chip">
-                          {s.name}
-                        </span>
-                      ))}
-                    </div>
-                  </section>
-                )}
-
-                {plan.length > 0 && (
-                  <section className="section section--band plan" data-band="lavender">
-                    <div className="plan__head">
-                      <h2 className="section__title">
-                        Your path to {targets.map((t) => t.spec.name).join(' + ')}
-                      </h2>
-                      <label className="plan__control">
-                        <span>Courses per term</span>
-                        <select
-                          className="resources__input"
-                          value={coursesPerTerm}
-                          onChange={(e) => setCoursesPerTerm(Number(e.target.value))}
-                        >
-                          {[1, 2, 3, 4].map((n) => (
-                            <option key={n} value={n}>
-                              {n}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    </div>
-                    <div className="plan__targets">
-                      <div className="chips">
-                        {targets.map((t) => (
-                          <span key={t.spec.id} className="chip">
-                            {t.spec.name}
-                            {t.spec.id !== hero.spec.id && (
-                              <button
-                                type="button"
-                                className="chip__remove"
-                                aria-label={`Remove ${t.spec.name} from this plan`}
-                                onClick={() =>
-                                  setExtraTargetIds((ids) => ids.filter((id) => id !== t.spec.id))
-                                }
-                              >
-                                ×
-                              </button>
-                            )}
-                          </span>
-                        ))}
-                      </div>
-                      {addableTargets.length > 0 && (
-                        <label className="plan__control">
-                          <span className="sr-only">Add another target to this plan</span>
-                          <select
-                            className="resources__input"
-                            value=""
-                            onChange={(e) => {
-                              const id = e.target.value
-                              if (id) setExtraTargetIds((ids) => [...ids, id])
-                            }}
-                          >
-                            <option value="">+ Add another one you&rsquo;re close to…</option>
-                            {addableTargets.map((m) => (
-                              <option key={m.spec.id} value={m.spec.id}>
-                                {m.spec.name} — {m.remaining} left
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                      )}
-                    </div>
-                    <p className="hint">
-                      Finishes in {plan.length} term{plan.length === 1 ? '' : 's'} — by{' '}
-                      <strong>{plan[plan.length - 1].label}</strong>. Where a requirement let you choose, we picked the
-                      option that also counts toward the most other credentials.
-                    </p>
-                    {hiddenPrereqs.length > 0 && (
-                      <p className="plan__hidden-cost">
-                        <strong>
-                          {hiddenPrereqs.length} course{hiddenPrereqs.length === 1 ? '' : 's'} below{' '}
-                          {hiddenPrereqs.length === 1 ? 'is' : 'are'} not on the specialization page
-                        </strong>{' '}
-                        — {hiddenPrereqs.length === 1 ? "it's a prerequisite" : "they're prerequisites"} you need before
-                        you&rsquo;re allowed to register for the ones that are. That&rsquo;s the real cost.
-                      </p>
-                    )}
-
-                    <ol className="plan__terms">
-                      {plan.map((term, i) => (
-                        <li key={term.label} className={`plan__term plan__term--${ACCENTS[i % ACCENTS.length]}`}>
-                          <p className="plan__term-label">{term.label}</p>
-                          <ul className="plan__courses">
-                            {term.courses.map((c) => (
-                              <li key={c.code} className={`plan__course plan__course--${c.reason}`}>
-                                <a
-                                  className="plan__course-name"
-                                  href={catalogueUrl(c.code)}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                >
-                                  {courseLabel(c.code)}
-                                  <span className="external-mark" aria-hidden>
-                                    {' ↗'}
-                                  </span>
-                                  <span className="sr-only"> (opens the USask catalogue)</span>
-                                </a>
-                                {c.reason === 'prerequisite' && (
-                                  <span className="plan__prereq">
-                                    Prerequisite for {courseCode(c.neededBy ?? '')}
-                                    {c.prerequisiteText && (
-                                      <em className="plan__prereq-rule">
-                                        {courseCode(c.neededBy ?? '')} requires: {c.prerequisiteText}
-                                      </em>
-                                    )}
-                                  </span>
-                                )}
-                                {c.alsoAdvances.length > 0 && (
-                                  <span className="plan__double-dip">
-                                    Also counts toward: {c.alsoAdvances.join(', ')}
-                                  </span>
-                                )}
-                              </li>
-                            ))}
-                          </ul>
-                        </li>
-                      ))}
-                    </ol>
-
-                    <div className="plan__actions">
-                      <button type="button" className="btn" onClick={copyPlan}>
-                        {planCopied ? '✓ Copied' : 'Copy plan for my advisor'}
-                      </button>
-                    </div>
-                    {planText !== null && (
-                      <>
-                        <p className="hint">
-                          Your browser blocked the copy — select the plan below and copy it yourself.
-                        </p>
-                        <textarea className="plan__fallback" readOnly rows={8} value={planText} />
-                      </>
-                    )}
-                    <p className="plan__caveat">
-                      Prerequisites come from catalogue.usask.ca verbatim; nothing here is inferred. What we
-                      can&rsquo;t know is which terms a course is actually offered in — confirm that with your advisor
-                      before you register.
-                    </p>
-                  </section>
-                )}
-
-                {credentials.length > 0 && (
-                  <section className="section section--band credentials" data-band="mint">
-                    <h2 className="section__title">Certificates and minors you&rsquo;re already partway through</h2>
-                    <p className="hint">
-                      Separate credentials from your degree, each with their own line on your transcript. Your major
-                      already covers part of them — this is how much is left.
-                    </p>
-                    <ol className="credentials__list">
-                      {credentials.map((c) => (
-                        <li key={c.spec.id} className="credential-card">
-                          <div className="credential-card__head">
-                            <div>
-                              <span className="credential-card__kind">
-                                {c.program.kind === 'minor' ? 'Minor' : 'Certificate'}
-                              </span>
-                              <h3 className="credential-card__name">{c.program.name}</h3>
-                            </div>
-                            <span className="credential-card__count tnum">
-                              {c.remaining === 0 ? 'Done' : `${c.remaining} left`}
-                            </span>
-                          </div>
-                          <ProgressBar done={c.doneCount} total={c.totalRequired} />
-                          <p className="credential-card__progress">
-                            {c.doneCount} of {c.totalRequired} required courses already taken
-                          </p>
-                          {c.remaining > 0 && (
-                            <>
-                              <ul className="credential-card__missing">
-                                {c.unsatisfied.map((g, i) => (
-                                  <li key={i}><OptionList options={g.options} label={courseLabel} /></li>
-                                ))}
-                              </ul>
-                              <button type="button" className="btn btn--quiet" onClick={() => setHeroId(c.spec.id)}>
-                                Plan this one →
-                              </button>
-                            </>
-                          )}
-                        </li>
-                      ))}
-                    </ol>
-                    <p className="plan__caveat">
-                      Requirements are the catalogue&rsquo;s, but eligibility isn&rsquo;t: USask notes that
-                      &ldquo;registration in most senior CMPT courses will be restricted to students in the
-                      Department&rsquo;s programs.&rdquo; Confirm you can declare a credential before planning around
-                      it.
-                    </p>
-                  </section>
-                )}
-
-                <section className="section">
-                  <h2 className="section__title">Ranked by fewest courses remaining</h2>
-                  <p className="hint">Pick any one to make it your target — the plan above rebuilds for it.</p>
-                  <ol className="feed">
-                    {rest.map((m, i) => {
-                      const { min, max } = closenessRange
-                      const closeness = max === min ? 0.5 : 1 - (m.remaining - min) / (max - min)
-                      return (
-                        <li
-                          key={m.spec.id}
-                          className={`feed__row feed__row--${ACCENTS[i % ACCENTS.length]}`}
-                          style={{ '--closeness': closeness } as CSSProperties}
-                        >
-                          <button type="button" className="feed__target" onClick={() => setHeroId(m.spec.id)}>
-                            <span className="feed__head">
-                              <span className="feed__name">{m.spec.name}</span>
-                              <span className="feed__progress">
-                                {m.doneCount}/{m.totalRequired}
-                              </span>
-                            </span>
-                            <ProgressBar done={m.doneCount} total={m.totalRequired} />
-                            <span className="feed__cta">Plan this one →</span>
-                          </button>
-                          {m.remaining > 0 && (
-                            <ul className="feed__missing">
-                              {m.unsatisfied.map((g, i2) => (
-                                <li key={i2}><OptionList options={g.options} label={courseLabel} /></li>
-                              ))}
-                            </ul>
-                          )}
-                        </li>
-                      )
-                    })}
-                  </ol>
-                </section>
-              </>
-            ) : (
-              <section className="section">
-                <p className="hint">
-                  No course-matching data yet for {selectedProgram.name} — but you can still look up scholarship
-                  guidance below.
-                </p>
-              </section>
-            )}
-
-            <section className="section section--band resources" data-band="mint">
-              <h2 className="section__title">Hidden resources &amp; scholarships</h2>
-              <p className="hint">
-                The stuff your school buries a few clicks too deep. Works for any school — verified awards where
-                we&rsquo;ve mapped it, AI-guided categories everywhere else.
-              </p>
-              <p className="resources__today">Today: {formatDate(today)}</p>
-              <form className="resources__lookup" onSubmit={handleFindResources}>
-                <input
-                  className="resources__input"
-                  value={schoolQuery}
-                  onChange={(e) => setSchoolQuery(e.target.value)}
-                  placeholder="Your school"
-                  aria-label="Your school"
-                />
-                <input
-                  className="resources__input"
-                  value={programQuery}
-                  onChange={(e) => setProgramQuery(e.target.value)}
-                  placeholder="Your program (optional)"
-                  aria-label="Your program"
-                />
-                <button type="submit" className="btn">
-                  Find resources
-                </button>
-              </form>
-
-              {lookup?.kind === 'verified' &&
-                (lookup.school.resources.length === 0 ? (
-                  <p className="resources__empty">
-                    Waiting on the verified source list for {lookup.school.name} — nothing invented here.
-                  </p>
-                ) : (
-                  <ol className="resources__list">
-                    {rankByUrgency(lookup.school.resources, today).map((r) => {
-                      const days = daysUntil(r, today)
-                      const tier = urgencyTier(days)
-                      const countdown = formatCountdown(days)
-                      const why = lookup.whyYou[r.id]
-                      return (
-                        <li key={r.id} className={`resource-card resource-card--${tier}`}>
-                          <p className="resource-card__countdown">{days !== null ? countdown : r.deadline}</p>
-                          <h3 className="resource-card__name">
-                            <a href={r.url} target="_blank" rel="noreferrer">
-                              {r.name}
-                              <span className="external-mark" aria-hidden>
-                                {' ↗'}
-                              </span>
-                            </a>
-                          </h3>
-                          {r.value && <p className="resource-card__value">{r.value}</p>}
-                          <p className="resource-card__what">{r.whatItIs}</p>
-                          <p className="resource-card__why">{r.whyRelevant}</p>
-                          {lookup.loadingWhy && (
-                            <p className="resource-card__why-you resource-card__why-you--loading">Personalizing…</p>
-                          )}
-                          {why && <p className="resource-card__why-you">{why}</p>}
-                        </li>
-                      )
-                    })}
-                  </ol>
-                ))}
-
-              {lookup?.kind === 'guidance' && (
-                <div className="guidance-card">
-                  <p className="guidance-card__label">
-                    {lookup.schoolName} isn&rsquo;t in our verified list yet — here&rsquo;s AI-guided direction, not
-                    specific named awards.
-                  </p>
-                  {lookup.loading && <p className="hint">Asking…</p>}
-                  {lookup.error && <p className="resources__empty">{lookup.error}</p>}
-                  {lookup.result && (
-                    <>
-                      <div className="chips">
-                        {lookup.result.categories.map((c) => (
-                          <span key={c} className="chip">
-                            {c}
-                          </span>
-                        ))}
-                      </div>
-                      <ul className="guidance-card__where">
-                        {lookup.result.whereToLook.map((w) => (
-                          <li key={w}>{w}</li>
-                        ))}
-                      </ul>
-                    </>
-                  )}
-                </div>
-              )}
-            </section>
-
-            {hasProgramData && (
-              <section className="section section--band call" data-band="pear">
-                <p className="call__lead">
-                  You&rsquo;ve seen what you&rsquo;re missing and how to reach it — let StudyMax call you before it
-                  slips away.
-                </p>
-                <h2 className="section__title">Last step: get the call</h2>
-                <p className="hint">
-                  Nobody re-opens a dashboard. So StudyMax phones you once about {topAward ? 'a real award with a ' : ''}
-                  {topAward ? <strong>near deadline</strong> : 'your closest specialization'}, says its piece, and hangs
-                  up. One way — no conversation, nothing to answer.
-                </p>
-
-                {topAward && (
-                  <div className="call__award">
-                    <p className="call__award-countdown">
-                      {topAwardDeadlineText ?? topAward.deadline}
-                    </p>
-                    <h3 className="call__award-name">{topAward.name}</h3>
-                    {topAward.value && <p className="call__award-value">{topAward.value}</p>}
-                    <p className="call__award-what">{topAward.whatItIs}</p>
-                  </div>
-                )}
-
-                <details className="call__script">
-                  <summary>Exactly what the call will say</summary>
-                  <p className="call__script-text">&ldquo;{callFallbackScript}&rdquo;</p>
-                </details>
-
-                <form className="call__form" onSubmit={handleCallMe}>
-                  <input
-                    type="tel"
-                    className="call__input"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="+1 555 555 5555"
-                    aria-label="Your phone number"
-                    required
-                  />
-                  <button type="submit" className="btn" disabled={callStatus === 'calling'}>
-                    {topAward ? `📞 Call me about the ${topAward.name.split(/[,(]/)[0].trim()}` : '📞 Call me about this'}
-                  </button>
-                </form>
-                {callStatus === 'calling' && <p className="hint">Calling…</p>}
-                {callStatus === 'success' && <p className="call__success">Call placed — it should ring shortly.</p>}
-                {callStatus === 'error' && (
-                  <p className="call__fallback">
-                    Call couldn&rsquo;t connect — here&rsquo;s your reminder on screen instead: &ldquo;
-                    {callFallbackScript}&rdquo;
-                  </p>
-                )}
-
-                {/* A phone call can't carry a URL, and Bland's SMS API is Enterprise-only, so the link
-                    lives here — shown whether the call rang, failed, or was never placed at all. */}
-                {topAward && (
-                  <div className="call__link">
-                    <p className="call__link-label">
-                      {callStatus === 'success'
-                        ? 'The call can’t hand you a link — so here it is:'
-                        : 'Either way, here’s the link the call points at:'}
-                    </p>
-                    <a className="call__link-url" href={topAward.url} target="_blank" rel="noreferrer">
-                      {topAward.name}
-                      <span className="external-mark" aria-hidden>
-                        {' ↗'}
-                      </span>
-                      <span className="sr-only"> (opens the award page)</span>
-                    </a>
-                    <p className="call__link-deadline">{topAwardDeadlineText ?? topAward.deadline}</p>
-                  </div>
-                )}
-              </section>
-            )}
-          </>
-        )}
-      </main>
-
-      <footer className="footer">
-        <p className="footer__statement">Built for one student, one transcript, one plan.</p>
-        <p className="footer__meta">StudyMax</p>
-        {/* Demo data lives down here, out of the way of a real student's own intake. */}
-        <p className="footer__sample">
-          Just looking around?{' '}
-          <button type="button" className="linkish" onClick={loadSampleStudent}>
-            Load sample student data (USask CS)
-          </button>
-        </p>
-      </footer>
-    </div>
+    <ModelContext.Provider value={model}>
+      <div className="app">
+        <AnimatePresence mode="wait" initial={false} custom={model.direction}>
+          <motion.div
+            key={model.screen}
+            className="screen"
+            custom={model.direction}
+            variants={reduce ? instantVariants : screenVariants}
+            initial="enter"
+            animate="shown"
+            exit="leave"
+          >
+            <Current />
+          </motion.div>
+        </AnimatePresence>
+      </div>
+      <Intro />
+    </ModelContext.Provider>
   )
 }
 
