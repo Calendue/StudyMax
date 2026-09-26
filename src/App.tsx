@@ -16,7 +16,7 @@ import { searchCourses, catalogueTitle } from './lib/courseSearch.ts'
 import { courseInfo } from './data/prereqs.ts'
 import { artsAndScienceSubjects } from './data/courses.ts'
 import { api, haptic, onBackButton } from './platform.ts'
-import { authAvailable, currentAccount, isCancel, signIn, signOut, type Account, type Provider } from './auth.ts'
+import { currentAccount, isAuthConfigured, signIn, signInErrorMessage, signOut, type Account, type Provider } from './auth.ts'
 import { ModelContext } from './model.ts'
 import { courseCode, type TargetKind } from './format.ts'
 import { DUR, INSTANT, SETTLE } from './ui/motion.ts'
@@ -240,7 +240,7 @@ function useStudyMax() {
   const completedRef = useRef(completed)
   completedRef.current = completed
 
-  // --- account (native only): Apple or Google through Firebase, or none at all ---
+  // --- account: Apple or Google through Firebase (native, or the web when configured), or none ---
   const [account, setAccount] = useState<Account | null>(null)
   const [authBusy, setAuthBusy] = useState<Provider | null>(null)
   const [authError, setAuthError] = useState<string | null>(null)
@@ -746,7 +746,7 @@ function useStudyMax() {
   const applySavedRef = useRef(applySaved)
   applySavedRef.current = applySaved
   useEffect(() => {
-    if (!authAvailable) return
+    if (!isAuthConfigured) return
     let live = true
     void currentAccount().then((existing) => {
       if (!live || !existing) return
@@ -777,16 +777,7 @@ function useStudyMax() {
       go(resumeScreen(state))
     } catch (err) {
       // Closing the sheet is a choice, not a failure: nothing is shown.
-      if (!isCancel(err)) {
-        setAuthError(
-          provider === 'google'
-            ? "Google sign-in didn't work this time. Check your connection and try again, or continue without an account."
-            : /error 1000\b/.test(String((err as Error)?.message))
-              ? // Apple's catch-all, most often: no Apple Account is signed in on this device.
-                "Sign in with Apple isn't available right now. Check you're signed in to your Apple Account in Settings, or continue another way."
-              : "Sign in with Apple didn't work this time. Try again, or continue without an account.",
-        )
-      }
+      setAuthError(signInErrorMessage(provider, err))
     } finally {
       setAuthBusy(null)
     }
@@ -813,8 +804,9 @@ function useStudyMax() {
 
   // --- navigation: one screen at a time, a direction for the transition, and at most one sheet ---
   const [screen, setScreen] = useState<Screen>(() =>
-    // Native launches start at the welcome screen; the web build has no sign-in and starts as before.
-    authAvailable ? 'welcome' : resumeScreen(saved),
+    // With sign-in on offer (native, or a configured web build) launches start at the welcome screen;
+    // otherwise straight into onboarding as a guest, or back to the results.
+    isAuthConfigured ? 'welcome' : resumeScreen(saved),
   )
   const [direction, setDirection] = useState<1 | -1>(1)
   const [tab, setTabState] = useState<Tab>(() => (hasProgramData ? 'overview' : 'awards'))
@@ -850,7 +842,7 @@ function useStudyMax() {
       : []),
   ]
   const flow: Screen[] = [
-    ...(authAvailable && !account ? (['welcome'] as const) : []),
+    ...(isAuthConfigured && !account ? (['welcome'] as const) : []),
     ...onboardingSteps,
     ...(hasCourseStep ? (['courses'] as const) : []),
   ]

@@ -78,7 +78,7 @@ export function WelcomeScreen() {
         <Button block variant="quiet" disabled={m.authBusy !== null} onClick={m.continueWithoutAccount}>
           Continue without an account
         </Button>
-        <p className="welcome__note">Signing in keeps your courses and plan with your account on this phone.</p>
+        <p className="welcome__note">Signing in keeps your courses and plan with your account on this device.</p>
       </footer>
     </>
   )

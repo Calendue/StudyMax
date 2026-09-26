@@ -27,7 +27,7 @@ export function AccountSheet() {
         </div>
       </div>
       <p className="footnote account__note">
-        Your courses and plan are saved on this phone under this account. Signing out keeps them here for next time.
+        Your courses and plan are saved on this device under this account. Signing out keeps them here for next time.
       </p>
     </Sheet>
   )

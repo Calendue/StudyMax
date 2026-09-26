@@ -33,8 +33,8 @@ const config: CapacitorConfig = {
       showSpinner: false,
     },
     Keyboard: { resize: 'native', resizeOnFullScreen: true, style: 'LIGHT' },
-    // Native sign-in only: the Firebase SDKs on the device hold the session. The web build never
-    // shows sign-in (there's no Firebase web app), so the plugin's web layer is never loaded.
+    // Native sign-in: the Firebase SDKs on the device hold the session. The web signs in with the
+    // Firebase JS SDK directly (src/auth.ts), so the plugin's web layer is never loaded.
     FirebaseAuthentication: {
       skipNativeAuth: false,
       providers: ['apple.com', 'google.com'],
