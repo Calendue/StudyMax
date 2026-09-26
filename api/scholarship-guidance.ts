@@ -1,5 +1,4 @@
 import { buildGuidancePrompt, parseGuidanceResponse } from '../src/lib/scholarshipAi.js'
-import { openAIKey, respond } from './_openai.js'
 
 interface VercelRequest {
   method?: string
@@ -17,7 +16,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return
   }
 
-  const apiKey = openAIKey()
+  const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) {
     res.status(500).json({ error: 'OPENAI_API_KEY not configured' })
     return
@@ -29,13 +28,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return
   }
 
-  let text: string
-  try {
-    text = await respond(apiKey, buildGuidancePrompt(body.school, body.program || 'their program'), 1024)
-  } catch {
+  const prompt = buildGuidancePrompt(body.school, body.program || 'their program')
+
+  const upstream = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: 'gpt-5-mini',
+      // Uncapped, gpt-5-mini spends the whole token budget on hidden reasoning and returns empty
+      // content — this is a short category list, not a task that needs it.
+      reasoning_effort: 'minimal',
+      max_completion_tokens: 1024,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  })
+
+  if (!upstream.ok) {
     res.status(502).json({ error: 'upstream error' })
     return
   }
 
-  res.status(200).json(parseGuidanceResponse(text))
+  const data = await upstream.json()
+  const text = data?.choices?.[0]?.message?.content ?? ''
+  const guidance = parseGuidanceResponse(text)
+
+  res.status(200).json(guidance)
 }
