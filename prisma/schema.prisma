@@ -11,7 +11,7 @@ datasource db {
 
 model UserInfo {
   userId    BigInt   @id @default(autoincrement())
-  clerkId   String   @unique @db.VarChar
+  authUid   String   @unique @db.VarChar // Firebase Auth uid (see src/lib/auth.ts's AuthUser.uid)
   firstName String?  @db.VarChar
   lastName  String?  @db.VarChar
   email     String?  @db.VarChar
