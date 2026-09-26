@@ -109,7 +109,7 @@
   line-height: 0.85;
   font-variant-numeric: tabular-nums;
   color: var(--color-accent-3);
-  background-image: linear-gradient(oklch(68% 0.24 18 / 0.2) 0 0);
+  background-image: linear-gradient(color-mix(in srgb, var(--color-accent-3) 20%, transparent) 0 0);
   background-repeat: no-repeat;
   background-size: 100% 0.16em;
   background-position: 0 90%;
@@ -199,7 +199,7 @@
   --btn-face: var(--color-accent);
   --btn-ink: var(--color-ink);
   --btn-edge: var(--color-accent-deep);
-  --btn-cast: oklch(76% 0.2 95 / 0.45);
+  --btn-cast: color-mix(in srgb, var(--color-accent-deep) 45%, transparent);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -315,7 +315,7 @@
 .feed__row:hover {
   background: color-mix(in oklch, var(--row-tint) 12%, var(--color-paper));
   transform: translateY(-4px);
-  box-shadow: 0 12px 32px -16px oklch(20% 0.012 250 / 0.15);
+  box-shadow: 0 12px 32px -16px color-mix(in srgb, var(--color-ink) 15%, transparent);
   opacity: 1;
 }
 
@@ -599,7 +599,7 @@
   padding: var(--space-lg);
   border-radius: var(--radius-card);
   background: var(--color-paper);
-  box-shadow: 0 12px 32px -20px oklch(20% 0.012 250 / 0.15);
+  box-shadow: 0 12px 32px -20px color-mix(in srgb, var(--color-ink) 15%, transparent);
   transition:
     transform var(--dur-med) var(--ease-spring),
     box-shadow var(--dur-med) var(--ease-out);
@@ -607,7 +607,7 @@
 
 .resource-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 16px 36px -16px oklch(20% 0.012 250 / 0.2);
+  box-shadow: 0 16px 36px -16px color-mix(in srgb, var(--color-ink) 20%, transparent);
 }
 
 /* the countdown is the hero of the card — bold, big, colour-coded by urgency */
@@ -952,7 +952,7 @@ select.resources__input {
   border-radius: var(--radius-card);
   border-top: 5px solid var(--term-tint);
   padding: var(--space-sm) var(--space-md) var(--space-md);
-  box-shadow: 0 12px 32px -18px oklch(20% 0.012 250 / 0.25);
+  box-shadow: 0 12px 32px -18px color-mix(in srgb, var(--color-ink) 25%, transparent);
 }
 
 .plan__term--pear {
@@ -1113,7 +1113,7 @@ select.resources__input {
   background: var(--color-paper);
   border-radius: var(--radius-card);
   padding: var(--space-sm) var(--space-md) var(--space-md);
-  box-shadow: 0 12px 32px -18px oklch(20% 0.012 250 / 0.25);
+  box-shadow: 0 12px 32px -18px color-mix(in srgb, var(--color-ink) 25%, transparent);
   display: flex;
   flex-direction: column;
   gap: var(--space-2xs);
@@ -1210,7 +1210,7 @@ select.resources__input {
   margin-top: var(--space-2xs);
   background: var(--color-paper);
   border-radius: var(--radius-input);
-  box-shadow: 0 12px 32px -18px oklch(20% 0.012 250 / 0.3);
+  box-shadow: 0 12px 32px -18px color-mix(in srgb, var(--color-ink) 30%, transparent);
   max-height: 20rem;
   overflow-y: auto;
 }
