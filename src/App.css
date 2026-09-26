@@ -443,6 +443,16 @@
   font-weight: 500;
 }
 
+/* The start-term picker sits on the same inset surface as the segmented control beside it. */
+.per-term select {
+  height: 42px;
+  padding: 0 var(--s3);
+  border: 0;
+  border-radius: var(--r2);
+  background: var(--surface-2);
+  font-weight: 600;
+}
+
 .segmented {
   display: flex;
   gap: 2px;
@@ -594,6 +604,10 @@
 
 .roadmap__node--done {
   background: var(--surface-2);
+}
+
+.roadmap__node--in-progress {
+  box-shadow: inset 0 0 0 2px var(--track);
 }
 
 .roadmap__node--done .roadmap__node-code,

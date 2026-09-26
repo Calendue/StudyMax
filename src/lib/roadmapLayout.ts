@@ -1,6 +1,6 @@
 import type { PlannedTerm } from './plan.ts'
 
-export type RoadmapNodeState = 'done' | 'requirement' | 'prerequisite'
+export type RoadmapNodeState = 'done' | 'in-progress' | 'requirement' | 'prerequisite'
 
 export interface RoadmapNodeLayout {
   code: string
@@ -32,11 +32,17 @@ export interface RoadmapLayout {
 
 /**
  * Turns the plan's term buckets into fixed grid coordinates: a leading "Completed" column for done
- * courses relevant to the credential, then one column per term, rows in the order the plan already
- * computed. Pure and React-free — `buildPlan` already did the hard part (topological order, term
- * batching); this only assigns (col, row) positions to what it produced.
+ * courses relevant to the credential, an "In progress" column for the ones the student is sitting
+ * in now (the plan counts them as passed by its first term, so they'd otherwise vanish), then one
+ * column per term, rows in the order the plan already computed. Pure and React-free — `buildPlan`
+ * already did the hard part (topological order, term batching); this only assigns (col, row)
+ * positions to what it produced.
  */
-export function buildRoadmapLayout(terms: PlannedTerm[], completedRelevant: string[]): RoadmapLayout {
+export function buildRoadmapLayout(
+  terms: PlannedTerm[],
+  completedRelevant: string[],
+  inProgressRelevant: string[] = [],
+): RoadmapLayout {
   const columns: RoadmapColumn[] = []
   const nodes: RoadmapNodeLayout[] = []
   const neededByCode = new Map<string, string>()
@@ -46,6 +52,13 @@ export function buildRoadmapLayout(terms: PlannedTerm[], completedRelevant: stri
     const codes = [...completedRelevant].sort()
     columns.push({ key: 'completed', label: 'Completed', collapsible: true, codes })
     codes.forEach((code, row) => nodes.push({ code, state: 'done', alsoAdvances: [], col, row }))
+    col++
+  }
+
+  if (inProgressRelevant.length > 0) {
+    const codes = [...inProgressRelevant].sort()
+    columns.push({ key: 'in-progress', label: 'In progress', collapsible: false, codes })
+    codes.forEach((code, row) => nodes.push({ code, state: 'in-progress', alsoAdvances: [], col, row }))
     col++
   }
 

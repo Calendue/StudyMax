@@ -27,23 +27,19 @@ import { Sheet } from '../ui/Sheet.tsx'
 export function PlanRoadmap() {
   const m = useModel()
 
-  // Completed courses that count toward what's being planned — shown as a leading, collapsed
-  // "Completed" column so the graph reads as a full journey, not just what's left.
-  const completedRelevant = useMemo(() => {
-    const relevant = new Set<string>()
-    for (const target of m.targets) {
-      for (const group of target.spec.requirements) {
-        for (const code of group.courses) {
-          if (m.completed.has(code)) relevant.add(code)
-        }
-      }
+  // Completed and in-progress courses that count toward what's being planned — shown as leading
+  // columns (completed collapsed) so the graph reads as a full journey, not just what's left.
+  const { completedRelevant, inProgressRelevant } = useMemo(() => {
+    const counted = new Set(m.targets.flatMap((t) => t.spec.requirements.flatMap((g) => g.courses)))
+    return {
+      completedRelevant: [...counted].filter((code) => m.completed.has(code)),
+      inProgressRelevant: m.uploadInProgress.filter((code) => counted.has(code) && !m.completed.has(code)),
     }
-    return [...relevant]
-  }, [m.targets, m.completed])
+  }, [m.targets, m.completed, m.uploadInProgress])
 
   const { columns, nodes, edges } = useMemo(
-    () => buildRoadmapLayout(m.plan, completedRelevant),
-    [m.plan, completedRelevant],
+    () => buildRoadmapLayout(m.plan, completedRelevant, inProgressRelevant),
+    [m.plan, completedRelevant, inProgressRelevant],
   )
   const nodesByCode = useMemo(() => new Map(nodes.map((n) => [n.code, n])), [nodes])
 
@@ -116,6 +112,11 @@ export function PlanRoadmap() {
         {activeNode && activeCode && (
           <>
             <p className="lead">{m.courseTitle(activeCode)}</p>
+            {activeNode.state === 'in-progress' && (
+              <p className="footnote">
+                You&rsquo;re taking this now. The plan counts it as passed from {m.startTerm.season} {m.startTerm.year}.
+              </p>
+            )}
             {activeNode.state === 'prerequisite' && (
               <p className="footnote">
                 <Chip>Prerequisite</Chip> Needed before {courseCode(activeNode.neededBy ?? '')}
