@@ -23,6 +23,7 @@ import { courseCode, type TargetKind } from './format.ts'
 import { DUR, INSTANT, SETTLE } from './ui/motion.ts'
 import { Intro } from './screens/Intro.tsx'
 import { LandingScreen } from './screens/LandingScreen.tsx'
+import { LandingPage } from './components/landing/LandingPage.tsx'
 import { WelcomeScreen } from './screens/WelcomeScreen.tsx'
 import { AccountSheet } from './screens/AccountSheet.tsx'
 import { ConcentrationScreen, DegreeScreen, MajorScreen, MinorScreen, StudentScreen, UniversityScreen } from './screens/Onboarding.tsx'
@@ -369,6 +370,7 @@ function useStudyMax() {
     setExtraTargetIds([])
     setUploadStatus('idle')
     haptic.selection()
+    requestAdvance()
   }
 
   function handleProgramChange(id: string) {
@@ -382,21 +384,25 @@ function useStudyMax() {
     setExtraTargetIds([])
     setConcentrationIds([]) // they belong to the major they were picked from
     setUploadStatus('idle')
+    requestAdvance()
   }
 
   function chooseStudentType(type: StudentType) {
     haptic.selection()
     setStudentType(type)
+    requestAdvance()
   }
 
   function chooseDegree(value: string) {
     haptic.selection()
     setDegree(value)
+    requestAdvance()
   }
 
   function chooseMinor(id: string | null) {
     haptic.selection()
     setMinorId(id)
+    requestAdvance()
   }
 
   function toggleConcentration(id: string) {
@@ -826,8 +832,12 @@ function useStudyMax() {
         : resumeScreen(saved),
   )
   const [direction, setDirection] = useState<1 | -1>(1)
+  const [advanceSignal, setAdvanceSignal] = useState(0)
   const [tab, setTabState] = useState<Tab>(() => (hasProgramData ? 'overview' : 'awards'))
   const [sheet, setSheet] = useState<string | null>(null)
+  // A peek at the pitch from inside the app — separate from the `landing` screen the flow itself
+  // uses on first visit, so revisiting it never re-triggers onboarding or reloads the sample data.
+  const [showLanding, setShowLanding] = useState(false)
 
   function go(next: Screen, dir: 1 | -1 = 1) {
     setDirection(dir)
@@ -874,6 +884,21 @@ function useStudyMax() {
     const to = flow[flowIndex + 1]
     if (to) go(to)
     else startReveal()
+  }
+
+  // A single-select answer advances on its own — no Continue click needed. The choose handlers set
+  // their piece of state and call this in the same tick; since flow/onboardingSteps depend on that
+  // state (e.g. picking "another university" changes what comes after), next() can't run inline off
+  // the stale closure from this render. Bumping this signal defers the call to an effect, which runs
+  // after the state has committed and a fresh next() (closed over the updated flow) exists.
+  useEffect(() => {
+    if (advanceSignal === 0) return
+    next()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [advanceSignal])
+
+  function requestAdvance() {
+    setAdvanceSignal((s) => s + 1)
   }
 
   /** The landing page's call to action: into the flow at its first step. */
@@ -1067,6 +1092,8 @@ function useStudyMax() {
     sheet,
     setSheet,
     openSheet,
+    showLanding,
+    setShowLanding,
     next,
     startFromLanding,
     nextIsReveal,
@@ -1119,6 +1146,18 @@ function App() {
   const backRef = useRef(model.back)
   backRef.current = model.back
   useEffect(() => onBackButton(() => backRef.current()), [])
+
+  if (model.showLanding) {
+    return (
+      <ModelContext.Provider value={model}>
+        <div className="app app--wide">
+          <main className="screen__body">
+            <LandingPage onGetStarted={() => model.setShowLanding(false)} onSkip={() => model.setShowLanding(false)} />
+          </main>
+        </div>
+      </ModelContext.Provider>
+    )
+  }
 
   const Current = SCREENS[model.screen]
   return (
