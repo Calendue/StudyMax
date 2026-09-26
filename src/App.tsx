@@ -16,6 +16,7 @@ import { courseInfo } from './data/prereqs.ts'
 import { catalogueCourses, artsAndScienceSubjects } from './data/courses.ts'
 import { CourseCheck } from './components/CourseCheck.tsx'
 import { OnboardingFlow } from './components/onboarding/OnboardingFlow.tsx'
+import { LandingPage } from './components/landing/LandingPage.tsx'
 import type { OnboardingProfile } from './components/onboarding/types.ts'
 import { onAuthChange, signOutUser, type AuthUser } from './lib/auth.ts'
 import './App.css'
@@ -193,6 +194,10 @@ function App() {
   const [onboarded, setOnboarded] = useState(saved.onboarded ?? false)
   const [firstYear, setFirstYear] = useState(saved.firstYear ?? false)
   const [authUser, setAuthUser] = useState<AuthUser | null>(null)
+
+  // The pitch/landing page shown before onboarding to a first-time visitor. Skipped entirely for
+  // anyone already onboarded (e.g. mid-demo refresh) — never re-shown once they've entered.
+  const [pastLanding, setPastLanding] = useState(saved.onboarded ?? false)
 
   useEffect(() => onAuthChange(setAuthUser), [])
 
@@ -695,6 +700,9 @@ function App() {
   const hasProgramData = (selectedProgram?.specializations.length ?? 0) > 0
 
   if (!onboarded) {
+    if (!pastLanding) {
+      return <LandingPage onGetStarted={() => setPastLanding(true)} onSkip={() => setOnboarded(true)} />
+    }
     return <OnboardingFlow onComplete={completeOnboarding} onSkip={() => setOnboarded(true)} />
   }
 

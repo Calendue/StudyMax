@@ -34,6 +34,20 @@ Brainstorm list — none of these are commitments until someone actually starts 
 
 - **Ibraheem is currently owning everything mobile.** StudyMax is meant to be a **mobile-primary product** — the phone experience is the product, not a responsive afterthought. If you're touching layout, navigation, or interaction patterns, check with Ibraheem or look for in-flight mobile work before assuming desktop-first is the default to design against.
 
+## Brand color palette
+
+The five colors below are the canonical brand palette — use these for any new UI, design work, or the roadmap/graph visual explorations mentioned above.
+
+| Name | Hex | RGB |
+| --- | --- | --- |
+| Old Lace | `#fff8eb` | 255, 248, 235 |
+| Cherry Rose | `#982649` | 152, 38, 73 |
+| Jet Black | `#12262b` | 18, 38, 43 |
+| Ultrasonic Blue | `#0921d7` | 9, 33, 215 |
+| Rosy Taupe | `#c38d94` | 195, 141, 148 |
+
+**Note:** `tokens.css` currently has a provisional palette under similar names (Dark Teal, Ultrasonic Blue, Old Lace, Cherry Rose, Rosy Taupe) with different hex values and a full 50–950 shade scale for each — that was an earlier stand-in, not this canonical set. Whoever picks up UI/theming work next should reconcile `tokens.css` against the five hex values above (this is the source of truth going forward), swapping in the black instead of the earlier teal.
+
 ## Code structure: component-first, no more god pages
 
 `src/App.tsx` is already ~1,400 lines doing everything — that's a warning sign, not a pattern to extend. **Every new piece of UI from here on gets its own component**, not another block bolted onto `App.tsx` or `App.css` (1,500+ lines already). This matters more than usual right now because mobile is being built in parallel: if a feature only exists as inline markup in one giant page, Ibraheem can't reuse it for the mobile UI — he has to rebuild it from scratch, which burns time neither of us has this weekend.
