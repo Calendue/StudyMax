@@ -937,7 +937,7 @@
   .topnav {
     display: flex;
     gap: var(--s5);
-    padding: 0 calc(var(--s5) + var(--sal)) 0 calc(var(--s5) + var(--sar));
+    padding: 0 calc(var(--s5) + var(--sar)) 0 calc(var(--s5) + var(--sal));
     border-bottom: 1px solid var(--divider);
   }
 
