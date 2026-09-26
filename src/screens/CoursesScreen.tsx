@@ -26,7 +26,7 @@ export function CoursesScreen() {
 
   return (
     <>
-      <TopBar onBack={() => m.go('school', -1)} />
+      <TopBar onBack={m.back} />
       <ScreenBody>
         <ScreenTitle lead={`${m.selectedProgram?.name ?? 'Your program'} at USask. Your transcript is the fastest way in.`}>
           Add your courses

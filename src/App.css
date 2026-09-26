@@ -34,7 +34,26 @@
   color: var(--ink);
 }
 
-/* ─────────────────────────────────────────────────────────── school */
+/* ─────────────────────────────────────────────────────────── onboarding */
+
+.steps {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 var(--s2);
+}
+
+.steps__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--track);
+  transition: background-color var(--d-med) var(--settle);
+}
+
+.steps__dot--on {
+  background: var(--accent);
+}
 
 .demo-link {
   display: flex;

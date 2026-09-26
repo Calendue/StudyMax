@@ -28,8 +28,8 @@ export function ResultsScreen() {
   return (
     <>
       <TopBar
-        onBack={() => m.go(m.hasCourseStep ? 'courses' : 'school', -1)}
-        backLabel={m.hasCourseStep ? 'Courses' : 'Back'}
+        onBack={() => m.go(m.resultsBack, -1)}
+        backLabel={m.resultsBack === 'courses' ? 'Courses' : 'Back'}
         right={
           <button type="button" className="topbar__action" onClick={m.startOver}>
             <Icon name="restart" size={18} />

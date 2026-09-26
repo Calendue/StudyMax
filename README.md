@@ -18,9 +18,9 @@ Applied Mathematics, Physics and Applied Computing are mapped too and will produ
 
 ## Try it
 
-1. Open the site and choose University of Saskatchewan, then Computer Science.
+1. Open the site and answer the onboarding questions: existing student, University of Saskatchewan, your degree, Computer Science, an optional minor, and any specializations you are aiming for. First-years skip straight to their plan.
 2. Upload a DegreeWorks audit or unofficial transcript as a PDF. Claude reads every course in every subject and separates what you finished from what you are taking now.
-3. No transcript handy? Use **Load sample student data (USask CS)** in the footer, or search the catalogue and tick off courses by hand.
+3. No transcript handy? Use **Load a sample student**, or search the catalogue and tick off courses by hand.
 4. Press **Reveal what my school hides**.
 
 You will get: what you are closest to finishing, the highest overlap course you have not taken, a term by term plan including the prerequisites the specialization page never lists, certificates and minors you are partway through, awards ranked by deadline, and the call at the end.

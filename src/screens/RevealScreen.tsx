@@ -17,7 +17,9 @@ export function RevealScreen() {
   const specCount = m.selectedProgram?.specializations.length ?? 0
   const all: string[] = m.hasProgramData
     ? [
-        `Checked ${plural(m.completed.size, 'course')} against ${plural(specCount, 'specialization')}`,
+        m.completed.size > 0
+          ? `Checked ${plural(m.completed.size, 'course')} against ${plural(specCount, 'specialization')}`
+          : `Mapped ${plural(specCount, 'specialization')} in ${m.selectedProgram?.name ?? 'your program'}`,
         m.credentials.length > 0
           ? `Found ${plural(m.credentials.length, 'certificate or minor', 'certificates and minors')} you've already started`
           : 'Looked for certificates and minors you have already started',
@@ -52,7 +54,7 @@ export function RevealScreen() {
       <div className="wait__mark wait__mark--reveal" aria-hidden>
         <Mark size={72} />
       </div>
-      <h1 className="wait__title">Looking at what you&rsquo;ve taken</h1>
+      <h1 className="wait__title">{m.completed.size > 0 ? <>Looking at what you&rsquo;ve taken</> : 'Mapping your path'}</h1>
       <StatusLines lines={lines} />
     </main>
   )

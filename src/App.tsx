@@ -23,7 +23,7 @@ import { DUR, INSTANT, SETTLE } from './ui/motion.ts'
 import { Intro } from './screens/Intro.tsx'
 import { WelcomeScreen } from './screens/WelcomeScreen.tsx'
 import { AccountSheet } from './screens/AccountSheet.tsx'
-import { SchoolScreen } from './screens/SchoolScreen.tsx'
+import { ConcentrationScreen, DegreeScreen, MajorScreen, MinorScreen, StudentScreen, UniversityScreen } from './screens/Onboarding.tsx'
 import { CoursesScreen } from './screens/CoursesScreen.tsx'
 import { ReadingScreen } from './screens/ReadingScreen.tsx'
 import { RevealScreen } from './screens/RevealScreen.tsx'
@@ -48,9 +48,27 @@ type Lookup =
 
 type UniversityChoice = '' | 'usask' | 'other'
 
-/** The flow, in order. Results is tabbed; the call is the last step. */
-export type Screen = 'welcome' | 'school' | 'courses' | 'reading' | 'reveal' | 'results' | 'call'
+/**
+ * The flow, in order. Onboarding asks one question per screen (student type, university, degree,
+ * major, minor, concentrations); existing students then add courses. Results is tabbed; the call is
+ * the last step.
+ */
+export type Screen =
+  | 'welcome'
+  | 'student'
+  | 'university'
+  | 'degree'
+  | 'major'
+  | 'minor'
+  | 'concentration'
+  | 'courses'
+  | 'reading'
+  | 'reveal'
+  | 'results'
+  | 'call'
 export type Tab = 'overview' | 'plan' | 'awards'
+/** First-years have no courses to add yet, so they go from onboarding straight to the reveal. */
+export type StudentType = 'first-year' | 'existing'
 
 // Selected when the student picks "Other university": no course-matching data exists for it, so it
 // routes straight to the AI-guidance fallback on the awards tab.
@@ -90,6 +108,16 @@ interface SavedState {
   programId: string
   completed: string[]
   revealed: boolean
+  studentType: StudentType | null
+  /** Descriptive only: it doesn't change matching or planning. */
+  degree: string
+  minorId: string | null
+  concentrationIds: string[]
+}
+
+/** The targets onboarding seeds the plan with: the concentrations first, then a declared minor. */
+function seedOf(state: Pick<Partial<SavedState>, 'concentrationIds' | 'minorId'>): string[] {
+  return [...(state.concentrationIds ?? []), state.minorId].filter((id): id is string => Boolean(id))
 }
 
 // Intake selections survive a refresh so a half-finished session isn't lost. The phone number is
@@ -115,9 +143,9 @@ function hasSaved(key: string) {
   }
 }
 
-/** Where a session resumes: its results if it got that far, otherwise the start of the intake. */
+/** Where a session resumes: its results if it got that far, otherwise the start of onboarding. */
 function resumeScreen(state: Partial<SavedState>): Screen {
-  return state.revealed && state.universityId ? 'results' : 'school'
+  return state.revealed && state.universityId ? 'results' : 'student'
 }
 
 function useStudyMax() {
@@ -126,6 +154,10 @@ function useStudyMax() {
   const [universityId, setUniversityId] = useState<UniversityChoice>(saved.universityId ?? '')
   const [programId, setProgramId] = useState(saved.programId ?? '')
   const [revealed, setRevealed] = useState(saved.revealed ?? false)
+  const [studentType, setStudentType] = useState<StudentType | null>(saved.studentType ?? null)
+  const [degree, setDegree] = useState(saved.degree ?? '')
+  const [minorId, setMinorId] = useState<string | null>(saved.minorId ?? null)
+  const [concentrationIds, setConcentrationIds] = useState<string[]>(saved.concentrationIds ?? [])
 
   const selectedSchool = universityId === 'usask' ? usask : null
   const availablePrograms = useMemo(() => selectedSchool?.programs ?? [], [selectedSchool])
@@ -214,21 +246,31 @@ function useStudyMax() {
   const [authError, setAuthError] = useState<string | null>(null)
   const saveKey = saveKeyFor(account?.uid ?? null)
 
+  const snapshot: SavedState = {
+    universityId,
+    programId,
+    completed: [...completed],
+    revealed,
+    studentType,
+    degree,
+    minorId,
+    concentrationIds,
+  }
+  const snapshotJson = JSON.stringify(snapshot)
   useEffect(() => {
-    const state: SavedState = { universityId, programId, completed: [...completed], revealed }
     try {
-      localStorage.setItem(saveKey, JSON.stringify(state))
+      localStorage.setItem(saveKey, snapshotJson)
     } catch {
       // storage full or blocked (private mode): the app works fine without persistence
     }
-  }, [saveKey, universityId, programId, completed, revealed])
+  }, [saveKey, snapshotJson])
 
   const matches = useMemo(
     () => computeMatches(selectedProgram?.specializations ?? [], completed),
     [selectedProgram, completed],
   )
 
-  const [heroId, setHeroId] = useState<string | null>(null)
+  const [heroId, setHeroId] = useState<string | null>(() => seedOf(saved)[0] ?? null)
   useEffect(() => {
     if (heroId === null && matches.length > 0) setHeroId(matches[0].spec.id)
   }, [heroId, matches])
@@ -329,7 +371,38 @@ function useStudyMax() {
     setUploadInProgress([])
     setHeroId(null)
     setExtraTargetIds([])
+    setConcentrationIds([]) // they belong to the major they were picked from
     setUploadStatus('idle')
+  }
+
+  function chooseStudentType(type: StudentType) {
+    haptic.selection()
+    setStudentType(type)
+  }
+
+  function chooseDegree(value: string) {
+    haptic.selection()
+    setDegree(value)
+  }
+
+  function chooseMinor(id: string | null) {
+    haptic.selection()
+    setMinorId(id)
+  }
+
+  function toggleConcentration(id: string) {
+    haptic.selection()
+    setConcentrationIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]))
+  }
+
+  const minorOptions = useMemo(() => availablePrograms.filter((p) => p.kind === 'minor'), [availablePrograms])
+  // Only a major with specializations to pick from gets the concentration step.
+  const concentrationOptions = universityId === 'usask' ? (selectedProgram?.specializations ?? []) : []
+  const targetSeed = seedOf({ concentrationIds, minorId })
+
+  function seedTargets(ids: string[]) {
+    setHeroId(ids[0] ?? null)
+    setExtraTargetIds(ids.slice(1))
   }
 
   function loadSampleStudent() {
@@ -337,8 +410,10 @@ function useStudyMax() {
     setProgramId(computerScience.id)
     setCompleted(new Set(computerScience.sampleTranscript ?? []))
     setUploadInProgress(computerScience.sampleInProgress ?? [])
-    setHeroId(null)
-    setExtraTargetIds([])
+    // A sample student is an existing one. Targets picked in onboarding still lead the plan.
+    setStudentType('existing')
+    if (programId !== computerScience.id) setConcentrationIds([])
+    seedTargets(programId === computerScience.id ? targetSeed : seedOf({ minorId }))
     // The sample is a real audit reduced to course codes, so it lands in the same state a finished
     // upload does: completed courses counted, in-progress ones named, the list ready to review.
     setUploadStatus('sample')
@@ -414,8 +489,7 @@ function useStudyMax() {
 
       setCompleted(new Set(codes))
       setUploadInProgress(inProgressCodes)
-      setHeroId(null)
-      setExtraTargetIds([])
+      seedTargets(targetSeed)
       setReadPhase('found')
       setUploadStatus('success')
       haptic.light()
@@ -445,7 +519,7 @@ function useStudyMax() {
   const [coursesPerTerm, setCoursesPerTerm] = useState(2)
   // Extra targets the student added to the same plan. Only ids from what they're already close to;
   // an id that stops resolving (they switched program) simply drops out.
-  const [extraTargetIds, setExtraTargetIds] = useState<string[]>([])
+  const [extraTargetIds, setExtraTargetIds] = useState<string[]>(() => seedOf(saved).slice(1))
   const addableTargets = useMemo(
     () =>
       [...matches, ...credentials].filter(
@@ -647,7 +721,8 @@ function useStudyMax() {
 
   const hasProgramData = (selectedProgram?.specializations.length ?? 0) > 0
   // Only a mapped program has a course step; everyone else goes straight to what we can find them.
-  const hasCourseStep = universityId === 'usask' && hasProgramData
+  // First-years skip it too: there's nothing to upload yet.
+  const hasCourseStep = universityId === 'usask' && hasProgramData && studentType !== 'first-year'
 
   /** Swaps in a whole saved session: the student's own on sign-in, the anonymous one on sign-out. */
   function applySaved(state: Partial<SavedState>) {
@@ -655,10 +730,13 @@ function useStudyMax() {
     setProgramId(state.programId ?? '')
     setCompleted(new Set(state.completed ?? []))
     setRevealed(state.revealed ?? false)
+    setStudentType(state.studentType ?? null)
+    setDegree(state.degree ?? '')
+    setMinorId(state.minorId ?? null)
+    setConcentrationIds(state.concentrationIds ?? [])
     setUploadInProgress([])
     setUploadStatus('idle')
-    setHeroId(null)
-    setExtraTargetIds([])
+    seedTargets(seedOf(state))
     setLookup(null)
     setCallStatus('idle')
   }
@@ -692,7 +770,7 @@ function useStudyMax() {
       // Their own saved session if they have one on this phone; otherwise what they've done so far
       // carries over into their account.
       const key = saveKeyFor(signedIn.uid)
-      const state = hasSaved(key) ? loadSaved(key) : { universityId, programId, completed: [...completed], revealed }
+      const state = hasSaved(key) ? loadSaved(key) : snapshot
       if (hasSaved(key)) applySaved(state)
       setAccount(signedIn)
       haptic.light()
@@ -736,7 +814,7 @@ function useStudyMax() {
   // --- navigation: one screen at a time, a direction for the transition, and at most one sheet ---
   const [screen, setScreen] = useState<Screen>(() =>
     // Native launches start at the welcome screen; the web build has no sign-in and starts as before.
-    authAvailable ? 'welcome' : saved.revealed && saved.universityId ? 'results' : 'school',
+    authAvailable ? 'welcome' : resumeScreen(saved),
   )
   const [direction, setDirection] = useState<1 | -1>(1)
   const [tab, setTabState] = useState<Tab>(() => (hasProgramData ? 'overview' : 'awards'))
@@ -759,10 +837,44 @@ function useStudyMax() {
     setSheet(id)
   }
 
-  function continueFromSchool() {
-    if (!selectedProgram) return
-    if (hasCourseStep) go('courses')
+  // The screens a student steps through before the reveal, in order, given what they've chosen so
+  // far. Continue moves one along it and Back (the button or Android's) one back.
+  // A question not answered yet assumes the longer USask path, so the dots and the button don't
+  // promise an early finish.
+  const onboardingSteps: Screen[] = [
+    'student',
+    'university',
+    ...(universityId !== 'other' ? (['degree', 'major', 'minor'] as const) : []),
+    ...(universityId !== 'other' && (!selectedProgram || concentrationOptions.length > 0)
+      ? (['concentration'] as const)
+      : []),
+  ]
+  const flow: Screen[] = [
+    ...(authAvailable && !account ? (['welcome'] as const) : []),
+    ...onboardingSteps,
+    ...(hasCourseStep ? (['courses'] as const) : []),
+  ]
+  const flowIndex = flow.indexOf(screen)
+  const nextIsReveal = flowIndex === flow.length - 1
+  const stepIndex = onboardingSteps.indexOf(screen)
+  /** Where Back from the results goes: the courses, or the last question onboarding asked. */
+  const resultsBack = flow[flow.length - 1]
+
+  function next() {
+    if (screen === onboardingSteps[onboardingSteps.length - 1]) completeOnboarding()
+    const to = flow[flowIndex + 1]
+    if (to) go(to)
     else startReveal()
+  }
+
+  function completeOnboarding() {
+    // First-years start from nothing; everyone's plan leads with what they said they're aiming for.
+    if (studentType === 'first-year') {
+      setCompleted(new Set())
+      setUploadInProgress([])
+      setUploadStatus('idle')
+    }
+    seedTargets(targetSeed)
   }
 
   function startReveal() {
@@ -780,6 +892,10 @@ function useStudyMax() {
 
   function startOver() {
     setRevealed(false)
+    setStudentType(null)
+    setDegree('')
+    setMinorId(null)
+    setConcentrationIds([])
     setUniversityId('')
     setProgramId('')
     setCompleted(new Set())
@@ -790,7 +906,7 @@ function useStudyMax() {
     setLookup(null)
     setCallStatus('idle')
     haptic.selection()
-    go('school', -1)
+    go('student', -1)
   }
 
   function planTarget(specId: string) {
@@ -808,17 +924,6 @@ function useStudyMax() {
       return true
     }
     switch (screen) {
-      case 'welcome':
-        return false
-      case 'school':
-        if (authAvailable && !account) {
-          go('welcome', -1)
-          return true
-        }
-        return false
-      case 'courses':
-        go('school', -1)
-        return true
       case 'reading':
         cancelUpload()
         go('courses', -1)
@@ -830,11 +935,16 @@ function useStudyMax() {
           setTabState('overview')
           return true
         }
-        go(hasCourseStep ? 'courses' : 'school', -1)
+        go(resultsBack, -1)
         return true
       case 'call':
         if (callStatus === 'calling') return true
         go('results', -1)
+        return true
+      default:
+        // Welcome and the onboarding steps: one step back, and out of the app from the first.
+        if (flowIndex === 0) return false
+        go(flowIndex > 0 ? flow[flowIndex - 1] : 'student', -1)
         return true
     }
   }
@@ -868,6 +978,17 @@ function useStudyMax() {
     programResults,
     handleProgramChange,
     loadSampleStudent,
+    // onboarding
+    studentType,
+    chooseStudentType,
+    degree,
+    chooseDegree,
+    minorId,
+    minorOptions,
+    chooseMinor,
+    concentrationIds,
+    concentrationOptions,
+    toggleConcentration,
     // courses
     completed,
     takenCourses,
@@ -930,7 +1051,12 @@ function useStudyMax() {
     sheet,
     setSheet,
     openSheet,
-    continueFromSchool,
+    next,
+    nextIsReveal,
+    canGoBack: flowIndex > 0,
+    stepIndex,
+    stepCount: onboardingSteps.length,
+    resultsBack,
     startReveal,
     finishReveal,
     startOver,
@@ -941,7 +1067,12 @@ export type Model = ReturnType<typeof useStudyMax>
 
 const SCREENS: Record<Screen, ComponentType> = {
   welcome: WelcomeScreen,
-  school: SchoolScreen,
+  student: StudentScreen,
+  university: UniversityScreen,
+  degree: DegreeScreen,
+  major: MajorScreen,
+  minor: MinorScreen,
+  concentration: ConcentrationScreen,
   courses: CoursesScreen,
   reading: ReadingScreen,
   reveal: RevealScreen,
