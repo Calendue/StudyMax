@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Before Android 12 there is no system widget radius; 16dp matches most launchers. -->
+    <dimen name="sm_widget_radius">16dp</dimen>
+    <dimen name="sm_widget_padding">14dp</dimen>
+</resources>

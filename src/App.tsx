@@ -15,8 +15,10 @@ import { computeCredentials } from './lib/credentials.ts'
 import { searchCourses, catalogueTitle } from './lib/courseSearch.ts'
 import { courseInfo } from './data/prereqs.ts'
 import { artsAndScienceSubjects } from './data/courses.ts'
-import { api, haptic, isNative, onBackButton } from './platform.ts'
+import { api, haptic, isNative, onAppUrlOpen, onBackButton } from './platform.ts'
 import { cachedFeatures, fetchFeatures } from './features.ts'
+import { buildWidgetSnapshot } from './lib/widgetSnapshot.ts'
+import { currentDeadlineWatch, startDeadlineWatch, stopDeadlineWatch, syncWidgets, watchFailureMessage } from './widgets.ts'
 import { useClassTracker } from './useClassTracker.ts'
 import { currentAccount, isAuthConfigured, signIn, signInErrorMessage, signOut, type Account, type Provider } from './auth.ts'
 import { ModelContext } from './model.ts'
@@ -991,6 +993,70 @@ function useStudyMax() {
     go('student', -1)
   }
 
+  // --- widgets and the deadline watch: what the home screen and the lock screen show ---
+  // Built from what the results already worked out; nothing is recomputed for the widgets. Starting
+  // over or finishing without results leaves nothing to show, which clears the widgets and ends any
+  // deadline watch (the plugin's clear() does both).
+  const [watchedId, setWatchedId] = useState<string | null>(null)
+  const [watchBusy, setWatchBusy] = useState(false)
+  const [watchError, setWatchError] = useState<string | null>(null)
+  const widgetSnapshot = useMemo(
+    () =>
+      buildWidgetSnapshot({
+        revealed,
+        awards: universityId === 'usask' ? rankedAwards : [],
+        hero,
+        heroKind,
+        topOverlap,
+        // courseTitle()'s lookup, inline: courseTitle itself is a new function every render.
+        courseTitle: (code) => selectedProgram?.courseTitles[code] ?? courseInfo[code]?.title ?? catalogueTitle(code),
+        now: today,
+      }),
+    [revealed, universityId, rankedAwards, hero, heroKind, topOverlap, selectedProgram, today],
+  )
+  useEffect(() => {
+    syncWidgets(widgetSnapshot)
+    if (!widgetSnapshot) setWatchedId(null)
+  }, [widgetSnapshot])
+
+  // The watch outlives the app, so ask what's running rather than assuming nothing is.
+  useEffect(() => {
+    void currentDeadlineWatch().then(setWatchedId)
+  }, [])
+
+  async function watchDeadline() {
+    const deadline = widgetSnapshot?.deadline
+    if (!deadline || watchBusy) return
+    setWatchBusy(true)
+    setWatchError(null)
+    const result = await startDeadlineWatch(deadline)
+    setWatchBusy(false)
+    if (result.started) {
+      setWatchedId(deadline.id)
+      haptic.light()
+    } else {
+      setWatchError(watchFailureMessage(result.reason))
+    }
+  }
+
+  async function unwatchDeadline() {
+    setWatchError(null)
+    await stopDeadlineWatch()
+    setWatchedId(null)
+    haptic.selection()
+  }
+
+  // studymax://awards and studymax://plan, from a widget or the deadline watch. Only once there are
+  // results to open; before that the app simply opens where it is.
+  const openLink = useRef((url: string) => void url)
+  openLink.current = (url: string) => {
+    const target = url.replace(/^studymax:\/\//, '').split(/[/?#]/)[0]
+    if (!revealed || (target !== 'awards' && target !== 'plan')) return
+    setTabState(target === 'plan' && hasProgramData ? 'plan' : 'awards')
+    if (screen !== 'results') go('results')
+  }
+  useEffect(() => onAppUrlOpen((url) => openLink.current(url)), [])
+
   function planTarget(specId: string) {
     setHeroId(specId)
     setExtraTargetIds((ids) => ids.filter((id) => id !== specId))
@@ -1132,6 +1198,13 @@ function useStudyMax() {
     callStatus,
     setCallStatus,
     callMe,
+    // the deadline watch (native only): the award it would follow, and whether it's running
+    watchableDeadline: widgetSnapshot?.deadline ?? null,
+    watchedId,
+    watchBusy,
+    watchError,
+    watchDeadline,
+    unwatchDeadline,
     // navigation
     screen,
     direction,

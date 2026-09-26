@@ -71,6 +71,19 @@ export function hideSplash() {
 }
 
 /**
+ * studymax:// links from the widgets and the deadline watch: the one the app was launched with,
+ * then any that arrive while it's running.
+ */
+export function onAppUrlOpen(handler: (url: string) => void): () => void {
+  if (!isNative) return () => {}
+  void NativeApp.getLaunchUrl()
+    .then((launch) => launch?.url && handler(launch.url))
+    .catch(() => {})
+  const listener = NativeApp.addListener('appUrlOpen', (event) => handler(event.url))
+  return () => void listener.then((l) => l.remove())
+}
+
+/**
  * The Android back button. `handler` returns true when it stepped back somewhere inside the flow;
  * false means there was nowhere left to go, and the app exits.
  */
