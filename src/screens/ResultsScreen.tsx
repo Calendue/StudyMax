@@ -21,6 +21,21 @@ const TAB_CONTENT: Record<Tab, ComponentType> = {
   awards: AwardsTab,
 }
 
+function TabButton({ label, icon, active, onClick }: { label: string; icon: IconName; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      className={`tab${active ? ' tab--active' : ''}`}
+      onClick={onClick}
+    >
+      <Icon name={icon} size={24} />
+      <span>{label}</span>
+    </button>
+  )
+}
+
 export function ResultsScreen() {
   const m = useModel()
   const reduce = useReducedMotion()
@@ -43,6 +58,15 @@ export function ResultsScreen() {
           </div>
         }
       />
+      {/* The same tabs as the bottom bar, laid out as a top strip instead — CSS alone swaps which
+          one shows, at the same width the rest of the app already treats as "desktop". */}
+      {m.hasProgramData && (
+        <nav className="topnav" role="tablist" aria-label="Results">
+          {TABS.map((t) => (
+            <TabButton key={t.id} label={t.label} icon={t.icon} active={m.tab === t.id} onClick={() => m.setTab(t.id)} />
+          ))}
+        </nav>
+      )}
       {/* A tab change is a destination change: a quick fade-through on one timeline, never a
           double exposure of two tabs. */}
       <AnimatePresence mode="wait" initial={false}>
@@ -61,17 +85,7 @@ export function ResultsScreen() {
       {m.hasProgramData && (
         <nav className="tabbar" role="tablist" aria-label="Results">
           {TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              role="tab"
-              aria-selected={m.tab === t.id}
-              className={`tab${m.tab === t.id ? ' tab--active' : ''}`}
-              onClick={() => m.setTab(t.id)}
-            >
-              <Icon name={t.icon} size={24} />
-              <span>{t.label}</span>
-            </button>
+            <TabButton key={t.id} label={t.label} icon={t.icon} active={m.tab === t.id} onClick={() => m.setTab(t.id)} />
           ))}
         </nav>
       )}
