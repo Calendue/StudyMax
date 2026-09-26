@@ -1,0 +1,20 @@
+// Which key-backed features this deployment can run. The app asks once at startup and leaves out
+// whatever the server can't do, so a missing key means a missing feature, not an error mid-flow.
+// Adding a key in Vercel turns its features back on everywhere, installed apps included, with no
+// rebuild. Only booleans leave the server, never the keys.
+
+interface VercelResponse {
+  status: (code: number) => VercelResponse
+  setHeader: (name: string, value: string) => void
+  json: (body: unknown) => void
+}
+
+export default function handler(_req: unknown, res: VercelResponse) {
+  res.setHeader('Cache-Control', 'no-store')
+  res.status(200).json({
+    // transcript reading, "why you" notes, guidance for schools we haven't mapped
+    ai: Boolean(process.env.OPENAI_API_KEY),
+    // the phone call about the award closing soonest
+    call: Boolean(process.env.BLAND_API_KEY),
+  })
+}

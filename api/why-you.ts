@@ -4,6 +4,7 @@ import {
   type WhyYouContext,
   type WhyYouResourceInput,
 } from '../src/lib/scholarshipAi.js'
+import { openAIKey, respond } from './_openai.js'
 
 interface VercelRequest {
   method?: string
@@ -21,9 +22,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY
+  const apiKey = openAIKey()
   if (!apiKey) {
-    res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' })
+    res.status(500).json({ error: 'OPENAI_API_KEY not configured' })
     return
   }
 
@@ -33,30 +34,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return
   }
 
-  const prompt = buildWhyYouPrompt(body.context, body.resources)
-
-  const upstream = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-5',
-      max_tokens: 1024,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  })
-
-  if (!upstream.ok) {
+  let text: string
+  try {
+    text = await respond(apiKey, buildWhyYouPrompt(body.context, body.resources), 2048)
+  } catch {
     res.status(502).json({ error: 'upstream error' })
     return
   }
 
-  const data = await upstream.json()
-  const textBlock = data?.content?.find((block: { type: string }) => block.type === 'text')
-  const text = textBlock?.text ?? ''
   const whyYou = parseWhyYouResponse(
     text,
     body.resources.map((r) => r.id),

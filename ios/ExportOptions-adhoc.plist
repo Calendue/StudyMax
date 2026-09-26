@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Ad hoc: installs on the team's registered devices only (Diawi-hostable). -->
+	<key>method</key>
+	<string>release-testing</string>
+	<key>teamID</key>
+	<string>JM7G3W9CWS</string>
+	<key>signingStyle</key>
+	<string>automatic</string>
+	<key>compileBitcode</key>
+	<false/>
+	<key>thinning</key>
+	<string>&lt;none&gt;</string>
+	<key>stripSwiftSymbols</key>
+	<true/>
+</dict>
+</plist>

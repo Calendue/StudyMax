@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="studymax_old_lace">#FFF8EB</color>
+    <color name="studymax_cherry_rose">#982649</color>
+    <!-- Override Capacitor's indigo defaults so nothing native falls outside the palette. -->
+    <color name="colorPrimary">#982649</color>
+    <color name="colorPrimaryDark">#FFF8EB</color>
+    <color name="colorAccent">#982649</color>
+</resources>

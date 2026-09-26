@@ -1,0 +1,168 @@
+import { useModel } from '../model.ts'
+import { KIND_LABEL, courseCode, plural } from '../format.ts'
+import { catalogueUrl } from '../lib/courseSearch.ts'
+import { ScreenTitle } from '../ui/chrome.tsx'
+import { Icon } from '../ui/Icon.tsx'
+import { Appear, Button, Chip, Group, Ring, Row, SectionLabel } from '../ui/primitives.tsx'
+import { Sheet } from '../ui/Sheet.tsx'
+
+export function PlanTab() {
+  const m = useModel()
+  const plan = m.plan
+  const last = plan[plan.length - 1]
+
+  if (plan.length === 0) {
+    return (
+      <>
+        <ScreenTitle lead={`You've finished ${m.hero.spec.name}. Pick another target on the Closest tab to plan it.`}>
+          Your plan
+        </ScreenTitle>
+        <Button block variant="secondary" onClick={() => m.setTab('overview')}>
+          See what you&rsquo;re close to
+        </Button>
+      </>
+    )
+  }
+
+  return (
+    <>
+      <ScreenTitle
+        lead={
+          <>
+            {plural(plan.length, 'term')} to finish, by <strong>{last.label}</strong>. Where a requirement gave you a
+            choice, we picked the course that also counts toward the most other credentials.
+          </>
+        }
+      >
+        Your plan
+      </ScreenTitle>
+
+      <Appear index={0} className="targets">
+        {m.targets.map((t) => (
+          <span key={t.spec.id} className="chip chip--target">
+            {t.spec.name}
+            {t.spec.id !== m.hero.spec.id && (
+              <button
+                type="button"
+                className="chip__remove"
+                aria-label={`Remove ${t.spec.name} from this plan`}
+                onClick={() => m.setExtraTargetIds((ids) => ids.filter((id) => id !== t.spec.id))}
+              >
+                <Icon name="close" size={14} />
+              </button>
+            )}
+          </span>
+        ))}
+        {m.addableTargets.length > 0 && (
+          <button type="button" className="chip chip--add" onClick={() => m.openSheet('addTarget')}>
+            <Icon name="plus" size={14} />
+            Plan another alongside
+          </button>
+        )}
+      </Appear>
+
+      <Appear index={1} className="per-term">
+        <span id="per-term-label">Courses per term</span>
+        <div className="segmented" role="radiogroup" aria-labelledby="per-term-label">
+          {[1, 2, 3, 4].map((n) => (
+            <button
+              key={n}
+              type="button"
+              role="radio"
+              aria-checked={m.coursesPerTerm === n}
+              className={`segmented__option${m.coursesPerTerm === n ? ' segmented__option--on' : ''}`}
+              onClick={() => m.setCoursesPerTerm(n)}
+            >
+              {n}
+            </button>
+          ))}
+        </div>
+      </Appear>
+
+      {m.hiddenPrereqs.length > 0 && (
+        <Appear index={2} className="notice">
+          <p>
+            <strong>
+              {plural(m.hiddenPrereqs.length, 'course')} below {m.hiddenPrereqs.length === 1 ? "isn't" : "aren't"} on the
+              specialization page.
+            </strong>{' '}
+            {m.hiddenPrereqs.length === 1 ? "It's a prerequisite" : "They're prerequisites"} you need before you can
+            register for the ones that are. That&rsquo;s the real cost.
+          </p>
+        </Appear>
+      )}
+
+      <ol className="timeline">
+        {plan.map((term, i) => (
+          <li key={term.label} className="timeline__term">
+            <Appear index={3 + i}>
+              <span className="timeline__node" aria-hidden />
+              <h3 className="timeline__label">{term.label}</h3>
+              <div className="group">
+                {term.courses.map((c) => (
+                  <a key={c.code} className="row row--tap plan-course" href={catalogueUrl(c.code)} target="_blank" rel="noreferrer">
+                    <span className="row__body">
+                      <span className="row__title">
+                        {courseCode(c.code)}
+                        {c.reason === 'prerequisite' && <Chip>Prerequisite</Chip>}
+                      </span>
+                      <span className="row__subtitle">{m.courseTitle(c.code)}</span>
+                      {c.reason === 'prerequisite' && (
+                        <span className="row__note">
+                          Needed before {courseCode(c.neededBy ?? '')}
+                          {c.prerequisiteText ? `, which requires ${c.prerequisiteText}` : ''}
+                        </span>
+                      )}
+                      {c.alsoAdvances.length > 0 && (
+                        <span className="row__note row__note--plus">Also counts toward {c.alsoAdvances.join(', ')}</span>
+                      )}
+                    </span>
+                    <Icon name="external" size={18} className="row__chevron" />
+                    <span className="visually-hidden"> (opens the USask catalogue)</span>
+                  </a>
+                ))}
+              </div>
+            </Appear>
+          </li>
+        ))}
+      </ol>
+
+      <div className="hero-action">
+        <Button block icon={m.planCopied ? 'check' : 'copy'} onClick={() => void m.copyPlan()}>
+          {m.planCopied ? 'Copied' : 'Copy plan for my advisor'}
+        </Button>
+      </div>
+      {m.planText !== null && (
+        <>
+          <p className="footnote">Copying was blocked here, so select the plan below and copy it yourself.</p>
+          <textarea className="plan-text" readOnly rows={8} value={m.planText} />
+        </>
+      )}
+      <p className="footnote">
+        Prerequisites come from catalogue.usask.ca verbatim; nothing here is inferred. What we can&rsquo;t know is which
+        terms a course actually runs in, so confirm that with your advisor before you register.
+      </p>
+
+      <Sheet open={m.sheet === 'addTarget'} onClose={() => m.setSheet(null)} title="Plan another alongside">
+        <p className="lead">Courses shared between targets are planned once and count for both.</p>
+        <SectionLabel>You&rsquo;re close to</SectionLabel>
+        <Group>
+          {m.addableTargets.map((t, i) => (
+            <Row
+              key={t.spec.id}
+              index={i}
+              leading={<Ring done={t.doneCount} total={t.totalRequired} size={40} stroke={4} />}
+              title={t.spec.name}
+              subtitle={`${KIND_LABEL[m.kindOf(t.spec.id)]} · ${t.remaining} left`}
+              trailing={<Icon name="plus" size={20} className="row__add" />}
+              onClick={() => {
+                m.setExtraTargetIds((ids) => [...ids, t.spec.id])
+                m.setSheet(null)
+              }}
+            />
+          ))}
+        </Group>
+      </Sheet>
+    </>
+  )
+}

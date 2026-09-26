@@ -1,0 +1,25 @@
+export type TargetKind = 'specialization' | 'certificate' | 'minor'
+
+export const WHY_IT_MATTERS: Record<TargetKind, string> = {
+  specialization:
+    'Specializations appear on your official transcript and signal focused expertise to employers, beyond the base degree.',
+  certificate:
+    'A certificate is a separate credential with its own line on your transcript, earned alongside your degree rather than instead of part of it.',
+  minor:
+    'A minor is a separate credential with its own line on your transcript, earned alongside your degree rather than instead of part of it.',
+}
+
+export const KIND_LABEL: Record<TargetKind, string> = {
+  specialization: 'Specialization',
+  certificate: 'Certificate',
+  minor: 'Minor',
+}
+
+/** "CMPT280" → "CMPT 280" */
+export function courseCode(code: string) {
+  return code.replace(/([A-Z]+)(\d+)/, '$1 $2')
+}
+
+export function plural(n: number, one: string, many = `${one}s`) {
+  return `${n} ${n === 1 ? one : many}`
+}
