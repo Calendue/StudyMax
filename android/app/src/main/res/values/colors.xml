@@ -2,6 +2,7 @@
 <resources>
     <color name="studymax_old_lace">#FFF8EB</color>
     <color name="studymax_cherry_rose">#982649</color>
+    <color name="studymax_ink">#12262B</color>
     <!-- Override Capacitor's indigo defaults so nothing native falls outside the palette. -->
     <color name="colorPrimary">#982649</color>
     <color name="colorPrimaryDark">#FFF8EB</color>

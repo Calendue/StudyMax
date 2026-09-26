@@ -4,15 +4,16 @@
 /// <reference types="@capacitor-firebase/authentication" />
 import type { CapacitorConfig } from '@capacitor/cli'
 
-// Old Lace. The WebView, the native splash and the Android window all paint this, so there is no
-// flash of another colour between launch and first render.
-const OLD_LACE = '#FFF8EB'
+// Jet navy, the launch intro's ground. The native launch screen, Capacitor's splash, the web view's
+// own background and the Android window all paint it, so nothing lighter flashes between launch and
+// the intro's first frame. The app itself paints Old Lace over it.
+const INK = '#12262B'
 
 const config: CapacitorConfig = {
   appId: 'ai.calendue.studymax',
   appName: 'StudyMax',
   webDir: 'dist',
-  backgroundColor: OLD_LACE,
+  backgroundColor: INK,
   ios: {
     contentInset: 'never',
     // The app scrolls inside its own container, so the root never rubber-bands.
@@ -29,7 +30,7 @@ const config: CapacitorConfig = {
       launchShowDuration: 3000,
       launchAutoHide: true,
       launchFadeOutDuration: 200,
-      backgroundColor: OLD_LACE,
+      backgroundColor: INK,
       showSpinner: false,
     },
     Keyboard: { resize: 'native', resizeOnFullScreen: true, style: 'LIGHT' },

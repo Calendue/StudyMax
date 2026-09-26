@@ -2,35 +2,93 @@
 
 /* ─────────────────────────────────────────────────────────── intro */
 
+/* The launch, after CalenDue's prism: jet navy ground (the native launch screen's flat colour), sheets
+   of light on the diagonal, and the Old Lace S igniting at the centre of the full screen. */
 .intro {
   position: fixed;
   inset: 0;
   z-index: 100;
   display: grid;
   place-items: center;
-  background: var(--bg);
+  overflow: hidden;
+  background: var(--ink);
 }
 
-/* The mark sits exactly where the native splash draws it: 96px, centred in the full screen. */
-.intro__stack {
-  position: relative;
-  width: 96px;
-  height: 96px;
-}
-
-.intro__mark {
-  display: block;
-  color: var(--accent);
-}
-
-.intro__word {
+.intro__canvas {
   position: absolute;
-  top: calc(100% + var(--s3));
-  left: -120px;
-  right: -120px;
-  display: flex;
-  justify-content: center;
-  color: var(--accent);
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.intro__icon {
+  position: relative;
+  width: 176px;
+  height: 176px;
+}
+
+.intro__icon svg {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+/* Ignition. The shape arrives first, unlit... */
+.intro__silhouette {
+  color: var(--taupe);
+  opacity: 0;
+  transform: scale(1.05);
+  animation: ignite 0.4s var(--settle) 0.5s forwards;
+}
+
+@keyframes ignite {
+  to {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+}
+
+/* ...then Old Lace blooms outward from its centre and fills it. */
+.intro__mark {
+  color: var(--old-lace);
+  clip-path: circle(0% at 52% 52%);
+  animation: bloom 0.85s cubic-bezier(0.22, 1, 0.36, 1) 0.72s forwards;
+}
+
+@keyframes bloom {
+  to {
+    clip-path: circle(75% at 52% 52%);
+  }
+}
+
+/* A soft halo swells behind the S as it lights, and settles to a glow. */
+.intro__halo {
+  position: absolute;
+  inset: -55%;
+  border-radius: 50%;
+  background: radial-gradient(
+    closest-side,
+    rgb(255 248 235 / 0.4),
+    rgb(221 128 150 / 0.22) 45%,
+    transparent
+  );
+  opacity: 0;
+  transform: scale(0.35);
+  animation: halo 1.3s var(--settle) 0.72s forwards;
+}
+
+@keyframes halo {
+  0% {
+    opacity: 0;
+    transform: scale(0.35);
+  }
+  35% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.6;
+    transform: scale(1.1);
+  }
 }
 
 /* ─────────────────────────────────────────────────────────── onboarding */
