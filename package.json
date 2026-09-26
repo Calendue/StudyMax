@@ -11,7 +11,14 @@
     "cap:assets": "bash scripts/generate-native-assets.sh",
     "cap:sync": "cap sync",
     "build:ios": "bash scripts/build-ios.sh --web",
-    "build:android": "bash scripts/build-android.sh --web"
+    "build:android": "bash scripts/build-android.sh --web",
+    "db:migrate": "dotenv -e .env.local -- prisma migrate deploy",
+    "db:generate": "prisma generate",
+    "db:studio": "dotenv -e .env.local -- prisma studio",
+    "db:seed:institutions": "node --experimental-strip-types --env-file=.env.local scripts/seed-institutions.ts",
+    "db:seed:majors": "node --experimental-strip-types --env-file=.env.local scripts/seed-majors.ts",
+    "db:seed": "npm run db:seed:institutions && npm run db:seed:majors",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@capacitor-firebase/authentication": "^8.5.2",
@@ -24,6 +31,7 @@
     "@capacitor/splash-screen": "^8.0.2",
     "@capacitor/status-bar": "^8.0.3",
     "@fontsource/plus-jakarta-sans": "^5.3.0",
+    "@prisma/client": "^6.19.3",
     "firebase": "^12.19.0",
     "motion": "^13.4.4",
     "react": "^19.2.8",
@@ -35,8 +43,18 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.4",
+    "dotenv-cli": "^11.0.0",
     "oxlint": "^1.75.0",
+    "prisma": "^6.19.3",
     "typescript": "~6.0.2",
     "vite": "^8.2.0"
+  },
+  "allowScripts": {
+    "fsevents@2.3.3": true,
+    "@firebase/util@1.15.3": true,
+    "@prisma/client": true,
+    "@prisma/engines": true,
+    "prisma": true,
+    "protobufjs@7.6.6": true
   }
 }
