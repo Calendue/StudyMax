@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The widget and Live Update palette. Same tokens as the iOS widgets (ios/StudyMaxWidgets).
+     Every colour is fixed: nothing here reads the system accent, so Material You never tints it. -->
+<resources>
+    <color name="sm_ground_start">#FFF8EB</color>
+    <color name="sm_ground_end">#F8EBE1</color>
+    <!-- accent at 0.20, fading to 0 -->
+    <color name="sm_glow">#33982649</color>
+    <color name="sm_glow_clear">#00982649</color>
+    <color name="sm_ink">#12262B</color>
+    <!-- ink 0.72 / ink 0.55 (the lowest allowed for text) -->
+    <color name="sm_ink_soft">#B812262B</color>
+    <color name="sm_ink_faint">#8C12262B</color>
+    <color name="sm_accent">#982649</color>
+    <!-- accent 0.14 -->
+    <color name="sm_capsule">#24982649</color>
+    <!-- ink 0.10 -->
+    <color name="sm_hairline">#1A12262B</color>
+    <color name="sm_old_lace">#FFF8EB</color>
+    <!-- #C38D94 at 0.35 -->
+    <color name="sm_ring_track">#59C38D94</color>
+</resources>

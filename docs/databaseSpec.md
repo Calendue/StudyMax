@@ -2,7 +2,7 @@
 
 Implemented in `prisma/schema.prisma`, migrated and seeded on the remote Supabase Postgres. This doc explains what each table is for and why — `prisma/schema.prisma` is the source of truth for exact column types/constraints; don't let this drift from it.
 
-Auth is **Firebase** (`src/lib/auth.ts`, Google/Apple sign-in with a "continue as guest" fallback) — not Clerk. `UserInfo.authUid` holds a Firebase `AuthUser.uid`.
+Auth is **Firebase** (`src/auth.ts` — one module, native Capacitor sign-in on iOS/Android and the Firebase JS SDK on web, Google/Apple, with a "continue as guest" fallback) — not Clerk. `UserInfo.authUid` holds an `Account.uid`.
 
 ## Tables
 
@@ -12,13 +12,13 @@ The account row, one per signed-in student.
 | Column | Type | Notes |
 | --- | --- | --- |
 | `userId` | `BigInt` id | |
-| `authUid` | `String` unique | Firebase `AuthUser.uid` |
+| `authUid` | `String` unique | Firebase uid (`Account.uid`) |
 | `firstName`, `lastName`, `email` | `String?` | from the Firebase profile |
 | `createdAt`, `updatedAt` | `DateTime` | |
 
 Relations: one `StudentProfile`, many `StudentCourse`, one `GeneratedPlan`.
 
-Guests (no account) never get a `UserInfo` row — "continue without an account" / "skip onboarding" both work with no backend write, matching `src/lib/auth.ts`'s `isAuthConfigured`/guest-fallback design.
+Guests (no account) never get a `UserInfo` row — "continue without an account" / "skip onboarding" both work with no backend write, matching `src/auth.ts`'s `isAuthConfigured`/guest-fallback design.
 
 ### `StudentProfile`
 The onboarding wizard's answers (`src/components/onboarding/`), one per student.

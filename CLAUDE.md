@@ -6,26 +6,27 @@ This is an active hackathon submission, not a normal side project. **The clock i
 
 Upload a transcript → StudyMax tells you what credential (specialization/certificate/minor) you're closest to finishing, the one course that advances the most of it, a term-by-term plan, and it calls your phone about the scholarship deadline closing soonest. Fully working end-to-end only for **Computer Science at University of Saskatchewan** right now; other programs are partially mapped or unmapped.
 
-Matching/planning are deterministic (`src/lib/match.ts`, `src/lib/plan.ts`, `src/lib/credentials.ts`); Claude only handles the parts that need real reasoning (transcript parsing, scholarship "why this fits you" copy, guidance for unmapped schools).
+Matching/planning are deterministic (`src/lib/match.ts`, `src/lib/plan.ts`, `src/lib/credentials.ts`); an OpenAI model (`gpt-5-mini`, called only from `api/_openai.ts`) handles just the parts that need real reasoning (transcript parsing, scholarship "why this fits you" copy, guidance for unmapped schools).
 
 ## Current features (what's actually built and demoable today)
 
-- Transcript upload (PDF — DegreeWorks audit or unofficial transcript), parsed by Claude into completed vs. in-progress courses.
+- Transcript upload (PDF — DegreeWorks audit or unofficial transcript), parsed by the model into completed vs. in-progress courses.
 - Manual course entry: search across the full catalogue by code or title, or browse the Arts & Science course list and tick courses by hand.
 - Credential matching: what specialization/certificate/minor you're closest to finishing, and the single highest-overlap course you haven't taken yet.
-- Term-by-term plan generator, with prerequisite chains expanded automatically (including prereqs the specialization page itself never lists).
+- Term-by-term plan, drawn as a roadmap (see Plan roadmap below), with prerequisite chains expanded automatically (including prereqs the specialization page itself never lists). It starts in a term the student picks and counts in-progress courses as passed by then; onboarding seeds it with the chosen concentrations first, then the minor's requirement lists.
 - Certificates/minors detector — surfaces credentials a student is partway through without knowing it.
-- Scholarships/awards ranked by deadline, with Claude-generated "why this fits you" copy.
+- Scholarships/awards ranked by deadline, with AI-generated "why this fits you" copy.
+- Classes tab (USask only): look up a course's sections and watch live seat counts from USask's own class search (`api/classes.ts`, `api/_banner.ts`), with a badge when a watched seat opens.
 - Outbound phone call (via Bland) about the award closing soonest — one-way, says its piece, hangs up.
-- "Load sample student data (USask CS)" — a bulletproof canned path for demoing without a real transcript.
-- Full end-to-end support for Computer Science at University of Saskatchewan; partial data (plan-only, no credential detection) for Applied Mathematics, Physics, and Applied Computing; every other Arts & Science subject reaches only the scholarship side.
+- "Load a sample student" — a bulletproof canned path for demoing without a real transcript.
+- Full end-to-end support for Computer Science at University of Saskatchewan; partial data (plan-only, no credential detection) for Applied Mathematics, Physics, and Applied Computing, and degree-requirement plans for Biology, Psychology, Engineering, Nursing, Agriculture, Commerce, Kinesiology and Education; every other Arts & Science subject reaches only the scholarship side.
 
 ## Scaling ideas toward a winning product
 
 Brainstorm list — none of these are commitments until someone actually starts building them. Flag to the team before sinking real time into one.
 
-- **Academic journey roadmap/graph UI (currently being explored).** Turn the term-by-term plan into a visual, graph-like roadmap: courses taken, in progress, and remaining laid out as connected nodes (prerequisite chains as edges), so a student can *see* their path to a credential at a glance instead of reading a list. This is the leading candidate for the "wow" feature from the gaps above — likely the single highest-impact visual upgrade for judging, since it turns an already-real feature (the plan) into something demoable at a glance from across a room.
-- Mobile-first redesign (in progress — see Ownership below) as its own differentiator: most transcript/planning tools are desktop-only dashboards; a genuinely good phone experience is a visible point of difference in a room full of laptop demos.
+- **Academic journey roadmap/graph UI (built; see Plan roadmap below).** Turn the term-by-term plan into a visual, graph-like roadmap: courses taken, in progress, and remaining laid out as connected nodes (prerequisite chains as edges), so a student can *see* their path to a credential at a glance instead of reading a list. This is the leading candidate for the "wow" feature from the gaps above — likely the single highest-impact visual upgrade for judging, since it turns an already-real feature (the plan) into something demoable at a glance from across a room.
+- Mobile-first product (built — iOS and Android via Capacitor, see Mobile build below) as its own differentiator: most transcript/planning tools are desktop-only dashboards; a genuinely good phone experience is a visible point of difference in a room full of laptop demos.
 - A shareable/exportable version of the roadmap or "what you're closest to" result (image or link) — gives the product a viral, show-your-friends moment beyond the live demo.
 - GPA or "what-if" simulation on top of the existing deterministic planner (e.g., "what if I dropped this specialization for that one") — reuses `src/lib/plan.ts` and `src/lib/match.ts` rather than needing new infrastructure.
 - Expanding the phone call from one-way to something more interactive, if Bland's capabilities allow it within the time left — higher risk, only worth it if the one-way call is already rock solid.
@@ -34,17 +35,44 @@ Brainstorm list — none of these are commitments until someone actually starts 
 
 - **Ibraheem is currently owning everything mobile.** StudyMax is meant to be a **mobile-primary product** — the phone experience is the product, not a responsive afterthought. If you're touching layout, navigation, or interaction patterns, check with Ibraheem or look for in-flight mobile work before assuming desktop-first is the default to design against.
 
+## Brand color palette
+
+The five colors below are the canonical brand palette — use these for any new UI, design work, or the roadmap/graph visual explorations mentioned above.
+
+| Name | Hex | RGB |
+| --- | --- | --- |
+| Old Lace | `#fff8eb` | 255, 248, 235 |
+| Cherry Rose | `#982649` | 152, 38, 73 |
+| Jet Black | `#12262b` | 18, 38, 43 |
+| Ultrasonic Blue | `#0921d7` | 9, 33, 215 |
+| Rosy Taupe | `#c38d94` | 195, 141, 148 |
+
+**Note:** `tokens.css` implements this palette. Inside the app Cherry Rose is the single accent and Rosy Taupe its tonal partner (never body text); Ultrasonic Blue belongs to the brand kit in `public/brand/`, not to app UI. The landing page uses the same tokens.
+
 ## Code structure: component-first, no more god pages
 
-`src/App.tsx` is already ~1,400 lines doing everything — that's a warning sign, not a pattern to extend. **Every new piece of UI from here on gets its own component**, not another block bolted onto `App.tsx` or `App.css` (1,500+ lines already). This matters more than usual right now because mobile is being built in parallel: if a feature only exists as inline markup in one giant page, Ibraheem can't reuse it for the mobile UI — he has to rebuild it from scratch, which burns time neither of us has this weekend.
+The app is a screen flow, not one page. `src/App.tsx` owns the state in one `useStudyMax()` hook and hands it to screens through `ModelContext` (`src/model.ts`, read with `useModel()`); it renders exactly one screen at a time with a directional transition. Keep it that way:
 
-- New features and new UI pieces go in their own file under `src/components/` (create the directory if it doesn't exist yet), with clearly typed props — not appended inline to `App.tsx`.
-- A component should do one thing (a card, a progress bar, a roadmap node, a credential badge) and be usable without dragging in unrelated page state — that's what makes it portable to mobile.
-- If you're touching a chunk of the existing god page anyway, it's fine (encouraged, even) to peel that piece out into its own component as part of the change. It is **not** the time to attempt a full top-to-bottom refactor of `App.tsx` — that's a big, demo-risking move; coordinate with the team before taking it on.
+- Screens live in `src/screens/` (Welcome, the onboarding steps, Courses, Reading, Reveal, Results with its Overview/Plan/Awards tabs, Call, AccountSheet). Shared UI lives in `src/ui/`: `primitives.tsx` (Button, Group, Row, Appear, Ring, Chip…), `chrome.tsx` (TopBar, ScreenBody, ScreenTitle, ActionBar), `Sheet.tsx`, `motion.ts`, `Icon.tsx`. Build new UI from those, not from new CSS.
+- The design system is `tokens.css` + `src/App.css`: Old Lace #FFF8EB page, ink #12262B, Cherry Rose #982649 as the single accent, Rosy Taupe #C38D94 as its tonal partner, no pure white/black. No component invents a colour, size or duration; it asks the tokens.
+- A new piece of UI gets its own file with clearly typed props (or reads the model), not another inline block in `App.tsx`. Logic that isn't UI (matching, planning, credentials) stays in `src/lib/`.
+- `src/platform.ts` wraps everything native (haptics, Android back button, splash, keyboard, the API base URL); `src/auth.ts` is the one sign-in module for native and web.
+
+## OpenAI helper
+
+Every AI route (`api/parse-transcript.ts`, `api/why-you.ts`, `api/scholarship-guidance.ts`) calls `respond()` in `api/_openai.ts` and answers failures with `sendFailure()`. Don't add a route that calls OpenAI directly.
+
+- `gpt-5-mini` on Chat Completions with `reasoning_effort: 'minimal'` and `store: false`. Uncapped, gpt-5-mini can spend its whole token budget on hidden reasoning and return empty text. Minimal against low, and Chat Completions against Responses, were measured on a synthetic transcript: minimal was 2–5x faster and always correct.
+- The key only travels in the Authorization header. OpenAI's error text never leaves the server: its invalid-key error quotes part of the key and its rate-limit error names the org. The browser gets `{ error, status }`; the log gets the status and OpenAI's error code.
+- `api/features.ts` reports `ai`/`call` from whether `OPENAI_API_KEY`/`BLAND_API_KEY` are set, and the app hides what's missing.
+
+## Plan roadmap
+
+The Plan tab (`src/screens/PlanTab.tsx`) draws the plan as a graph (`src/screens/PlanRoadmap.tsx`), laid out by `src/lib/roadmapLayout.ts`: one row per term, top to bottom, each term's courses sharing the full width, with prerequisite links as connectors flowing down. Courses already done and in progress toward the target sit in a collapsible list above it (the plan counts in-progress courses as passed, so they'd otherwise appear nowhere). It consumes `buildStudentPlan`'s output as-is and has no scheduling logic of its own. The connectors use fixed vertical geometry (`LABEL_HEIGHT`, `NODE_HEIGHT`, `ROW_GAP`) and the measured width, so change the constants with the CSS.
 
 ## Database
 
-Schema lives in `prisma/schema.prisma`, migrated onto the team's shared remote Supabase Postgres — see `docs/databaseSpec.md` for what each table is for and what's deliberately not in the DB (the course catalogue/programs/scholarships stay static files).
+Schema lives in `prisma/schema.prisma`, migrated onto the team's shared remote Supabase Postgres (the app itself doesn't read or write it yet; identity is the Firebase uid in `UserInfo.authUid`) — see `docs/databaseSpec.md` for what each table is for and what's deliberately not in the DB (the course catalogue/programs/scholarships stay static files).
 
 - **Use `prisma migrate deploy`, never `prisma migrate dev`.** There's no local/shadow database here — only the one shared remote instance — and `migrate dev` provisions a shadow DB to diff against, which isn't the right model for four people hitting the same remote schema. Write migration SQL with `prisma migrate diff` (or by hand for something simple like a rename), then apply it with `npm run db:migrate` (wraps `prisma migrate deploy`).
 - Prisma's CLI doesn't read `.env.local` — `db:migrate`/`db:studio` are wrapped in `dotenv-cli` for this reason. Don't add a plain `.env` with the same values instead.
@@ -54,9 +82,18 @@ Schema lives in `prisma/schema.prisma`, migrated onto the team's shared remote S
 
 Ranked by what actually swings judges, in order of what to protect first:
 
-1. **Demo polish & story.** The pitch and the live-demo path have to be flawless — no rough loading/error/empty states, no dead ends judges can wander into. The "reveal" moment (finding what you're close to) and the phone call at the end are the emotional payoff of the pitch; they need to land every single time we run the demo, including offline/no-real-transcript scenarios. **The sample data path (`Load sample student data (USask CS)`) is the demo's safety net — it must never break.**
+1. **Demo polish & story.** The pitch and the live-demo path have to be flawless — no rough loading/error/empty states, no dead ends judges can wander into. The "reveal" moment (finding what you're close to) and the phone call at the end are the emotional payoff of the pitch; they need to land every single time we run the demo, including offline/no-real-transcript scenarios. **The sample data path ("Load a sample student" on the Courses screen) is the demo's safety net — it must never break.**
 2. **Breadth beyond CS/USask.** Right now the "wow, it actually works" moment only exists for one program at one school. Per the README, adding a program is a **data task, not an engineering one**: one file in `src/data/programs/`, registered in `index.ts`, and matching/planning/credentials pick it up automatically. This is the highest-leverage way to make the product look bigger than it is — but only add programs if the data is trustworthy enough not to visibly break the demo (see `check-course-codes.ts`, `check-schools.ts`).
 3. **A standout "wow" feature.** We need at least one moment in the demo that judges haven't seen in another submission. Not yet decided what this is — flag ideas to the team rather than unilaterally committing to a large new feature.
+
+## Mobile build
+
+The same Vite app ships as iOS and Android apps through Capacitor 8 (`capacitor.config.ts`, `ios/`, `android/`; app id `ai.calendue.studymax`). Native Apple and Google sign-in go through `@capacitor-firebase/authentication` against Firebase project `studymax-3a090`; the web uses the Firebase JS SDK only when the four `VITE_FIREBASE_*` vars are set, otherwise it starts as a guest. The native apps call the API at `https://study-max-theta.vercel.app` (`src/platform.ts`). Features that need `OPENAI_API_KEY` or `BLAND_API_KEY` are gated by `/api/features` (`src/features.ts`), so they stay hidden until those keys are in Vercel.
+
+- `npm run build` then `npx cap sync` copies `dist/` into both native projects; open `ios/App/App.xcodeproj` or `android/` to run on a simulator/emulator.
+- `npm run build:ios` builds the signed ad hoc IPA into `release/`; `npm run build:android` builds the signed APK. `npm run cap:assets` regenerates icons and splash.
+- Never committed (gitignored): `ios/App/App/GoogleService-Info.plist`, `android/app/google-services.json`, `android/keystore.properties` and keystores, `release/`, `.env.local`. Get them from a teammate or the Firebase console.
+- Native API calls go to the deployed Vercel site (`API_BASE` in `src/platform.ts`), so `api/` changes must be deployed before the app sees them.
 
 ## How to work during this sprint
 
@@ -65,6 +102,7 @@ Ranked by what actually swings judges, in order of what to protect first:
 - **Keep the cheap safety nets, skip the expensive ones.** The `scripts/check-*.ts` asserts and `npm run lint && npm run build` are fast and catch exactly the kind of silent data breakage (a course code the catalogue dropped, a scholarship link that 404s) that would be embarrassing live — keep running them before calling something done. Don't add new test infrastructure or heavy process during the sprint.
 - **Four people editing the same small codebase.** Keep diffs scoped and legible so teammates can tell what changed and why at a glance; avoid unrelated drive-by refactors while everyone's moving fast in parallel.
 - **When in doubt, ask.** With this little runway, a wrong guess that has to be unwound costs more than a 10-second clarifying question — especially for anything that touches the demo path or judging story.
+- **Don't use the claude-in-chrome tool in this project.** Verify UI changes another way (build, lint, `npm run dev` + reading the code, or ask the user to check).
 
 TEAM_EMAIL=ayotundeogunade13@gmail.com,michealsalam06@gmail.com,lafiajisamuel@gmail.com,Ibraheem.Islam.2016@gmail.com,support@calendue.ai,calendue.dev@gmail.com
 

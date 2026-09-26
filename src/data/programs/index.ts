@@ -11,13 +11,20 @@ import { statisticsMinor } from './statisticsMinor.ts'
 import { math } from './math.ts'
 import { statistics } from './statistics.ts'
 import { biology } from './biology.ts'
+import { psychology } from './psychology.ts'
+import { engineering } from './engineering.ts'
+import { nursing } from './nursing.ts'
+import { agriculture } from './agriculture.ts'
+import { commerce } from './commerce.ts'
+import { kinesiology } from './kinesiology.ts'
+import { education } from './education.ts'
 
 // Adding a program = adding a data file + one line here.
 //
-// math / statistics / biology stay as empty stubs on purpose: their USask Four-year majors (and,
-// for math, its minor) all rely on an open-ended "any 300/400-level course in the subject" bucket
-// that doesn't map to an enumerated course list — see the commit message / chat summary for the
-// full skip list and reasons.
+// math / statistics stay as empty stubs on purpose: their USask Four-year majors (and, for math,
+// its minor) rely on an open-ended "any 300/400-level course in the subject" bucket as most of the
+// major. Biology and Psychology have the same kind of bucket for a small part of theirs, which is
+// enumerated from the scraped catalogue instead (see subjectAtLevels in helpers.ts).
 export const programs: Program[] = [
   computerScience,
   appliedMathematics,
@@ -31,4 +38,11 @@ export const programs: Program[] = [
   math,
   statistics,
   biology,
+  psychology,
+  engineering,
+  nursing,
+  agriculture,
+  commerce,
+  kinesiology,
+  education,
 ]

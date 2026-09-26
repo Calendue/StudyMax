@@ -1,0 +1,493 @@
+.landing {
+  /* This page was written against the earlier theme's variable names; they're mapped here, scoped
+     to the landing page, onto tokens.css. Colours use the tokens directly. The display sizes a
+     marketing page needs beyond the app's type scale (text-sm/lg/2xl, space-2xl) are its own. */
+  --font-display: var(--font-brand);
+  --font-body: var(--font-text);
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --space-3xs: var(--s1);
+  --space-2xs: var(--s2);
+  --space-xs: var(--s3);
+  --space-sm: var(--s4);
+  --space-md: var(--s5);
+  --space-lg: var(--s6);
+  --space-xl: var(--s7);
+  --space-2xl: 4.5rem;
+  --text-xs: var(--fs-section);
+  --text-sm: 0.875rem;
+  --text-md: 1.125rem;
+  --text-lg: 1.375rem;
+  --text-2xl: 2.25rem;
+  --ease-out: var(--settle);
+  --ease-snap: var(--settle);
+  --dur-short: var(--d-fast);
+  --dur-med: var(--d-med);
+  --radius-pill: 999px;
+
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  min-height: 100%;
+}
+
+.landing * {
+  box-sizing: border-box;
+}
+
+.landing__topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: var(--space-md) var(--space-md) 0;
+}
+
+/* The Caveat wordmark from the brand pack, on its own, in berry. */
+.landing__wordmark {
+  display: block;
+  color: var(--accent);
+}
+
+.landing__skip {
+  font: 500 var(--text-sm) var(--font-body);
+  color: var(--ink-2);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: var(--space-2xs) var(--space-xs);
+}
+
+.landing__skip:hover {
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+.landing__hero {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: var(--space-2xl) var(--space-md) var(--space-xl);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 420px);
+  gap: var(--space-2xl);
+  align-items: center;
+}
+
+.landing__headline {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(2.25rem, 4.4vw + 1rem, 3.5rem);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  max-width: 14ch;
+}
+
+.landing__subhead {
+  margin-top: var(--space-md);
+  font-size: var(--text-lg);
+  line-height: 1.5;
+  color: var(--ink-2);
+  max-width: 46ch;
+}
+
+.landing__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-top: var(--space-lg);
+}
+
+.landing__cta {
+  font: 600 var(--text-md) var(--font-body);
+  background: var(--ink);
+  color: var(--bg);
+  border: 1px solid var(--ink);
+  border-radius: var(--radius-pill);
+  padding: var(--space-xs) var(--space-lg);
+  cursor: pointer;
+  transition: background var(--dur-med) var(--ease-out), color var(--dur-med) var(--ease-out), transform var(--dur-short) var(--ease-out);
+}
+
+.landing__cta:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.landing__cta--ghost {
+  background: transparent;
+  color: var(--ink);
+}
+
+.landing__cta--ghost:hover {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.landing__hero-note {
+  margin-top: var(--space-md);
+  font-size: var(--text-sm);
+  color: var(--ink-2);
+  max-width: 40ch;
+}
+
+/* --- the redacted-audit hero visual --- */
+
+.landing__audit {
+  border: 1px solid var(--divider);
+  background: var(--surface);
+  padding: var(--space-md);
+}
+
+.landing__audit-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: var(--space-sm);
+  align-items: baseline;
+  padding: var(--space-2xs) 0;
+  border-bottom: 1px solid var(--divider);
+  font-size: var(--text-sm);
+}
+
+.landing__audit-code {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.landing__audit-title {
+  min-width: 0;
+}
+
+.landing__audit-row--done .landing__audit-title,
+.landing__audit-row--done .landing__audit-code {
+  color: var(--ink-2);
+}
+
+.landing__audit-check {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.landing__audit-redaction-wrap {
+  position: relative;
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.landing__audit-remaining {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.landing__audit-redaction-bar {
+  position: absolute;
+  inset: -1px -3px;
+  background: var(--ink);
+  transform-origin: right center;
+  animation: landing-lift-redaction 620ms var(--ease-snap) 1000ms forwards;
+}
+
+@keyframes landing-lift-redaction {
+  to {
+    transform: scaleX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing__audit-redaction-bar {
+    animation: none;
+    transform: scaleX(0);
+  }
+}
+
+.landing__audit-reveal {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--accent);
+  color: var(--bg);
+  padding: var(--space-sm);
+  margin-top: var(--space-sm);
+}
+
+.landing__audit-reveal-label {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: lowercase;
+  opacity: 0.8;
+}
+
+.landing__audit-reveal-value {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--text-md);
+}
+
+.landing__audit-award {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+  padding-top: var(--space-sm);
+  border-top: 1px dashed var(--divider);
+  font-size: var(--text-sm);
+  color: var(--ink-2);
+}
+
+.landing__audit-award-deadline {
+  font-family: var(--font-mono);
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+/* --- problem band --- */
+
+.landing__band {
+  padding: var(--space-2xl) var(--space-md);
+}
+
+.landing__band--rose {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.landing__lede {
+  max-width: 62ch;
+  margin: 0 auto;
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: clamp(1.25rem, 1.4vw + 1rem, 1.75rem);
+  line-height: 1.45;
+  letter-spacing: -0.01em;
+}
+
+/* --- generic section --- */
+
+.landing__section {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: var(--space-2xl) var(--space-md);
+}
+
+.landing__heading {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--text-2xl);
+  letter-spacing: -0.015em;
+}
+
+.landing__section-intro {
+  margin-top: var(--space-2xs);
+  color: var(--ink-2);
+  max-width: 56ch;
+}
+
+/* --- how it works --- */
+
+.landing__steps {
+  list-style: none;
+  margin: var(--space-lg) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.landing__step {
+  display: grid;
+  grid-template-columns: 2.5rem 1fr;
+  gap: var(--space-sm);
+}
+
+.landing__step-index {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--accent);
+  padding-top: 0.2em;
+}
+
+.landing__step-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--text-lg);
+}
+
+.landing__step-body {
+  margin-top: var(--space-3xs);
+  color: var(--ink-2);
+  line-height: 1.55;
+}
+
+/* --- ledger (coverage + features) --- */
+
+.landing__ledger {
+  margin-top: var(--space-lg);
+  border-top: 1px solid var(--divider);
+}
+
+.landing__ledger-row {
+  display: grid;
+  grid-template-columns: 9rem 1fr;
+  gap: var(--space-2xs) var(--space-md);
+  padding: var(--space-sm) 0;
+  border-bottom: 1px solid var(--divider);
+}
+
+.landing__ledger--features .landing__ledger-row {
+  grid-template-columns: 5rem 1fr;
+}
+
+.landing__ledger-program {
+  font-family: var(--font-display);
+  font-weight: 600;
+  grid-column: 2;
+}
+
+.landing__ledger-detail {
+  grid-column: 2;
+  color: var(--ink-2);
+  line-height: 1.5;
+}
+
+.landing__status {
+  grid-row: 1 / span 2;
+  align-self: start;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  padding: 0.3em 0.6em;
+  border: 1px solid currentColor;
+  width: fit-content;
+}
+
+.landing__status--full {
+  color: var(--accent);
+}
+
+.landing__status--partial {
+  color: var(--ink-2);
+}
+
+.landing__status--scholarships-only {
+  color: var(--ink-2);
+}
+
+.landing__tag {
+  grid-row: 1 / span 2;
+  align-self: start;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--accent);
+}
+
+/* --- meme break --- */
+
+.landing__meme {
+  display: flex;
+  justify-content: center;
+  padding: 0 var(--space-md) var(--space-2xl);
+}
+
+.landing__meme-img {
+  width: 100%;
+  max-width: 380px;
+  border: 1px solid var(--divider);
+  background: var(--surface);
+  transform: rotate(-1.5deg);
+}
+
+/* --- judge Q&A --- */
+
+.landing__qa-list {
+  margin-top: var(--space-lg);
+  border-top: 1px solid var(--divider);
+}
+
+.landing__qa-item {
+  border-bottom: 1px solid var(--divider);
+}
+
+.landing__qa-question {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  padding: var(--space-sm) 0;
+  font: 600 var(--text-md) var(--font-display);
+  color: var(--ink);
+}
+
+.landing__qa-icon {
+  font-family: var(--font-mono);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.landing__qa-answer {
+  padding: 0 0 var(--space-md);
+  max-width: 62ch;
+  color: var(--ink-2);
+  line-height: 1.6;
+}
+
+/* --- footer --- */
+
+.landing__footer {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: var(--space-2xl) var(--space-md) var(--space-2xl);
+  border-top: 1px solid var(--divider);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+}
+
+.landing__footer-meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+}
+
+.landing__team {
+  font-weight: 600;
+}
+
+.landing__stack {
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+  max-width: 70ch;
+}
+
+@media (max-width: 860px) {
+  .landing__hero {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .landing__ledger-row,
+  .landing__ledger--features .landing__ledger-row {
+    grid-template-columns: 1fr;
+  }
+
+  .landing__status,
+  .landing__tag {
+    grid-row: auto;
+    margin-bottom: var(--space-3xs);
+  }
+
+  .landing__ledger-program,
+  .landing__ledger-detail {
+    grid-column: 1;
+  }
+}

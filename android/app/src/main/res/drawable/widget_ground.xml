@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The widget ground: Old Lace to a warmer blush, top-left to bottom-right, with a Cherry Rose glow
+     caught in the top-right corner. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="@dimen/sm_widget_radius" />
+            <gradient android:type="linear" android:angle="315"
+                android:startColor="@color/sm_ground_start" android:endColor="@color/sm_ground_end" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="@dimen/sm_widget_radius" />
+            <gradient android:type="radial" android:centerX="1.0" android:centerY="0.0"
+                android:gradientRadius="115%"
+                android:startColor="@color/sm_glow" android:endColor="@color/sm_glow_clear" />
+        </shape>
+    </item>
+</layer-list>
