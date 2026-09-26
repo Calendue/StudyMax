@@ -4,7 +4,7 @@ import {
   type WhyYouContext,
   type WhyYouResourceInput,
 } from '../src/lib/scholarshipAi.js'
-import { chat } from './_openai.js'
+import { openAIKey, respond, sendFailure } from './_openai.js'
 import { allow, clientIp } from './_rateLimit.js'
 
 // The app sends awards three at a time (twenty awards overflow one reply's token budget). A cap on
@@ -30,7 +30,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return
   }
 
-  const apiKey = process.env.OPENAI_API_KEY
+  const apiKey = openAIKey()
   if (!apiKey) {
     res.status(500).json({ error: 'OPENAI_API_KEY not configured' })
     return
@@ -71,9 +71,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let text: string
   try {
     // One-sentence copywriting per award.
-    text = await chat(apiKey, buildWhyYouPrompt(context, resources), 2048, 25_000)
-  } catch {
-    res.status(502).json({ error: 'upstream error' })
+    text = await respond(apiKey, buildWhyYouPrompt(context, resources), 2048, 25_000)
+  } catch (err) {
+    sendFailure(res, err)
     return
   }
 

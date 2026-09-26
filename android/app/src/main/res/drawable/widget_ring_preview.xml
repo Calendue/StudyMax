@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The progress ring as the widget picker shows it (4 of 6). At runtime the ring is drawn to a
+     bitmap in CredentialWidget, since RemoteViews has no arc of its own. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp" android:height="48dp"
+    android:viewportWidth="48" android:viewportHeight="48">
+    <path android:strokeColor="@color/sm_ring_track" android:strokeWidth="4.5"
+        android:pathData="M24,4 A20,20 0 1,1 23.99,4" />
+    <path android:strokeColor="@color/sm_accent" android:strokeWidth="4.5" android:strokeLineCap="round"
+        android:pathData="M24,4 A20,20 0 1,1 6.68,34" />
+</vector>

@@ -10,13 +10,15 @@ import type { School } from './data/schools/types.ts'
 import { computerScience } from './data/programs/computerScience.ts'
 import type { Program } from './data/programs/types.ts'
 import { buildCallScript, type CallContext } from './lib/callScript.ts'
-import { buildPlan, upcomingTerm } from './lib/plan.ts'
+import { buildStudentPlan, termsFrom, upcomingTerm, type TermStart } from './lib/plan.ts'
 import { computeCredentials } from './lib/credentials.ts'
 import { searchCourses, catalogueTitle } from './lib/courseSearch.ts'
 import { courseInfo } from './data/prereqs.ts'
 import { artsAndScienceSubjects } from './data/courses.ts'
-import { api, haptic, isNative, onBackButton } from './platform.ts'
+import { api, haptic, isNative, onAppUrlOpen, onBackButton } from './platform.ts'
 import { cachedFeatures, fetchFeatures } from './features.ts'
+import { buildWidgetSnapshot } from './lib/widgetSnapshot.ts'
+import { currentDeadlineWatch, startDeadlineWatch, stopDeadlineWatch, syncWidgets, watchFailureMessage } from './widgets.ts'
 import { useClassTracker } from './useClassTracker.ts'
 import { currentAccount, isAuthConfigured, signIn, signInErrorMessage, signOut, type Account, type Provider } from './auth.ts'
 import { ModelContext } from './model.ts'
@@ -133,7 +135,9 @@ interface SavedState {
 
 /** The targets onboarding seeds the plan with: the concentrations first, then a declared minor. */
 function seedOf(state: Pick<Partial<SavedState>, 'concentrationIds' | 'minorId'>): string[] {
-  return [...(state.concentrationIds ?? []), state.minorId].filter((id): id is string => Boolean(id))
+  // The minor is a program; the plan targets its requirement lists (specializations) by id.
+  const minorSpecIds = usask.programs?.find((p) => p.id === state.minorId)?.specializations.map((s) => s.id) ?? []
+  return [...(state.concentrationIds ?? []), ...minorSpecIds]
 }
 
 // Intake selections survive a refresh so a half-finished session isn't lost. The phone number is
@@ -601,18 +605,21 @@ function useStudyMax() {
       (m) => m.remaining > 0,
     )
   }, [hero, matches, credentials, extraTargetIds])
-  // In-progress courses don't count as done (the targets' "N left" still includes them), but the plan
-  // is built around them: a course the student is sitting in now is never scheduled again, and it
-  // already unlocks what it's a prerequisite for.
-  const plannedAround = useMemo(() => new Set([...completed, ...uploadInProgress]), [completed, uploadInProgress])
-  const plan = useMemo(() => {
-    const planTargets = targets
-      .map((t) => computeMatches([t.spec], plannedAround)[0])
-      .filter((t) => t.remaining > 0)
-    return planTargets.length > 0
-      ? buildPlan(planTargets, planningSpecs, plannedAround, coursesPerTerm, upcomingTerm(today))
-      : []
-  }, [targets, planningSpecs, plannedAround, coursesPerTerm, today])
+  // The plan starts in a term the student picks; in-progress courses count as passed by then.
+  const startChoices = useMemo(() => termsFrom(upcomingTerm(today), 6), [today])
+  const [startTerm, setStartTerm] = useState<TermStart>(startChoices[0])
+  const plan = useMemo(
+    () =>
+      buildStudentPlan(
+        targets.map((t) => t.spec),
+        planningSpecs,
+        completed,
+        uploadInProgress,
+        coursesPerTerm,
+        startTerm,
+      ),
+    [targets, planningSpecs, completed, uploadInProgress, coursesPerTerm, startTerm],
+  )
   const [planCopied, setPlanCopied] = useState(false)
   // Clipboard writes are blocked in some browsers and contexts. Rather than a button that appears to
   // do nothing, the plan text is shown for the student to select by hand.
@@ -631,7 +638,7 @@ function useStudyMax() {
         (hiddenPrereqs.length > 0
           ? `, plus ${hiddenPrereqs.length} prerequisite${hiddenPrereqs.length === 1 ? '' : 's'} not listed on the specialization page`
           : '') +
-        `. ${coursesPerTerm} per term.`,
+        `. ${coursesPerTerm} per term, starting ${startTerm.season} ${startTerm.year}.`,
       '',
       ...plan.flatMap((term) => [
         `${term.label}:`,
@@ -1013,6 +1020,70 @@ function useStudyMax() {
     go('student', -1)
   }
 
+  // --- widgets and the deadline watch: what the home screen and the lock screen show ---
+  // Built from what the results already worked out; nothing is recomputed for the widgets. Starting
+  // over or finishing without results leaves nothing to show, which clears the widgets and ends any
+  // deadline watch (the plugin's clear() does both).
+  const [watchedId, setWatchedId] = useState<string | null>(null)
+  const [watchBusy, setWatchBusy] = useState(false)
+  const [watchError, setWatchError] = useState<string | null>(null)
+  const widgetSnapshot = useMemo(
+    () =>
+      buildWidgetSnapshot({
+        revealed,
+        awards: universityId === 'usask' ? rankedAwards : [],
+        hero,
+        heroKind,
+        topOverlap,
+        // courseTitle()'s lookup, inline: courseTitle itself is a new function every render.
+        courseTitle: (code) => selectedProgram?.courseTitles[code] ?? courseInfo[code]?.title ?? catalogueTitle(code),
+        now: today,
+      }),
+    [revealed, universityId, rankedAwards, hero, heroKind, topOverlap, selectedProgram, today],
+  )
+  useEffect(() => {
+    syncWidgets(widgetSnapshot)
+    if (!widgetSnapshot) setWatchedId(null)
+  }, [widgetSnapshot])
+
+  // The watch outlives the app, so ask what's running rather than assuming nothing is.
+  useEffect(() => {
+    void currentDeadlineWatch().then(setWatchedId)
+  }, [])
+
+  async function watchDeadline() {
+    const deadline = widgetSnapshot?.deadline
+    if (!deadline || watchBusy) return
+    setWatchBusy(true)
+    setWatchError(null)
+    const result = await startDeadlineWatch(deadline)
+    setWatchBusy(false)
+    if (result.started) {
+      setWatchedId(deadline.id)
+      haptic.light()
+    } else {
+      setWatchError(watchFailureMessage(result.reason))
+    }
+  }
+
+  async function unwatchDeadline() {
+    setWatchError(null)
+    await stopDeadlineWatch()
+    setWatchedId(null)
+    haptic.selection()
+  }
+
+  // studymax://awards and studymax://plan, from a widget or the deadline watch. Only once there are
+  // results to open; before that the app simply opens where it is.
+  const openLink = useRef((url: string) => void url)
+  openLink.current = (url: string) => {
+    const target = url.replace(/^studymax:\/\//, '').split(/[/?#]/)[0]
+    if (!revealed || (target !== 'awards' && target !== 'plan')) return
+    setTabState(target === 'plan' && hasProgramData ? 'plan' : 'awards')
+    if (screen !== 'results') go('results')
+  }
+  useEffect(() => onAppUrlOpen((url) => openLink.current(url)), [])
+
   function planTarget(specId: string) {
     // The "why you" notes name the target, so a new one gets fresh notes (the awards effect refetches).
     if (specId !== hero.spec.id) setLookup(null)
@@ -1133,6 +1204,9 @@ function useStudyMax() {
     plan,
     coursesPerTerm,
     setCoursesPerTerm,
+    startChoices,
+    startTerm,
+    setStartTerm,
     hiddenPrereqs,
     copyPlan,
     planCopied,
@@ -1154,6 +1228,13 @@ function useStudyMax() {
     callStatus,
     setCallStatus,
     callMe,
+    // the deadline watch (native only): the award it would follow, and whether it's running
+    watchableDeadline: widgetSnapshot?.deadline ?? null,
+    watchedId,
+    watchBusy,
+    watchError,
+    watchDeadline,
+    unwatchDeadline,
     // navigation
     screen,
     direction,
@@ -1219,6 +1300,10 @@ function App() {
   backRef.current = model.back
   useEffect(() => onBackButton(() => backRef.current()), [])
 
+  // In the native app the first screen mounts as the launch splash starts to dissolve, not under it,
+  // so its rows spring in while the splash fades out: one continuous move into the app.
+  const [launched, setLaunched] = useState(!isNative)
+
   if (model.showLanding) {
     return (
       <ModelContext.Provider value={model}>
@@ -1235,6 +1320,7 @@ function App() {
   return (
     <ModelContext.Provider value={model}>
       <div className={`app${model.screen === 'landing' ? ' app--wide' : ''}`}>
+        {launched && (
         <AnimatePresence mode="wait" initial={false} custom={model.direction}>
           <motion.div
             key={model.screen}
@@ -1248,9 +1334,10 @@ function App() {
             <Current />
           </motion.div>
         </AnimatePresence>
+        )}
       </div>
       {model.account && <AccountSheet />}
-      <Intro />
+      <Intro onReveal={() => setLaunched(true)} />
     </ModelContext.Provider>
   )
 }

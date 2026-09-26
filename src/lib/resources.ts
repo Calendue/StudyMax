@@ -18,16 +18,18 @@ export function rankByUrgency(resources: Resource[], today: Date = new Date()): 
 }
 
 /**
- * Calendar days from `today` until the resource's deadline day: 0 on the day itself, 1 the day before.
- * null for rolling/ongoing or past deadlines. Counted between local midnights, so the time of day
- * never pushes a same-day deadline to "tomorrow", and DST's 23/25-hour days round away.
+ * Calendar days from `today` to the resource's deadline: 0 = closes today, 1 = tomorrow. null for
+ * rolling/ongoing or past deadlines. Counting whole dates rather than rounding elapsed time up keeps
+ * this in step with formatCountdown's wording at every hour of the day (rounding up said "Closes
+ * tomorrow" on the deadline itself), and it's the same rule the widgets and the deadline watch use.
  */
 export function daysUntil(resource: Resource, today: Date = new Date()): number | null {
   if (!resource.deadlineDate) return null
-  const [year, month, day] = resource.deadlineDate.split('-').map(Number)
-  const deadline = new Date(year, month - 1, day)
-  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate())
-  const days = Math.round((deadline.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
+  const [y, m, d] = resource.deadlineDate.split('-').map(Number)
+  // Both as UTC midnights, so a daylight-saving change in between can't shift the count.
+  const due = Date.UTC(y, m - 1, d)
+  const now = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())
+  const days = Math.round((due - now) / 86_400_000)
   return days >= 0 ? days : null
 }
 

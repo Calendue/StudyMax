@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sm_widget_deadline_label">Next deadline</string>
+    <string name="sm_widget_deadline_description">The next award deadline you\'re close to, counted down in days.</string>
+    <string name="sm_widget_credential_label">Credential progress</string>
+    <string name="sm_widget_credential_description">How close you are to your nearest credential, and the course that gets you there.</string>
+    <string name="sm_widget_empty">Open StudyMax to see what you\'re close to</string>
+    <string name="sm_chip_urgent">Closing soon</string>
+    <string name="sm_chip_calm">Next deadline</string>
+    <string name="sm_value_label">Value</string>
+    <string name="sm_ring_done">done</string>
+    <string name="sm_watch_channel_name">Deadline watch</string>
+    <string name="sm_watch_channel_description">A live countdown to an award deadline you chose to watch.</string>
+    <string name="sm_watch_stop">Stop</string>
+</resources>

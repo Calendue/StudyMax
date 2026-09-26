@@ -1,5 +1,5 @@
 import { buildGuidancePrompt, parseGuidanceResponse } from '../src/lib/scholarshipAi.js'
-import { chat } from './_openai.js'
+import { openAIKey, respond, sendFailure } from './_openai.js'
 import { allow, clientIp } from './_rateLimit.js'
 
 interface VercelRequest {
@@ -19,7 +19,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return
   }
 
-  const apiKey = process.env.OPENAI_API_KEY
+  const apiKey = openAIKey()
   if (!apiKey) {
     res.status(500).json({ error: 'OPENAI_API_KEY not configured' })
     return
@@ -41,9 +41,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let text: string
   try {
     // A short category list, not a task that needs reasoning.
-    text = await chat(apiKey, buildGuidancePrompt(school, program || 'their program'), 1024, 25_000)
-  } catch {
-    res.status(502).json({ error: 'upstream error' })
+    text = await respond(apiKey, buildGuidancePrompt(school, program || 'their program'), 1024, 25_000)
+  } catch (err) {
+    sendFailure(res, err)
     return
   }
 

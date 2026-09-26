@@ -1,6 +1,6 @@
 import { buildTranscriptParsePrompt, parseTranscriptResponse } from '../src/lib/transcriptParse.js'
 import { catalogueCourses } from '../src/data/courses.js'
-import { chat, OpenAIError } from './_openai.js'
+import { openAIKey, respond, sendFailure } from './_openai.js'
 import { allow, clientIp } from './_rateLimit.js'
 
 const CATALOGUE_CODES = catalogueCourses.map((c) => c.code)
@@ -22,7 +22,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return
   }
 
-  const apiKey = process.env.OPENAI_API_KEY
+  const apiKey = openAIKey()
   if (!apiKey) {
     res.status(500).json({ error: 'OPENAI_API_KEY not configured' })
     return
@@ -39,25 +39,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return
   }
 
-  const prompt = buildTranscriptParsePrompt()
-
   let text: string
   try {
-    text = await chat(
+    text = await respond(
       apiKey,
       [
         { type: 'file', file: { filename: 'transcript.pdf', file_data: `data:application/pdf;base64,${body.pdfBase64}` } },
-        { type: 'text', text: prompt },
+        { type: 'text', text: buildTranscriptParsePrompt() },
       ],
       4096,
-      55_000,
     )
-  } catch (error) {
-    // Only the status goes back (the client words a 401/403 differently); OpenAI's own error text
-    // can quote the key, so it never leaves the server.
-    res.status(502).json({ error: 'upstream error', status: error instanceof OpenAIError ? error.status : 0 })
+  } catch (err) {
+    // The app tells the student whether the problem is on our side (401/403) from the status alone.
+    sendFailure(res, err)
     return
   }
+
   const { completed, inProgress } = parseTranscriptResponse(text, CATALOGUE_CODES)
 
   // A readable PDF with no recognisable courses is a different problem from an unreadable one, and

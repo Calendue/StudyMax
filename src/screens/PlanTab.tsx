@@ -84,6 +84,23 @@ export function PlanTab() {
         </div>
       </Appear>
 
+      <Appear index={1} className="per-term">
+        <label htmlFor="start-term">Starting</label>
+        {/* ponytail: native select, not a segmented control; six term labels don't fit one row on a phone */}
+        <select
+          id="start-term"
+          value={`${m.startTerm.season} ${m.startTerm.year}`}
+          onChange={(e) => {
+            const t = m.startChoices.find((c) => `${c.season} ${c.year}` === e.target.value)
+            if (t) m.setStartTerm(t)
+          }}
+        >
+          {m.startChoices.map((t) => (
+            <option key={`${t.season} ${t.year}`}>{`${t.season} ${t.year}`}</option>
+          ))}
+        </select>
+      </Appear>
+
       {m.hiddenPrereqs.length > 0 && (
         <Appear index={2} className="notice">
           <p>
