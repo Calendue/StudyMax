@@ -26,10 +26,21 @@ export interface CloudSession {
    * when never answered. Omitted by app builds from before it, which leaves a stored answer as is.
    */
   internship?: CloudInternship | null
+  /**
+   * The academic year (its Fall's calendar year) that internship takes, as the app resolved it from
+   * the transcript's dated terms; null without a year. Max's plan snapshot leaves it empty. Omitted
+   * by app builds from before it, which leaves a stored one as is.
+   */
+  internshipAY?: number | null
 }
 
 /** The internship question's answers, as the app keeps them (App.tsx's Internship). */
 export type CloudInternship = 3 | 4 | 'unsure' | 'no'
+
+/** A plausible academic year (2000-2100), else null. */
+export function academicYearFrom(value: unknown): number | null {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 2000 && value <= 2100 ? value : null
+}
 
 /** "3" → 3, "unsure" → 'unsure': a stored answer or a sent one, anything else null. */
 export function internshipFrom(value: unknown): CloudInternship | null {
@@ -88,5 +99,6 @@ export function cleanCloudSession(raw: unknown): CloudSession | null {
     summerPerTerm: count(s.summerPerTerm, MAX_SUMMER_COURSES, DEFAULT_SUMMER),
     ...(typeof s.phone === 'string' && PHONE_RE.test(s.phone.trim()) ? { phone: s.phone.trim() } : {}),
     ...(s.internship !== undefined ? { internship: internshipFrom(s.internship) } : {}),
+    ...(s.internshipAY !== undefined ? { internshipAY: academicYearFrom(s.internshipAY) } : {}),
   }
 }

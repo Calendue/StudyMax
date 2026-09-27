@@ -32,6 +32,8 @@ export interface AdapterInput {
   /** A ceiling, not an exact fill (spec 03 decision 5) — passed straight to buildPlan's perTerm cap. */
   coursesPerTerm: number
   start: TermStart
+  /** StudentProfile.internshipAcademicYear: an academic year away on an internship, left empty. */
+  away?: number | null
 }
 
 export type ValidationSeverity = 'WARNING' | 'ERROR'
@@ -76,7 +78,9 @@ export function regenerate(input: AdapterInput): { terms: PlannedTerm[] } {
   const terms =
     targets.length === 0
       ? []
-      : buildStudentPlan(targets, program.specializations, input.completed, input.inProgress, input.coursesPerTerm, input.start)
+      : buildStudentPlan(targets, program.specializations, input.completed, input.inProgress, input.coursesPerTerm, input.start, {
+          away: input.away ?? null,
+        })
   return { terms }
 }
 
