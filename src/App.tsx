@@ -429,33 +429,6 @@ function useStudyMax() {
   // to their account below, so it follows them to another phone.
   const [phone, setPhone] = useState('')
 
-  // A signed-in student's session is also kept in the database, so another phone can pick it up.
-  // Saved a moment after the last change, not on every tick; a failed save is simply retried by the next.
-  const cloudJson = JSON.stringify({
-    universityId,
-    programId,
-    completed: snapshot.completed,
-    inProgress: uploadInProgress,
-    revealed,
-    studentType,
-    degree,
-    minorId,
-    concentrationIds,
-    registered,
-    springSummer,
-    coursesPerTerm,
-    summerPerTerm,
-    internship,
-    ...(phone.trim() ? { phone: phone.trim() } : {}),
-  } satisfies CloudSession)
-  const accountUid = account?.uid ?? null
-  // Only once this phone's session is known to be theirs: their own save here, or the database answered.
-  const [cloudUid, setCloudUid] = useState<string | null>(null)
-  useEffect(() => {
-    if (!accountUid || accountUid !== cloudUid) return
-    const timer = setTimeout(() => void saveCloudSession(JSON.parse(cloudJson)), 1500)
-    return () => clearTimeout(timer)
-  }, [accountUid, cloudUid, cloudJson])
 
   const matches = useMemo(
     () => computeMatches(selectedProgram?.specializations ?? [], completed, activeDegree),
@@ -936,6 +909,36 @@ function useStudyMax() {
           }),
     [internshipYear, completed, inProgressCourses, today, completedTerms, coursesPerTerm, startTerm],
   )
+
+  // A signed-in student's session is also kept in the database, so another phone can pick it up. (Down
+  // here because it carries the internship's academic year, worked out just above.)
+  // Saved a moment after the last change, not on every tick; a failed save is simply retried by the next.
+  const cloudJson = JSON.stringify({
+    universityId,
+    programId,
+    completed: snapshot.completed,
+    inProgress: uploadInProgress,
+    revealed,
+    studentType,
+    degree,
+    minorId,
+    concentrationIds,
+    registered,
+    springSummer,
+    coursesPerTerm,
+    summerPerTerm,
+    internship,
+    internshipAY,
+    ...(phone.trim() ? { phone: phone.trim() } : {}),
+  } satisfies CloudSession)
+  const accountUid = account?.uid ?? null
+  // Only once this phone's session is known to be theirs: their own save here, or the database answered.
+  const [cloudUid, setCloudUid] = useState<string | null>(null)
+  useEffect(() => {
+    if (!accountUid || accountUid !== cloudUid) return
+    const timer = setTimeout(() => void saveCloudSession(JSON.parse(cloudJson)), 1500)
+    return () => clearTimeout(timer)
+  }, [accountUid, cloudUid, cloudJson])
   const plan = useMemo(
     () =>
       buildStudentPlan(

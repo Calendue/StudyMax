@@ -69,7 +69,8 @@ export interface AdapterInput {
   inProgressSeasons?: Record<string, Season>
   /** The degree variant the student chose (Program.degrees[].variant); missing: the program's default. */
   degreeVariant?: string | null
-  /** An academic year left empty for an internship (the app computes it; PlanOptions.away). */
+  /** An academic year left empty for an internship (PlanOptions.away): the app's own on a live call,
+   * else StudentProfile.internshipAcademicYear, which the app resolved and saved. */
   away?: number | null
 }
 

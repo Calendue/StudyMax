@@ -1,5 +1,202 @@
-/* The fake registration page: imitates another system's look, so it gets its own palette (never
-   used elsewhere), stays light even in dark mode, and never uses the shared Button/tokens.css. */
+/* The Register screen's two views.
+   - Max's plan (.reg-max, .reg-course, ...): the app's own design, tokens only, light and dark.
+   - The practice run (.reg-page): imitates another system's look, so it gets its own palette (never
+     used elsewhere), stays light even in dark mode, and never uses the shared Button/tokens.css. */
+
+/* ══════════════════════════════════════════════════════════════ Max's plan */
+
+/* Max speaking: his mark on the accent, a line, and a spinner while he's busy. */
+.reg-max {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  border-radius: var(--r3);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.reg-max--error {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.reg-max__avatar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--accent-fill);
+  color: var(--on-accent);
+}
+
+.reg-max__body {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: var(--s1);
+  padding-top: 5px;
+  line-height: 1.45;
+}
+
+.reg-max__spinner {
+  flex: none;
+  margin-top: 7px;
+  color: var(--accent);
+}
+
+.reg-max__note {
+  font-size: var(--fs-caption);
+  color: var(--ink-2);
+}
+
+.reg-max__quiet {
+  justify-self: start;
+  font-size: var(--fs-caption);
+  font-weight: 500;
+  color: var(--ink-2);
+}
+
+/* One course: its name (and the elective slot it fills), then its sections. */
+.reg-course + .reg-course {
+  margin-top: var(--s3);
+}
+
+.reg-course__head {
+  display: grid;
+  gap: 2px;
+  padding: var(--s3) var(--s4);
+  border-bottom: 1px solid var(--divider);
+}
+
+.reg-course__name {
+  font-size: var(--fs-label);
+  line-height: 1.35;
+}
+
+.reg-course__name strong,
+.reg-plan .row__title strong {
+  font-weight: 600;
+}
+
+.reg-course__slot {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  font-size: var(--fs-caption);
+  font-weight: 500;
+  color: var(--accent);
+}
+
+.reg-skeleton {
+  padding: var(--s4);
+}
+
+.reg-skeleton + .reg-skeleton {
+  border-top: 1px solid var(--divider);
+}
+
+/* A CRN is text to select and copy, even inside a row. */
+.reg-crn {
+  font-size: var(--fs-caption);
+  color: var(--ink-2);
+  white-space: nowrap;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.reg-crn .tnum {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.reg-crn--big {
+  font-size: var(--fs-title);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+}
+
+.reg-num {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.reg-copy-all {
+  font-size: var(--fs-caption);
+}
+
+/* The three steps on PAWS, and the sheet's plain facts before it opens. */
+.reg-steps,
+.reg-facts {
+  display: grid;
+  gap: var(--s3);
+  margin: var(--s4) 0 0;
+  padding: 0;
+  list-style: none;
+  line-height: 1.45;
+}
+
+.reg-steps {
+  counter-reset: reg-step;
+}
+
+.reg-steps li,
+.reg-facts li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s3);
+}
+
+.reg-steps li {
+  counter-increment: reg-step;
+}
+
+.reg-steps li::before {
+  content: counter(reg-step);
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--accent-tint);
+  color: var(--accent);
+  font-size: var(--fs-caption);
+  font-weight: 600;
+}
+
+.reg-facts svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--accent);
+}
+
+.reg-sheet-actions {
+  display: grid;
+  gap: var(--s2);
+}
+
+.reg-bookmarklet__link {
+  display: inline-block;
+  padding: 0 var(--s2);
+  border-radius: var(--r1);
+  background: var(--accent-tint);
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+  cursor: grab;
+}
+
+/* ══════════════════════════════════════════════════════════════ the practice run */
 
 .reg-page {
   --reg-brand: #1b5e3b;
@@ -15,6 +212,7 @@
   --reg-c2: #e56a8f;
   --reg-c3: #6aa8e0;
   --reg-c4: #a98ad8;
+  --reg-booked: #d5d9db;
 
   position: relative;
   isolation: isolate;
@@ -158,6 +356,7 @@
 
 .reg-search__head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   margin-bottom: 12px;
@@ -257,6 +456,10 @@
 
 /* ── results table ────────────────────────────────────────────────────── */
 
+.reg-results-wrap {
+  overflow-x: auto;
+}
+
 .reg-results {
   width: 100%;
   border-collapse: collapse;
@@ -336,6 +539,11 @@
   color: var(--reg-ink-2);
 }
 
+.reg-caption--key {
+  margin: 10px 0 0;
+  font-weight: 500;
+}
+
 .reg-week {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
@@ -389,6 +597,12 @@
   border: none;
 }
 
+/* Already registered this term: context on the week, never part of the run. */
+.reg-week__block--booked {
+  background: var(--reg-booked);
+  color: var(--reg-ink);
+}
+
 .reg-week__title {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -435,6 +649,7 @@
   border-radius: 4px;
   padding: 12px;
   min-width: 0;
+  overflow-x: auto;
 }
 
 .reg-summary__head {
@@ -485,6 +700,11 @@
   background: #dff3d8;
   color: #2e6b1f;
   font-style: italic;
+}
+
+.reg-pill--error {
+  background: #fbe0dd;
+  color: #b3261e;
 }
 
 .reg-select {
@@ -586,11 +806,11 @@
   display: grid;
   place-items: center;
   flex: none;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
-  background: var(--accent, #982649);
-  color: var(--on-accent, #fff);
+  background: var(--accent-fill, #982649);
+  color: var(--on-accent, #fff8eb);
 }
 
 .reg-bubble__body {
@@ -672,12 +892,71 @@
     flex: 1 1 auto;
   }
 
+  .reg-splitter {
+    display: none;
+  }
+
+  /* Clear of Max's bubble, which floats over the end of the page. */
   .reg-panes {
     flex-direction: column;
+    align-items: stretch;
+    margin-bottom: 104px;
   }
 
   .reg-summary {
     order: -1;
+  }
+
+  /* The summary's rows become cards: course and section with the status, the title, then the CRN,
+     type and credits. */
+  .reg-summary__table,
+  .reg-summary__table tbody {
+    display: block;
+  }
+
+  .reg-summary__table thead,
+  .reg-sum__action {
+    display: none;
+  }
+
+  .reg-summary__table tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 10px;
+    padding: 10px 2px;
+    border-bottom: 1px solid var(--reg-border);
+  }
+
+  .reg-summary__table td {
+    display: block;
+    padding: 0;
+    border: none;
+  }
+
+  .reg-sum__details {
+    flex: 1 1 auto;
+    font-weight: 700;
+  }
+
+  .reg-summary__table .reg-summary__title {
+    order: 1;
+    flex: 1 1 100%;
+  }
+
+  .reg-sum__crn,
+  .reg-sum__type,
+  .reg-sum__credits {
+    order: 2;
+    color: var(--reg-ink-2);
+  }
+
+  .reg-sum__crn::before {
+    content: 'CRN ';
+  }
+
+  .reg-sum__credits::after {
+    content: ' credits';
   }
 
   .reg-week {
@@ -689,8 +968,18 @@
     display: none;
   }
 
+  /* Just Submit, full width: the decorative Panels and checkbox don't fit beside it. */
   .reg-bottom {
-    flex-wrap: wrap;
+    padding-bottom: calc(10px + var(--sab));
+  }
+
+  .reg-panels,
+  .reg-check {
+    display: none;
+  }
+
+  .reg-bottom__right {
+    flex: 1;
   }
 
   .reg-btn--submit {
@@ -700,7 +989,7 @@
   .reg-bubble {
     left: 12px;
     right: 12px;
-    bottom: 64px;
+    bottom: calc(60px + var(--sab));
     max-width: none;
   }
 }

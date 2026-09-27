@@ -130,6 +130,7 @@ async function save(user: VerifiedUser, session: CloudSession) {
     maxSummerCourses: session.summerPerTerm,
     // An app build from before the question sends none: the stored answer stays.
     ...(session.internship !== undefined ? { internship: session.internship === null ? null : String(session.internship) } : {}),
+    ...(session.internshipAY !== undefined ? { internshipAcademicYear: session.internshipAY } : {}),
   }
 
   const rows = [
@@ -161,6 +162,11 @@ async function save(user: VerifiedUser, session: CloudSession) {
         summerPerTerm: session.summerPerTerm,
         start,
         today,
+        // The internship year the app resolved; an older app build sends none, so the stored one.
+        away:
+          session.internshipAY !== undefined
+            ? session.internshipAY
+            : ((await prisma.studentProfile.findUnique({ where: { userId }, select: { internshipAcademicYear: true } }))?.internshipAcademicYear ?? null),
       }
       const { terms } = regenerate(input)
       planSnapshot = {

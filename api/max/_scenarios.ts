@@ -311,7 +311,8 @@ async function loadCurrentSnapshot(
       start: { season: plan.startSeason as TermStart['season'], year: plan.startYear },
       inProgressSeasons: {},
       degreeVariant: null,
-      away: null,
+      // Not a scenario op: a what-if keeps the student's internship year, so the diff never shows one.
+      away: profile?.internshipAcademicYear ?? null,
       today: new Date(),
     },
   }

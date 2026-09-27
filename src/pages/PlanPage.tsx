@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useModel } from '../model.ts'
 import { courseCode } from '../format.ts'
 import { Icon } from '../ui/Icon.tsx'
-import { AddTargetSheet, HiddenPrereqsNotice, PlanControls, PlanCopy, PlanEmpty, PlanLead, PlanTargets } from '../screens/PlanTab.tsx'
+import { AddTargetSheet, HiddenPrereqsNotice, PlanControls, PlanCopy, PlanEmpty, PlanLead, PlanTargets, RegisterEntry } from '../screens/PlanTab.tsx'
 import { CourseDetail, PlanRoadmap, type RoadmapSelection } from '../screens/PlanRoadmap.tsx'
 import { Card } from './Card.tsx'
 import { useLayoutMode } from '../ui/layout.ts'
@@ -41,6 +41,8 @@ export function PlanPage() {
           </Card>
         </div>
         <aside className="plan-page__side">
+          {/* Beside the tree, not above it: the tree's box is sized to end above the fold. */}
+          <RegisterEntry />
           {docked && (
             <Card index={1} title="On the tree" icon="plan" className="plan-page__detail">
               <div ref={setDock} />
@@ -82,6 +84,7 @@ export function PlanPage() {
             <PlanLead />
           </p>
           <PlanTargets />
+          <RegisterEntry />
           <HiddenPrereqsNotice />
           <PlanRoadmap selected={selection?.code ?? null} onSelect={setSelection} />
         </Card>
