@@ -241,8 +241,8 @@ switch sprouts and prunes; a 3-step proposal broadcasts ~13 KB; a whole-degree p
 - **The degree variant isn't synced to the account** (`CloudSession` has no `degreeVariant`), so a
   signed-in student's server-side autosave plans the program's default degree; live calls are
   unaffected (the app sends its variant with the call).
-- **Migration `20260927130000_add_internship_academic_year`** is applied to the shared DB but isn't in
-  any pushed branch yet — whoever wrote it should push it.
+- The internship year: live calls use the app's own `away`; outside a call, scenarios and the autosave
+  read `StudentProfile.internshipAcademicYear` (Ibraheem's, merged 2026-09-27).
 - **Scenario baselines for real students built before 2026-09-27** (specialization-only, 4 a term) stay
   stale until their next app autosave rewrites them with the whole-degree plan; a what-if in that window
   diffs against the old plan. The demo student is reseeded, so it's unaffected.
