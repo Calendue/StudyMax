@@ -28,7 +28,7 @@ export function ReadingScreen() {
   if (found) {
     lines.push({
       text:
-        `Found ${plural(m.completed.size, 'completed course')}` +
+        `Found ${plural(m.foundCount, 'completed course')}` +
         (m.uploadInProgress.length > 0 ? ` and ${m.uploadInProgress.length} in progress` : ''),
       state: 'done',
     })

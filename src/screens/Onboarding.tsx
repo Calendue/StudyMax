@@ -1,8 +1,9 @@
-import type { ReactNode } from 'react'
+import { useRef, type ReactNode } from 'react'
 import { useModel } from '../model.ts'
+import { courseCode } from '../format.ts'
 import { ActionBar, ScreenBody, ScreenTitle, TopBar } from '../ui/chrome.tsx'
 import { Icon } from '../ui/Icon.tsx'
-import { Appear, Button, Group, Row, RowIcon } from '../ui/primitives.tsx'
+import { Appear, Button, Group, IconButton, Row, RowIcon, SectionLabel } from '../ui/primitives.tsx'
 
 // Degrees across the Arts & Science programs StudyMax covers. Descriptive: it doesn't change what
 // the matcher or the planner find.
@@ -29,28 +30,30 @@ function StepDots() {
 }
 
 /**
- * The frame every question shares: Back, the dots, and the question. A single-select question
- * advances the moment an option is clicked, so it has no Continue button — only a multi-select
- * question (picking several specializations) needs one, since there's no single click that means
- * "done".
+ * The frame every question shares: Back (Home on the first step, out to the landing page), the dots,
+ * and the question. A single-select question advances the moment an option is clicked, so it has no
+ * Continue button — only a multi-select or typed-in question needs one, since there's no single click
+ * that means "done". `skip` adds a quiet way past an optional question.
  */
 function Step({
   title,
   lead,
   canContinue = true,
   multiSelect = false,
+  skip,
   children,
 }: {
   title: ReactNode
   lead?: ReactNode
   canContinue?: boolean
   multiSelect?: boolean
+  skip?: () => void
   children: ReactNode
 }) {
   const m = useModel()
   return (
     <>
-      <TopBar onBack={m.canGoBack ? m.back : undefined} brand={!m.canGoBack} right={<StepDots />} />
+      <TopBar onBack={m.canGoBack ? m.back : m.toLanding} backLabel={m.canGoBack ? 'Back' : 'Home'} right={<StepDots />} />
       <ScreenBody>
         <ScreenTitle lead={lead}>{title}</ScreenTitle>
         {children}
@@ -60,6 +63,11 @@ function Step({
           <Button block disabled={!canContinue} onClick={m.next}>
             {m.nextIsReveal ? 'Reveal what my school hides' : 'Continue'}
           </Button>
+          {skip && (
+            <Button block variant="quiet" onClick={skip}>
+              Skip for now
+            </Button>
+          )}
         </ActionBar>
       )}
     </>
@@ -68,6 +76,14 @@ function Step({
 
 export function StudentScreen() {
   const m = useModel()
+  const fileInput = useRef<HTMLInputElement>(null)
+  // Where the transcript picked on this question has got to, since it's read in the background.
+  const transcriptStatus =
+    m.uploadStatus === 'uploading'
+      ? 'Reading it now. Carry on while it works.'
+      : m.uploadStatus === 'success'
+        ? `Read: ${m.takenCourses.length} completed course${m.takenCourses.length === 1 ? '' : 's'} found.`
+        : null
   return (
     <Step title="Are you just starting out?" lead="This decides whether we ask for your courses next." canContinue={m.studentType !== null}>
       <Group>
@@ -93,8 +109,36 @@ export function StudentScreen() {
           trailing={m.studentType === 'existing' ? check : null}
           onClick={() => m.chooseStudentType('existing')}
         />
+        <Row
+          index={3}
+          leading={<RowIcon name="upload" />}
+          title="Upload my transcript"
+          subtitle={
+            transcriptStatus ??
+            "A DegreeWorks audit or unofficial transcript, as a PDF. We'll read it while you answer the rest."
+          }
+          onClick={() => fileInput.current?.click()}
+        />
       </Group>
-      <Appear index={3} className="demo-link">
+      <input
+        ref={fileInput}
+        type="file"
+        accept="application/pdf"
+        className="visually-hidden"
+        tabIndex={-1}
+        aria-hidden
+        onChange={(e) => {
+          const file = e.target.files?.[0]
+          e.target.value = '' // allow picking the same filename again
+          if (file) m.chooseTranscript(file)
+        }}
+      />
+      {m.uploadStatus === 'error' && m.uploadError && (
+        <Appear index={0} className="notice">
+          <p>{m.uploadError}</p>
+        </Appear>
+      )}
+      <Appear index={4} className="demo-link">
         <p>Just looking around?</p>
         <button type="button" className="inline-link" onClick={m.loadSampleStudent}>
           Load a sample student
@@ -259,6 +303,152 @@ export function ConcentrationScreen() {
         })}
       </Group>
       {count > 0 && <p className="footnote">{count === 1 ? 'One target' : `${count} targets`} picked. You can change them on the plan later.</p>}
+    </Step>
+  )
+}
+
+export function GraduationScreen() {
+  const m = useModel()
+  const thisYear = m.today.getFullYear()
+  const years = Array.from({ length: 7 }, (_, i) => thisYear + i)
+  return (
+    <Step title="Expected year of graduation" canContinue={m.gradYear !== null}>
+      <Group>
+        {years.map((year, i) => (
+          <Row
+            key={year}
+            index={i + 1}
+            title={String(year)}
+            selected={m.gradYear === year}
+            trailing={m.gradYear === year ? check : null}
+            onClick={() => m.chooseGradYear(year)}
+          />
+        ))}
+      </Group>
+    </Step>
+  )
+}
+
+export function RegisteredScreen() {
+  const m = useModel()
+  const count = m.registered.length
+  const query = m.registeredQuery.trim()
+  return (
+    <Step
+      title="What courses have you registered for?"
+      lead="Search by subject or code and tick every course you're taking. Your plan counts them as underway."
+      multiSelect
+    >
+      <div className="field field--search">
+        <Icon name="search" size={20} />
+        <input
+          type="search"
+          enterKeyHint="search"
+          value={m.registeredQuery}
+          onChange={(e) => m.setRegisteredQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              // An exact code ("CMPT 214") is the top hit: Enter ticks it, if it isn't already.
+              const top = m.registeredResults[0]
+              if (top && !m.registered.includes(top.code)) m.toggleRegistered(top.code)
+            }
+          }}
+          placeholder="CMPT 214, GEOG 120, PHYS 117…"
+          aria-label="Search courses"
+          autoComplete="off"
+          autoCorrect="off"
+          spellCheck={false}
+        />
+      </div>
+
+      {query !== '' &&
+        (m.registeredResults.length === 0 ? (
+          <p className="empty">No USask course matches &ldquo;{query}&rdquo;.</p>
+        ) : (
+          <Group>
+            {m.registeredResults.map((hit, i) => {
+              const on = m.registered.includes(hit.code)
+              return (
+                <Row
+                  key={hit.code}
+                  index={Math.min(i, 8)}
+                  title={courseCode(hit.code)}
+                  subtitle={hit.title}
+                  selected={on}
+                  trailing={<Icon name={on ? 'check' : 'plus'} size={20} className={on ? 'row__check' : 'row__add'} />}
+                  onClick={() => m.toggleRegistered(hit.code)}
+                />
+              )
+            })}
+          </Group>
+        ))}
+
+      {count > 0 && (
+        <>
+          <SectionLabel>
+            Registered <span className="section-label__count tnum">{count}</span>
+          </SectionLabel>
+          <Group>
+            {m.registered.map((code, i) => (
+              <Row
+                key={code}
+                index={i}
+                title={courseCode(code)}
+                subtitle={m.courseTitle(code)}
+                trailing={
+                  <IconButton
+                    icon="close"
+                    label={`Remove ${courseCode(code)}`}
+                    onClick={() => m.removeRegistered(code)}
+                  />
+                }
+              />
+            ))}
+          </Group>
+        </>
+      )}
+      {count === 0 && query === '' && (
+        <p className="footnote">Optional. Skip it if you haven&rsquo;t registered yet.</p>
+      )}
+    </Step>
+  )
+}
+
+export function PhoneScreen() {
+  const m = useModel()
+  const digits = m.phone.replace(/\D/g, '').length
+  const canCall = digits >= 7
+  return (
+    <Step
+      title="Enter your phone number"
+      lead="So Max can call you and help you with your university roadmap and questions."
+      canContinue={canCall}
+      multiSelect
+      skip={() => {
+        m.setPhone('')
+        m.next()
+      }}
+    >
+      <Appear index={1} className="form">
+        <div className="field">
+          <input
+            id="onboarding-phone"
+            type="tel"
+            inputMode="tel"
+            autoComplete="tel"
+            enterKeyHint="go"
+            value={m.phone}
+            onChange={(e) => m.setPhone(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && canCall) m.next()
+            }}
+            placeholder="+1 306 555 0123"
+            aria-label="Your phone number"
+          />
+        </div>
+        <p className="footnote">Max only calls when you ask. Your number isn&rsquo;t saved.</p>
+      </Appear>
     </Step>
   )
 }

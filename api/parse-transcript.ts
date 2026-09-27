@@ -1,10 +1,13 @@
 import { buildTranscriptParsePrompt, parseTranscriptResponse } from '../src/lib/transcriptParse.js'
 import { catalogueCourses } from '../src/data/courses.js'
+import { openAIKey, respond, sendFailure } from './_openai.js'
+import { allow, clientIp } from './_rateLimit.js'
 
 const CATALOGUE_CODES = catalogueCourses.map((c) => c.code)
 
 interface VercelRequest {
   method?: string
+  headers?: Record<string, string | string[] | undefined>
   body?: { pdfBase64: string }
 }
 
@@ -19,63 +22,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return
   }
 
-  const apiKey = process.env.OPENAI_API_KEY
+  const apiKey = openAIKey()
   if (!apiKey) {
     res.status(500).json({ error: 'OPENAI_API_KEY not configured' })
     return
   }
 
+  if (!allow(`transcript:${clientIp(req)}`, 30, 10 * 60_000)) {
+    res.status(429).json({ error: 'too many requests' })
+    return
+  }
+
   const body = req.body
-  if (!body?.pdfBase64) {
+  if (typeof body?.pdfBase64 !== 'string' || !body.pdfBase64) {
     res.status(400).json({ error: 'pdfBase64 required' })
     return
   }
 
-  const prompt = buildTranscriptParsePrompt()
-
-  const upstream = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: 'gpt-5-mini',
-      // This is straightforward extraction, not a task that benefits from deep reasoning — and without
-      // reasoning_effort capped, gpt-5-mini spends the whole max_completion_tokens budget on hidden
-      // reasoning tokens and returns empty content (finish_reason "length", content "").
-      reasoning_effort: 'minimal',
-      max_completion_tokens: 4096,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'file',
-              file: { filename: 'transcript.pdf', file_data: `data:application/pdf;base64,${body.pdfBase64}` },
-            },
-            { type: 'text', text: prompt },
-          ],
-        },
+  let text: string
+  try {
+    text = await respond(
+      apiKey,
+      [
+        { type: 'file', file: { filename: 'transcript.pdf', file_data: `data:application/pdf;base64,${body.pdfBase64}` } },
+        { type: 'text', text: buildTranscriptParsePrompt() },
       ],
-    }),
-  })
-
-  if (!upstream.ok) {
-    // Pass the real reason through. Swallowing it here meant every failure — an oversized PDF, a
-    // scanned page image, an expired key — surfaced to the student as the same shrug.
-    const detail = await upstream.text().catch(() => '')
-    console.error(`openai ${upstream.status}: ${detail.slice(0, 500)}`)
-    res.status(502).json({
-      error: 'upstream error',
-      status: upstream.status,
-      detail: detail.slice(0, 300),
-    })
+      4096,
+    )
+  } catch (err) {
+    // The app tells the student whether the problem is on our side (401/403) from the status alone.
+    sendFailure(res, err)
     return
   }
 
-  const data = await upstream.json()
-  const text = data?.choices?.[0]?.message?.content ?? ''
   const { completed, inProgress } = parseTranscriptResponse(text, CATALOGUE_CODES)
 
   // A readable PDF with no recognisable courses is a different problem from an unreadable one, and

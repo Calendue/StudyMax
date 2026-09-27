@@ -203,7 +203,7 @@ export function LandingPage({ onGetStarted, onSkip }: LandingPageProps) {
           <h2 className="landing__heading">See what your school is hiding.</h2>
           <div className="landing__actions">
             <button type="button" className="landing__cta" onClick={onGetStarted}>
-              Upload your transcript
+              Get Started
             </button>
             <button type="button" className="landing__cta landing__cta--ghost" onClick={onSkip}>
               Skip to the app
@@ -230,7 +230,7 @@ function Hero({ onGetStarted }: { onGetStarted: () => void }) {
         </p>
         <div className="landing__actions">
           <button type="button" className="landing__cta" onClick={onGetStarted}>
-            Upload your transcript
+            Get Started
           </button>
         </div>
         <p className="landing__hero-note">Computer Science at the University of Saskatchewan, end to end. Everyone else still gets the scholarships.</p>

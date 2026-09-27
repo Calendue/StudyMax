@@ -1,7 +1,10 @@
 import { buildGuidancePrompt, parseGuidanceResponse } from '../src/lib/scholarshipAi.js'
+import { openAIKey, respond, sendFailure } from './_openai.js'
+import { allow, clientIp } from './_rateLimit.js'
 
 interface VercelRequest {
   method?: string
+  headers?: Record<string, string | string[] | undefined>
   body?: { school: string; program: string }
 }
 
@@ -16,44 +19,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return
   }
 
-  const apiKey = process.env.OPENAI_API_KEY
+  const apiKey = openAIKey()
   if (!apiKey) {
     res.status(500).json({ error: 'OPENAI_API_KEY not configured' })
     return
   }
 
+  if (!allow(`guidance:${clientIp(req)}`, 40, 10 * 60_000)) {
+    res.status(429).json({ error: 'too many requests' })
+    return
+  }
+
   const body = req.body
-  if (!body?.school?.trim()) {
+  const school = typeof body?.school === 'string' ? body.school.trim().slice(0, 150) : ''
+  if (!school) {
     res.status(400).json({ error: 'school required' })
     return
   }
+  const program = typeof body?.program === 'string' ? body.program.trim().slice(0, 150) : ''
 
-  const prompt = buildGuidancePrompt(body.school, body.program || 'their program')
-
-  const upstream = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: 'gpt-5-mini',
-      // Uncapped, gpt-5-mini spends the whole token budget on hidden reasoning and returns empty
-      // content — this is a short category list, not a task that needs it.
-      reasoning_effort: 'minimal',
-      max_completion_tokens: 1024,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  })
-
-  if (!upstream.ok) {
-    res.status(502).json({ error: 'upstream error' })
+  let text: string
+  try {
+    // A short category list, not a task that needs reasoning.
+    text = await respond(apiKey, buildGuidancePrompt(school, program || 'their program'), 1024, 25_000)
+  } catch (err) {
+    sendFailure(res, err)
     return
   }
 
-  const data = await upstream.json()
-  const text = data?.choices?.[0]?.message?.content ?? ''
-  const guidance = parseGuidanceResponse(text)
-
-  res.status(200).json(guidance)
+  res.status(200).json(parseGuidanceResponse(text))
 }

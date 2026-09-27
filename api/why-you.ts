@@ -4,9 +4,18 @@ import {
   type WhyYouContext,
   type WhyYouResourceInput,
 } from '../src/lib/scholarshipAi.js'
+import { openAIKey, respond, sendFailure } from './_openai.js'
+import { allow, clientIp } from './_rateLimit.js'
+
+// The app sends awards three at a time (twenty awards overflow one reply's token budget). A cap on
+// count and length keeps one request from being an open-ended prompt on our key.
+const MAX_RESOURCES = 5
+const MAX_TEXT = 400
+const clip = (value: unknown, max = MAX_TEXT) => (typeof value === 'string' ? value.slice(0, max) : '')
 
 interface VercelRequest {
   method?: string
+  headers?: Record<string, string | string[] | undefined>
   body?: { context: WhyYouContext; resources: WhyYouResourceInput[] }
 }
 
@@ -21,46 +30,56 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return
   }
 
-  const apiKey = process.env.OPENAI_API_KEY
+  const apiKey = openAIKey()
   if (!apiKey) {
     res.status(500).json({ error: 'OPENAI_API_KEY not configured' })
     return
   }
 
+  // A results screen sends about seven of these at once, so the per-address budget is roomy.
+  if (!allow(`why:${clientIp(req)}`, 200, 10 * 60_000)) {
+    res.status(429).json({ error: 'too many requests' })
+    return
+  }
+
   const body = req.body
-  if (!body?.resources?.length) {
+  if (!Array.isArray(body?.resources) || body.resources.length === 0 || body.resources.length > MAX_RESOURCES) {
     res.status(400).json({ error: 'resources required' })
     return
   }
 
-  const prompt = buildWhyYouPrompt(body.context, body.resources)
+  const resources: WhyYouResourceInput[] = body.resources.map((r) => ({
+    id: clip(r?.id, 100),
+    name: clip(r?.name, 200),
+    whatItIs: clip(r?.whatItIs),
+  }))
+  const c = body.context ?? ({} as Partial<WhyYouContext>)
+  const context: WhyYouContext = {
+    school: clip(c.school, 200),
+    program: clip(c.program, 200),
+    closestSpecialization: clip(c.closestSpecialization, 200),
+    coursesRemaining: Number.isInteger(c.coursesRemaining) ? Math.max(0, Math.min(60, c.coursesRemaining)) : 0,
+    topOverlapCourse: c.topOverlapCourse ? clip(c.topOverlapCourse, 20) : undefined,
+    otherCloseSpecializations: Array.isArray(c.otherCloseSpecializations)
+      ? c.otherCloseSpecializations.slice(0, 3).map((o) => ({
+          name: clip(o?.name, 200),
+          remaining: Number.isInteger(o?.remaining) ? Math.max(0, Math.min(60, o.remaining)) : 0,
+        }))
+      : undefined,
+  }
 
-  const upstream = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: 'gpt-5-mini',
-      // Uncapped, gpt-5-mini spends the whole token budget on hidden reasoning and returns empty
-      // content — this is one-sentence copywriting, not a task that needs it.
-      reasoning_effort: 'minimal',
-      max_completion_tokens: 2048,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  })
-
-  if (!upstream.ok) {
-    res.status(502).json({ error: 'upstream error' })
+  let text: string
+  try {
+    // One-sentence copywriting per award.
+    text = await respond(apiKey, buildWhyYouPrompt(context, resources), 2048, 25_000)
+  } catch (err) {
+    sendFailure(res, err)
     return
   }
 
-  const data = await upstream.json()
-  const text = data?.choices?.[0]?.message?.content ?? ''
   const whyYou = parseWhyYouResponse(
     text,
-    body.resources.map((r) => r.id),
+    resources.map((r) => r.id),
   )
 
   res.status(200).json({ whyYou })
