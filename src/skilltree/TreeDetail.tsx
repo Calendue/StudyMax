@@ -6,6 +6,7 @@ import { courseInfo } from '../data/prereqs.ts'
 import { haptic } from '../platform.ts'
 import { laneSeason, type SkillTreeLayout, type TreeNode } from '../lib/skillTree.ts'
 import { Button, Ring } from '../ui/primitives.tsx'
+import { ElectiveChoice } from '../screens/ElectivePicker.tsx'
 import { statusLabel, type TreeSelection } from './planView.ts'
 
 export function Swatch({ kind, hue }: { kind?: string; hue?: number }) {
@@ -142,11 +143,7 @@ export function TreeDetail({
       )}
       {node.status === 'locked' && <p className="footnote">Locked until the courses below it on the tree are done.</p>}
 
-      {isElective(node.code) && (
-        <p className="footnote">
-          Your degree needs a course of this kind here. Any one that fits counts, so pick it when you register.
-        </p>
-      )}
+      {isElective(node.code) && <ElectiveChoice slot={node.code} />}
 
       {node.elective && !isElective(node.code) && (
         <section className="tree-detail__section">

@@ -18,6 +18,8 @@ import {
 import { Appear, Chip } from '../ui/primitives.tsx'
 import { Icon } from '../ui/Icon.tsx'
 import { Sheet } from '../ui/Sheet.tsx'
+import { useElectivePicks } from '../lib/electivePicks.ts'
+import { ElectiveChoice } from './ElectivePicker.tsx'
 
 /**
  * The visual node/edge view of the term-by-term plan: terms stacked top to bottom, each term's
@@ -45,8 +47,22 @@ export function PlanRoadmap({ selected, onSelect }: { selected?: string | null; 
   // In-progress courses are drawn in their terms on the roadmap, so this only lists what's finished.
   const doneSummary = `${plural(completedRelevant.length, 'course')} already done toward this`
 
+  // Electives the student took off the roadmap for room. Display only: the plan and the degree
+  // audit still count them, and "Show" brings them back.
+  const [hidden, setHidden] = useState<string[]>(readHiddenElectives)
+  const shown = useMemo(() => {
+    const off = new Set(hidden)
+    return m.roadmap
+      .map((term) => ({ ...term, courses: term.courses.filter((c) => !off.has(c.code)) }))
+      .filter((term) => term.courses.length > 0)
+  }, [m.roadmap, hidden])
+  const hiddenCount = useMemo(
+    () => m.roadmap.flatMap((t) => t.courses).filter((c) => hidden.includes(c.code)).length,
+    [m.roadmap, hidden],
+  )
+
   // The roadmap, not the bare plan: the courses already under way sit in their terms too.
-  const { rows, nodes, edges } = useMemo(() => buildRoadmapLayout(m.roadmap), [m.roadmap])
+  const { rows, nodes, edges } = useMemo(() => buildRoadmapLayout(shown, m.internshipAY), [shown, m.internshipAY])
   const nodesByCode = useMemo(() => new Map(nodes.map((n) => [n.code, n])), [nodes])
 
   const [doneOpen, setDoneOpen] = useState(false)
@@ -59,6 +75,16 @@ export function PlanRoadmap({ selected, onSelect }: { selected?: string | null; 
     onSelect(code && node ? { code, node } : null)
   }
   const activeNode = activeCode ? nodesByCode.get(activeCode) : undefined
+
+  const hideElective = (code: string) => {
+    haptic.selection()
+    setHidden((prev) => saveHiddenElectives([...prev, code]))
+    if (activeCode === code) setActiveCode(null)
+  }
+  const showElectives = () => {
+    haptic.selection()
+    setHidden(saveHiddenElectives([]))
+  }
 
   const connectedCodes = useMemo(() => {
     if (!activeCode) return null
@@ -120,6 +146,15 @@ export function PlanRoadmap({ selected, onSelect }: { selected?: string | null; 
         </div>
       )}
 
+      {hiddenCount > 0 && (
+        <p className="roadmap__hidden footnote">
+          {plural(hiddenCount, 'elective')} hidden. Your plan still counts {hiddenCount === 1 ? 'it' : 'them'}.{' '}
+          <button type="button" className="roadmap__hidden-show" onClick={showElectives}>
+            Show
+          </button>
+        </p>
+      )}
+
       <div className="roadmap__graph" ref={graphRef} style={{ height }}>
         {width > 0 && (
           <svg className="roadmap__edges" width={width} height={height} aria-hidden>
@@ -150,26 +185,34 @@ export function PlanRoadmap({ selected, onSelect }: { selected?: string | null; 
             <p className="roadmap__row-label" style={{ height: LABEL_HEIGHT }}>
               {row.label}
             </p>
-            <div
-              // A full term (4-5 courses) shares a phone's width five ways: smaller type so codes fit.
-              className={`roadmap__row-nodes${row.codes.length >= 4 ? ' roadmap__row-nodes--dense' : ''}`}
-              style={{ gridTemplateColumns: `repeat(${row.codes.length}, minmax(0, 1fr))`, gap: NODE_GAP, height: NODE_HEIGHT }}
-            >
-              {row.codes.map((code) => {
-                const node = nodesByCode.get(code)
-                if (!node) return null
-                return (
-                  <RoadmapNodeView
-                    key={code}
-                    node={node}
-                    title={m.courseTitle(code)}
-                    active={activeCode === code}
-                    dimmed={connectedCodes !== null && !connectedCodes.has(code)}
-                    onSelect={() => selectCourse(code)}
-                  />
-                )
-              })}
-            </div>
+            {row.internship ? (
+              <div className="roadmap__internship" role="note" style={{ height: NODE_HEIGHT }}>
+                <strong>Internship year</strong>
+                <span>No courses this year. The plan picks up again when you&rsquo;re back.</span>
+              </div>
+            ) : (
+              <div
+                // A full term (4-5 courses) shares a phone's width five ways: smaller type so codes fit.
+                className={`roadmap__row-nodes${row.codes.length >= 4 ? ' roadmap__row-nodes--dense' : ''}`}
+                style={{ gridTemplateColumns: `repeat(${row.codes.length}, minmax(0, 1fr))`, gap: NODE_GAP, height: NODE_HEIGHT }}
+              >
+                {row.codes.map((code) => {
+                  const node = nodesByCode.get(code)
+                  if (!node) return null
+                  return (
+                    <RoadmapNodeView
+                      key={code}
+                      node={node}
+                      title={m.courseTitle(code)}
+                      active={activeCode === code}
+                      dimmed={connectedCodes !== null && !connectedCodes.has(code)}
+                      onSelect={() => selectCourse(code)}
+                      onRemove={isElective(code) ? () => hideElective(code) : undefined}
+                    />
+                  )
+                })}
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -202,7 +245,7 @@ export function CourseDetail({ code, node }: RoadmapSelection) {
       )}
       {node.alsoAdvances.length > 0 && <p className="footnote">Also counts toward {node.alsoAdvances.join(', ')}</p>}
       {isElective(code) ? (
-        <p className="footnote">Your degree needs a course of this kind here. Any one that fits counts.</p>
+        <ElectiveChoice slot={code} />
       ) : (
         <a className="btn btn--secondary btn--block course-detail__link" href={catalogueUrl(code)} target="_blank" rel="noreferrer">
           <Icon name="external" size={20} />
@@ -213,28 +256,35 @@ export function CourseDetail({ code, node }: RoadmapSelection) {
   )
 }
 
+
 function RoadmapNodeView({
   node,
   title,
   active,
   dimmed,
   onSelect,
+  onRemove,
 }: {
   node: RoadmapNodeLayout
   title: string | undefined
   active: boolean
   dimmed: boolean
   onSelect: () => void
+  /** An elective can be taken off the roadmap for room; a real course can't. */
+  onRemove?: () => void
 }) {
+  const m = useModel()
+  const pick = useElectivePicks()[node.code]
   const classes = ['roadmap__node', `roadmap__node--${node.state}`]
+  if (pick) classes.push('roadmap__node--picked')
   if (active) classes.push('roadmap__node--active')
   if (dimmed) classes.push('roadmap__node--dimmed')
 
-  return (
+  const button = (
     <button type="button" className={classes.join(' ')} onClick={onSelect}>
       <span className="roadmap__node-head">
-        <span className={`roadmap__node-code${isElective(node.code) ? ' roadmap__node-code--elective' : ''}`}>
-          {courseCode(node.code)}
+        <span className={`roadmap__node-code${isElective(node.code) && !pick ? ' roadmap__node-code--elective' : ''}`}>
+          {courseCode(pick ?? node.code)}
         </span>
         {node.alsoAdvances.length > 0 && (
           <span className="roadmap__node-dot" title={`Also counts toward ${node.alsoAdvances.join(', ')}`} />
@@ -242,7 +292,43 @@ function RoadmapNodeView({
         {node.state === 'prerequisite' && <span className="roadmap__node-tag">Prereq</span>}
         {node.state === 'registered' && <span className="roadmap__node-tag">In progress</span>}
       </span>
-      <span className="roadmap__node-title">{isElective(node.code) ? 'Your choice' : title}</span>
+      <span className="roadmap__node-title">{pick ? m.courseTitle(pick) : isElective(node.code) ? 'Your choice' : title}</span>
     </button>
   )
+  if (!onRemove) return button
+  // The remove button sits beside the node's own, not inside it: a button can't hold a button.
+  return (
+    <div className="roadmap__cell">
+      {button}
+      <button
+        type="button"
+        className="roadmap__remove"
+        aria-label={`Remove ${courseCode(node.code)} from the roadmap`}
+        title="Remove from the roadmap"
+        onClick={onRemove}
+      >
+        <Icon name="close" size={14} />
+      </button>
+    </div>
+  )
+}
+
+const HIDDEN_KEY = 'studymax:roadmap-hidden-electives'
+
+function readHiddenElectives(): string[] {
+  try {
+    const value: unknown = JSON.parse(localStorage.getItem(HIDDEN_KEY) ?? '[]')
+    return Array.isArray(value) ? value.filter((c): c is string => typeof c === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+function saveHiddenElectives(codes: string[]): string[] {
+  try {
+    localStorage.setItem(HIDDEN_KEY, JSON.stringify(codes))
+  } catch {
+    // Private mode or blocked storage: hiding still works until the page reloads.
+  }
+  return codes
 }

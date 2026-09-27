@@ -49,6 +49,27 @@ function matchOne(spec: Specialization, completed: Set<string>): SpecializationM
 }
 
 /**
+ * The open slots minus what the student is already registered for: a registered course fills its
+ * slot (the plan counts it as passed by then), so "What's left" never lists it. The counts stay
+ * the match's own; this only splits the list for display and for picking the next course.
+ */
+export function withoutRegistered(
+  unsatisfied: UnsatisfiedGroup[],
+  inProgress: Iterable<string>,
+): { left: UnsatisfiedGroup[]; registered: string[] } {
+  const taking = new Set(inProgress)
+  const used = new Set<string>()
+  const left: UnsatisfiedGroup[] = []
+  for (const group of unsatisfied) {
+    const mine = group.options.filter((c) => taking.has(c) && !used.has(c)).slice(0, group.need)
+    mine.forEach((c) => used.add(c))
+    const need = group.need - mine.length
+    if (need > 0) left.push({ ...group, need, options: group.options.filter((c) => !taking.has(c)) })
+  }
+  return { left, registered: [...used] }
+}
+
+/**
  * The order targets are offered in: one that can be finished from the current catalogue before one
  * that can't (`unavailable`), then fewest remaining courses, then the most courses the degree itself
  * names (a first-year is equally far from several; the one that shares most with the degree wins),

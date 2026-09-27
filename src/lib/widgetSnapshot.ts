@@ -1,7 +1,7 @@
 import type { Resource } from '../data/schools/types.ts'
 import type { TargetKind } from '../format.ts'
 import { courseCode } from '../format.ts'
-import type { CourseOverlap, SpecializationMatch } from './match.ts'
+import { withoutRegistered, type CourseOverlap, type SpecializationMatch } from './match.ts'
 import { daysUntil } from './resources.ts'
 
 // WHAT THE WIDGETS AND THE DEADLINE WATCH READ. The app writes this through the StudyMaxWidgets
@@ -45,6 +45,8 @@ export interface SnapshotInput {
   heroKind: TargetKind
   /** The course that advances the most specializations at once, if any. */
   topOverlap: CourseOverlap | null
+  /** Courses under way or registered for: never offered as the next course. */
+  inProgress?: string[]
   courseTitle: (code: string) => string | undefined
   now: Date
 }
@@ -68,7 +70,7 @@ export function buildWidgetSnapshot(input: SnapshotInput): WidgetSnapshot | null
           done: hero.doneCount,
           total: hero.totalRequired,
           left: hero.remaining,
-          nextCourse: nextCourseFor(hero, input.topOverlap, input.courseTitle),
+          nextCourse: nextCourseFor(hero, input.topOverlap, input.inProgress ?? [], input.courseTitle),
         }
       : null
 
@@ -83,11 +85,27 @@ export function buildWidgetSnapshot(input: SnapshotInput): WidgetSnapshot | null
 function nextCourseFor(
   hero: SpecializationMatch,
   topOverlap: CourseOverlap | null,
+  inProgress: string[],
   courseTitle: (code: string) => string | undefined,
 ): WidgetCredential['nextCourse'] {
-  if (hero.remaining === 0) return null
-  const open = hero.unsatisfied.flatMap((g) => g.options)
-  const code = topOverlap && open.includes(topOverlap.course) ? topOverlap.course : open[0]
+  const code = heroNextCourse(hero, topOverlap, [], inProgress)
   if (!code) return null
   return { code: courseCode(code), title: courseTitle(code) ?? '' }
+}
+
+/**
+ * The next course for the hero, always one of its own open requirements so it never contradicts
+ * "What's left" (and never one already registered for): the overlap course when it counts here
+ * too, else the first of these the plan schedules (prerequisite order), else the first open option.
+ */
+export function heroNextCourse(
+  hero: SpecializationMatch,
+  topOverlap: CourseOverlap | null,
+  planOrder: string[] = [],
+  inProgress: string[] = [],
+): string | null {
+  if (hero.remaining === 0) return null
+  const open = withoutRegistered(hero.unsatisfied, inProgress).left.flatMap((g) => g.options)
+  if (topOverlap && open.includes(topOverlap.course)) return topOverlap.course
+  return planOrder.find((c) => open.includes(c)) ?? open[0] ?? null
 }

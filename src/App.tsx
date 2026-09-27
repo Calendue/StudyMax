@@ -1524,11 +1524,12 @@ function useStudyMax() {
         hero,
         heroKind,
         topOverlap,
+        inProgress: inProgressCourses,
         // courseTitle()'s lookup, inline: courseTitle itself is a new function every render.
         courseTitle: (code) => selectedProgram?.courseTitles[code] ?? courseInfo[code]?.title ?? catalogueTitle(code),
         now: today,
       }),
-    [revealed, universityId, rankedAwards, hero, heroKind, topOverlap, selectedProgram, today],
+    [revealed, universityId, rankedAwards, hero, heroKind, topOverlap, inProgressCourses, selectedProgram, today],
   )
   useEffect(() => {
     syncWidgets(widgetSnapshot)
