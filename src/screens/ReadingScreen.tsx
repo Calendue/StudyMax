@@ -53,7 +53,9 @@ export function ReadingScreen() {
         <Appear index={3}>
           <p className="wait__hint" aria-live="polite">
             {found
-              ? 'Taking you to the list so you can check it.'
+              ? m.fromTranscript
+                ? 'Taking you to what you’re closest to.'
+                : 'Taking you to the list so you can check it.'
               : slow
                 ? 'Still reading. Long audits take a little more time.'
                 : 'This usually takes 10 to 30 seconds.'}

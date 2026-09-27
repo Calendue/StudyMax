@@ -9,26 +9,6 @@ interface LandingPageProps {
   onSkip: () => void
 }
 
-interface CoverageRow {
-  program: string
-  status: 'full' | 'partial' | 'scholarships-only'
-  detail: string
-}
-
-const COVERAGE: CoverageRow[] = [
-  { program: 'Computer Science', status: 'full', detail: 'Matching, planning, credentials — everything, end to end.' },
-  { program: 'Applied Mathematics', status: 'partial', detail: 'Produces a plan. Credential detection isn’t built yet.' },
-  { program: 'Physics', status: 'partial', detail: 'Produces a plan. Credential detection isn’t built yet.' },
-  { program: 'Applied Computing', status: 'partial', detail: 'Produces a plan. Credential detection isn’t built yet.' },
-  { program: 'Every other Arts & Science subject', status: 'scholarships-only', detail: 'No requirement data yet — still finds awards and deadlines.' },
-]
-
-const COVERAGE_LABEL: Record<CoverageRow['status'], string> = {
-  full: 'Full support',
-  partial: 'Plan only',
-  'scholarships-only': 'Scholarships only',
-}
-
 const STEPS = [
   {
     title: 'Upload your transcript',
@@ -131,30 +111,6 @@ export function LandingPage({ onGetStarted, onSkip }: LandingPageProps) {
             </li>
           ))}
         </ol>
-      </section>
-
-      <section className="landing__section" aria-labelledby="coverage-heading">
-        <h2 id="coverage-heading" className="landing__heading">
-          What actually works today
-        </h2>
-        <p className="landing__section-intro">
-          We’d rather tell you the coverage map than let you find its edges live.
-        </p>
-        <div className="landing__ledger" role="table">
-          {COVERAGE.map((row) => (
-            <div className="landing__ledger-row" role="row" key={row.program}>
-              <span className={`landing__status landing__status--${row.status}`} role="cell">
-                {COVERAGE_LABEL[row.status]}
-              </span>
-              <span className="landing__ledger-program" role="cell">
-                {row.program}
-              </span>
-              <span className="landing__ledger-detail" role="cell">
-                {row.detail}
-              </span>
-            </div>
-          ))}
-        </div>
       </section>
 
       <section className="landing__section" aria-labelledby="features-heading">

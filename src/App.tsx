@@ -31,7 +31,6 @@ import { WelcomeScreen } from './screens/WelcomeScreen.tsx'
 import { AccountSheet } from './screens/AccountSheet.tsx'
 import {
   ConcentrationScreen,
-  DegreeScreen,
   GraduationScreen,
   MajorScreen,
   MinorScreen,
@@ -65,9 +64,9 @@ type Lookup =
 type UniversityChoice = '' | 'usask' | 'other'
 
 /**
- * The flow, in order. Onboarding asks one question per screen (student type, university, degree,
+ * The flow, in order. Onboarding asks one question per screen (student type, university,
  * graduation year, major, minor, concentrations, this term's courses, phone number); existing
- * students then add courses. Results is tabbed; the call is
+ * students then add courses. A transcript upload skips what the transcript already answers. Results is tabbed; the call is
  * the last step.
  */
 export type Screen =
@@ -75,7 +74,6 @@ export type Screen =
   | 'welcome'
   | 'student'
   | 'university'
-  | 'degree'
   | 'graduation'
   | 'major'
   | 'minor'
@@ -306,6 +304,14 @@ function useStudyMax() {
 
   const [completed, setCompleted] = useState<Set<string>>(() => new Set(saved.completed ?? []))
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'sample' | 'error'>('idle')
+  // Picked "Upload my transcript" on the first question: the transcript answers the major, minor and
+  // this term's courses, so onboarding skips those and ends on the dashboard, not the course list.
+  const [fromTranscript, setFromTranscript] = useState(false)
+  // The major and minor the transcript states, as written; mapped to program ids once USask is picked.
+  const [statedProgram, setStatedProgram] = useState<{ major: string | null; minor: string | null }>({
+    major: null,
+    minor: null,
+  })
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploadInProgress, setUploadInProgress] = useState<string[]>(saved.inProgress ?? [])
   const completedRef = useRef(completed)
@@ -432,11 +438,14 @@ function useStudyMax() {
     }
     setUniversityId(id)
     setProgramId('')
-    setCompleted(new Set())
-    setUploadInProgress([])
+    // A transcript read from the first question is the student's, whichever school they then pick.
+    if (!fromTranscript) {
+      setCompleted(new Set())
+      setUploadInProgress([])
+      setUploadStatus('idle')
+    }
     setHeroId(null)
     setExtraTargetIds([])
-    setUploadStatus('idle')
     haptic.selection()
     requestAdvance()
   }
@@ -449,12 +458,15 @@ function useStudyMax() {
       return
     }
     setProgramId(id)
-    setCompleted(new Set())
-    setUploadInProgress([])
+    // A transcript's courses are the student's whatever their major; only hand-picked ones reset.
+    if (!fromTranscript) {
+      setCompleted(new Set())
+      setUploadInProgress([])
+      setUploadStatus('idle')
+    }
     setHeroId(null)
     setExtraTargetIds([])
     setConcentrationIds([]) // they belong to the major they were picked from
-    setUploadStatus('idle')
     requestAdvance()
   }
 
@@ -463,6 +475,7 @@ function useStudyMax() {
     // A first-year has no transcript: one being read from the first question is dropped.
     if (type === 'first-year' && uploadStatus === 'uploading') cancelUpload()
     setStudentType(type)
+    setFromTranscript(false)
     requestAdvance()
   }
 
@@ -472,13 +485,10 @@ function useStudyMax() {
     setStudentType('existing')
     void handleTranscriptFile(file, true)
     // Too big a file is refused on the spot; the notice shows on this question instead of later.
-    if (file.size <= MAX_TRANSCRIPT_BYTES) requestAdvance()
-  }
-
-  function chooseDegree(value: string) {
-    haptic.selection()
-    setDegree(value)
-    requestAdvance()
+    if (file.size <= MAX_TRANSCRIPT_BYTES) {
+      setFromTranscript(true)
+      requestAdvance()
+    }
   }
 
   function chooseGradYear(year: number) {
@@ -524,6 +534,28 @@ function useStudyMax() {
   const minorOptions = useMemo(() => availablePrograms.filter((p) => p.kind === 'minor'), [availablePrograms])
   // Only a major with specializations to pick from gets the concentration step.
   const concentrationOptions = universityId === 'usask' ? (selectedProgram?.specializations ?? []) : []
+
+  // The transcript's stated major and minor, matched to USask programs by name (or shorthand like
+  // "Accounting" for Commerce), longest name first so "Applied Mathematics" beats "Mathematics". A
+  // named track ("Mechanical Engineering") becomes the concentration, so the reveal leads with it.
+  useEffect(() => {
+    if (!fromTranscript || universityId !== 'usask') return
+    const says = (text: string | null, name: string) => !!text && text.toLowerCase().includes(name.toLowerCase())
+    // Shorthand is matched as a whole word: "COMM" must not find Commerce in "Communications".
+    const saysWord = (text: string | null, word: string) => !!text && new RegExp(`\\b${word}\\b`, 'i').test(text)
+    const { major, minor } = statedProgram
+    const byLength = [...programOptions].sort((a, b) => b.name.length - a.name.length)
+    const program =
+      byLength.find((o) => says(major, o.name)) ??
+      byLength.find((o) => o.aliases.some((alias) => alias.length > 3 && saysWord(major, alias)))
+    if (program) {
+      setProgramId((id) => id || program.id)
+      const track = availablePrograms.find((p) => p.id === program.id)?.specializations.find((s) => says(major, s.name))
+      if (track) setConcentrationIds((ids) => (ids.length > 0 ? ids : [track.id]))
+    }
+    const minorProgram = minorOptions.find((p) => says(minor, p.name.replace(/\s*minor\s*/i, '').trim()))
+    if (minorProgram) setMinorId((id) => id ?? minorProgram.id)
+  }, [fromTranscript, universityId, statedProgram, programOptions, availablePrograms, minorOptions])
   const targetSeed = seedOf({ concentrationIds, minorId })
 
   function seedTargets(ids: string[]) {
@@ -532,6 +564,7 @@ function useStudyMax() {
   }
 
   function loadSampleStudent() {
+    setFromTranscript(false)
     setUniversityId('usask')
     setProgramId(computerScience.id)
     setCompleted(new Set(computerScience.sampleTranscript ?? []))
@@ -626,13 +659,17 @@ function useStudyMax() {
       setCompleted((prev) => new Set(replacing ? codes : [...prev, ...codes]))
       setUploadInProgress((prev) => (replacing ? inProgressCodes : [...new Set([...prev, ...inProgressCodes])]))
       setFoundCount(codes.length)
+      setStatedProgram({ major: data.major ?? null, minor: data.minor ?? null })
       if (!early) seedTargets(targetSeed)
       setReadPhase('found')
       setUploadStatus('success')
       haptic.light()
       if (early && screenRef.current !== 'reading') return
       await wait(1200)
-      if (live()) go('courses', -1)
+      if (!live()) return
+      // The first question's upload finishes onboarding (to the dashboard); a later one shows the list.
+      if (early) requestAdvance()
+      else go('courses', -1)
     } catch (err) {
       if (!live()) return
       setUploadStatus('error')
@@ -642,7 +679,8 @@ function useStudyMax() {
           ? err.message
           : "Couldn't reach the transcript reader. Check your connection, or add your courses by search.",
       )
-      if (!early || screenRef.current === 'reading') go('courses', -1)
+      if (!early) go('courses', -1)
+      else if (screenRef.current === 'reading') requestAdvance()
     }
   }
 
@@ -1014,10 +1052,19 @@ function useStudyMax() {
   // far. Continue moves one along it and Back (the button or Android's) one back.
   // A question not answered yet assumes the longer USask path, so the dots and the button don't
   // promise an early finish.
-  const onboardingSteps: Screen[] = [
+  const onboardingSteps: Screen[] = fromTranscript
+    ? [
+        'student',
+        'university',
+        'graduation',
+        'phone',
+        // Only if the transcript didn't name a major StudyMax knows.
+        ...(uploadStatus === 'success' && !selectedProgram ? (['major'] as const) : []),
+      ]
+    : [
     'student',
     'university',
-    ...(universityId !== 'other' ? (['degree', 'graduation', 'major', 'minor'] as const) : (['graduation'] as const)),
+    ...(universityId !== 'other' ? (['graduation', 'major', 'minor'] as const) : (['graduation'] as const)),
     ...(universityId !== 'other' && (!selectedProgram || concentrationOptions.length > 0)
       ? (['concentration'] as const)
       : []),
@@ -1027,7 +1074,7 @@ function useStudyMax() {
   const flow: Screen[] = [
     ...(isAuthConfigured && !account ? (['welcome'] as const) : []),
     ...onboardingSteps,
-    ...(hasCourseStep ? (['courses'] as const) : []),
+    ...(hasCourseStep && !fromTranscript ? (['courses'] as const) : []),
   ]
   const flowIndex = flow.indexOf(screen)
   const nextIsReveal = flowIndex === flow.length - 1
@@ -1036,6 +1083,11 @@ function useStudyMax() {
   const resultsBack = flow[flow.length - 1]
 
   function next() {
+    // The major step drops out of the transcript path's list once it's answered, hence the explicit check.
+    if (fromTranscript && (screen === 'reading' || screen === 'major' || flowIndex === flow.length - 1)) {
+      finishTranscriptPath()
+      return
+    }
     if (screen === onboardingSteps[onboardingSteps.length - 1]) completeOnboarding()
     const to = flow[flowIndex + 1]
     // A transcript uploaded on the first question and still being read: wait for it there.
@@ -1079,6 +1131,26 @@ function useStudyMax() {
       setUploadStatus('idle')
     }
     seedTargets(targetSeed)
+  }
+
+  /** End of the transcript path: wait for the read if it's still going, then straight to the dashboard. */
+  function finishTranscriptPath() {
+    if (uploadStatus === 'uploading') {
+      go('reading')
+      return
+    }
+    if (uploadStatus === 'error') {
+      // Back onto the regular questions; the reader's message waits on the course list at the end.
+      setFromTranscript(false)
+      go('major')
+      return
+    }
+    if (!selectedProgram) {
+      go('major')
+      return
+    }
+    completeOnboarding()
+    startReveal()
   }
 
   function startReveal() {
@@ -1201,7 +1273,11 @@ function useStudyMax() {
         return false
       case 'reading':
         cancelUpload()
-        go('courses', -1)
+        if (fromTranscript) {
+          // "Add courses by hand instead": the regular questions, from the major on.
+          setFromTranscript(false)
+          go('major', -1)
+        } else go('courses', -1)
         return true
       case 'reveal':
         return true // it's over in a second; there's nothing to go back to mid-reveal
@@ -1263,8 +1339,8 @@ function useStudyMax() {
     studentType,
     chooseStudentType,
     chooseTranscript,
+    fromTranscript,
     degree,
-    chooseDegree,
     minorId,
     minorOptions,
     chooseMinor,
@@ -1376,7 +1452,6 @@ const SCREENS: Record<Screen, ComponentType> = {
   welcome: WelcomeScreen,
   student: StudentScreen,
   university: UniversityScreen,
-  degree: DegreeScreen,
   major: MajorScreen,
   minor: MinorScreen,
   concentration: ConcentrationScreen,

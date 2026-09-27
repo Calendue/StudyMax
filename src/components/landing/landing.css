@@ -355,28 +355,6 @@
   line-height: 1.5;
 }
 
-.landing__status {
-  grid-row: 1 / span 2;
-  align-self: start;
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  padding: 0.3em 0.6em;
-  border: 1px solid currentColor;
-  width: fit-content;
-}
-
-.landing__status--full {
-  color: var(--accent);
-}
-
-.landing__status--partial {
-  color: var(--ink-2);
-}
-
-.landing__status--scholarships-only {
-  color: var(--ink-2);
-}
-
 .landing__tag {
   grid-row: 1 / span 2;
   align-self: start;
@@ -480,7 +458,6 @@
     grid-template-columns: 1fr;
   }
 
-  .landing__status,
   .landing__tag {
     grid-row: auto;
     margin-bottom: var(--space-3xs);
