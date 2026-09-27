@@ -62,6 +62,7 @@ import { RevealScreen } from './screens/RevealScreen.tsx'
 import { ResultsScreen } from './screens/ResultsScreen.tsx'
 import { CallScreen } from './screens/CallScreen.tsx'
 import { PingMaxScreen } from './screens/PingMaxScreen.tsx'
+import { RegisterScreen } from './screens/RegisterScreen.tsx'
 import { AppShell, CoursesFocus, Wizard } from './shell/AppShell.tsx'
 import { useLayoutMode } from './ui/layout.ts'
 import './App.css'
@@ -108,6 +109,7 @@ export type Screen =
   | 'results'
   | 'call'
   | 'ping-max'
+  | 'register'
 export type Tab = 'overview' | 'plan' | 'awards' | 'classes'
 /** First-years have no courses to add yet, so they go from onboarding straight to the reveal. */
 export type StudentType = 'first-year' | 'existing'
@@ -1559,6 +1561,9 @@ function useStudyMax() {
       case 'ping-max':
         go('results', -1)
         return true
+      case 'register':
+        navigate('plan')
+        return true
       case 'courses':
         // Once there are results, Courses is a destination beside them, not a step of onboarding.
         if (revealed) {
@@ -1771,6 +1776,7 @@ const SCREENS: Record<Screen, ComponentType> = {
   results: ResultsScreen,
   call: CallScreen,
   'ping-max': PingMaxScreen,
+  register: RegisterScreen,
 }
 
 // A screen change runs on ONE timeline: the outgoing screen is gone before the incoming one is
@@ -1817,7 +1823,9 @@ function App() {
   // the dashboard shell; before that, courses get the desktop page and every other step the wizard.
   const wide = layout !== 'tabs'
   const inShell =
-    wide && model.revealed && (model.screen === 'results' || model.screen === 'courses' || model.screen === 'call' || model.screen === 'ping-max')
+    wide &&
+    model.revealed &&
+    (model.screen === 'results' || model.screen === 'courses' || model.screen === 'call' || model.screen === 'ping-max' || model.screen === 'register')
   const coursesFocus = wide && !inShell && model.screen === 'courses'
   const frame = inShell ? 'shell' : coursesFocus ? 'courses-focus' : model.screen
   const Current = SCREENS[model.screen]

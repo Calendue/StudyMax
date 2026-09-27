@@ -286,7 +286,7 @@ function AccountMenu() {
 export function Header() {
   const m = useModel()
   const active = useActiveDestination()
-  const title = m.screen === 'call' ? 'Get a call' : destinationInfo(active).title
+  const title = m.screen === 'call' ? 'Get a call' : m.screen === 'register' ? 'Class registration' : destinationInfo(active).title
   // Where the student is: the school and the program, the way TandemTeach's header names the class.
   const context = [m.universityId === 'usask' ? 'University of Saskatchewan' : 'Your university', m.selectedProgram?.name]
     .filter(Boolean)

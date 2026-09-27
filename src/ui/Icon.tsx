@@ -153,6 +153,18 @@ const PATHS = {
       <path d="M9 20h6M12 16.5V20" />
     </>
   ),
+  calendar: (
+    <>
+      <rect x="4" y="5.5" width="16" height="14.5" rx="2" />
+      <path d="M4 9.5h16M8 3.5v3M16 3.5v3" />
+    </>
+  ),
+  table: (
+    <>
+      <rect x="4" y="5" width="16" height="14" rx="1.5" />
+      <path d="M4 10h16M9.5 5v14" />
+    </>
+  ),
 } as const
 
 export type IconName = keyof typeof PATHS

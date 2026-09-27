@@ -7,6 +7,7 @@ import type { LayoutMode } from '../ui/layout.ts'
 import { TopBar } from '../ui/chrome.tsx'
 import { CallScreen } from '../screens/CallScreen.tsx'
 import { PingMaxScreen } from '../screens/PingMaxScreen.tsx'
+import { RegisterScreen } from '../screens/RegisterScreen.tsx'
 import { DashboardPage } from '../pages/DashboardPage.tsx'
 import { PlanPage } from '../pages/PlanPage.tsx'
 import { AwardsPage } from '../pages/AwardsPage.tsx'
@@ -44,6 +45,7 @@ const PAGES: Record<string, ComponentType> = {
   courses: CoursesPage,
   call: CallPage,
   'ping-max': PingMaxPage,
+  register: RegisterScreen,
 }
 
 /**
@@ -54,7 +56,8 @@ const PAGES: Record<string, ComponentType> = {
 export function AppShell({ mode }: { mode: Exclude<LayoutMode, 'tabs'> }) {
   const m = useModel()
   const reduce = useReducedMotion()
-  const page = m.screen === 'courses' ? 'courses' : m.screen === 'call' ? 'call' : m.screen === 'ping-max' ? 'ping-max' : m.tab
+  const page =
+    m.screen === 'courses' ? 'courses' : m.screen === 'call' ? 'call' : m.screen === 'ping-max' ? 'ping-max' : m.screen === 'register' ? 'register' : m.tab
   const Page = PAGES[page] ?? DashboardPage
   return (
     <div className={`shell shell--${mode}`}>
