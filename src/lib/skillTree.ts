@@ -381,10 +381,14 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
   }
 
   // ── rows within each year: prerequisites below what they unlock ──
+  // Only on the same side of the trunk. Across it, Fall already comes before Winter (and Spring/Summer
+  // sits above Winter), so a Fall prerequisite doesn't lift its Winter course a row: that lift is what
+  // stacked a year's chains into a staircase. Its link runs across the trunk instead.
+  const sameSide = (a: string, b: string) => sameYear(a, b) && drafts.get(a)!.lane === drafts.get(b)!.lane
   const tierOf = (d: Draft, seen = new Set<string>()): number => {
     if (seen.has(d.code)) return 0
     seen.add(d.code)
-    const below = links.filter((l) => l.sequencing && l.to === d.code && sameYear(l.from, d.code))
+    const below = links.filter((l) => l.sequencing && l.to === d.code && sameSide(l.from, d.code))
     return below.length === 0 ? 0 : 1 + Math.max(...below.map((l) => tierOf(drafts.get(l.from)!, seen)))
   }
   for (const d of drafts.values()) d.tier = tierOf(d)
@@ -430,7 +434,7 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
       let row = Math.max(
         d.summer ? winterRows : 0,
         ...links
-          .filter((l) => l.sequencing && l.to === d.code && drafts.get(l.from)!.year === year)
+          .filter((l) => l.sequencing && l.to === d.code && sameSide(l.from, d.code))
           .map((l) => drafts.get(l.from)!.row + 1),
       )
       for (;; row++) {
@@ -514,13 +518,16 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
     })
   const byCode = new Map(nodes.map((n) => [n.code, n]))
 
-  // Keep only links that run UP the board (or level, across the trunk): a course placed by its
-  // level can't be sure of the order of a prerequisite in another year, and a trace pointing down
-  // would say something the tree doesn't know. The course's sheet still lists every prerequisite.
+  // Keep only links that run UP the board, or across the trunk from Fall to the same year's Winter
+  // side: a course placed by its level can't be sure of the order of a prerequisite in another year,
+  // and a trace pointing down would say something the tree doesn't know. The course's sheet still
+  // lists every prerequisite.
+  const below = (a: TreeNode, b: TreeNode) => a.y > b.y + b.h - 1
+  const across = (a: TreeNode, b: TreeNode) => a.year === b.year && a.lane === 'fall' && b.lane === 'winter'
   const upward = links.filter((l) => {
     const a = byCode.get(l.from)!
     const b = byCode.get(l.to)!
-    return a.y > b.y + b.h - 1 || (a.year === b.year && a.row < b.row)
+    return below(a, b) || across(a, b) || (a.year === b.year && a.lane === b.lane && a.row < b.row)
   })
   for (const l of upward) {
     byCode.get(l.to)!.prereqs.push(l.from)
@@ -616,10 +623,25 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
   // Prerequisite links, drawn only for the course you pick: out of the top of the prerequisite,
   // up into the bottom of what it unlocks, ending in an arrowhead. A course stacked straight above
   // its prerequisite gets a short straight arrow; everything else a curve that arrives vertically.
+  // A Fall prerequisite beside its Winter course goes across the trunk instead: out of the card's
+  // trunk-side edge, into the other's, arriving horizontally.
   const ARROW = 7
   const treeLinks: TreeLink[] = upward.map((l) => {
     const a = byCode.get(l.from)!
     const b = byCode.get(l.to)!
+    if (across(a, b) && !below(a, b)) {
+      const x1 = a.x + a.w
+      const y1 = Math.round(a.y + a.h / 2)
+      const tip = b.x
+      const y2 = Math.round(b.y + b.h / 2)
+      const end = tip - ARROW
+      const k = Math.max(12, (end - x1) / 2)
+      const d = `M ${x1} ${y1} C ${x1 + k} ${y1}, ${end - k} ${y2}, ${end} ${y2}`
+      const arrow = `M ${end - 1} ${y2 - 4.5} L ${tip} ${y2} L ${end - 1} ${y2 + 4.5} Z`
+      const chord = Math.hypot(end - x1, y2 - y1)
+      const length = Math.round((chord + k + Math.hypot(end - x1 - 2 * k, y2 - y1) + k) / 2)
+      return { from: l.from, to: l.to, conditional: l.conditional, d, arrow, length }
+    }
     const x1 = Math.round(a.x + a.w / 2)
     const x2 = Math.round(b.x + b.w / 2)
     const tip = b.y + b.h
