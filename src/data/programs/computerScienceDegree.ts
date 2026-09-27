@@ -54,21 +54,24 @@ const coreSenior = ['CMPT317', 'CMPT332', 'CMPT340', 'CMPT353', 'CMPT360', 'CMPT
 // "CMPT courses with number 410 or higher" (400-409 don't count).
 const cmpt410Plus = subjectAtLevels('CMPT', [400]).filter((code) => Number(code.slice(4)) >= 410)
 
+const juniorScience = ['BIOL120', 'BIOL121', 'CHEM112', 'CHEM115', 'CHEM250', 'GEOG120', 'GEOL121', 'GEOL122', 'ASTR113', 'ASTR213', 'PHYS115', 'PHYS117', 'PHYS125']
+
 const requirements: RequirementGroup[] = [
   // C1 College Requirement (15 cu)
   { courses: englishWriting, need: 2, label: 'English writing', year: 1 },
-  { courses: indigenousLearning, need: 1, label: 'Indigenous learning', year: 1 },
   { ...single('MATH163'), year: 1 },
   { ...single('MATH164'), year: 1 },
   // C2 Breadth Requirement (9 cu)
   { courses: breadth, need: 3, label: 'Breadth elective', year: 2 },
   // C3 Cognate Requirement (15-18 cu)
-  {
-    courses: ['BIOL120', 'BIOL121', 'CHEM112', 'CHEM115', 'CHEM250', 'GEOG120', 'GEOL121', 'GEOL122', 'ASTR113', 'ASTR213', 'PHYS115', 'PHYS117', 'PHYS125'],
-    need: 3,
-    label: 'Junior science',
-    year: 1,
-  },
+  // The advising sheet's Year 1 has a junior science each term; the third goes in Year 2 Fall
+  // ("breadth or science").
+  { courses: juniorScience, need: 2, label: 'Junior science', year: 1 },
+  { courses: juniorScience, need: 1, label: 'Junior science', year: 2 },
+  // Indigenous learning is Year 1 too, after the sciences: the sheet's Year 1 Winter slot is
+  // "Indigenous or breadth", so it's what moves to Year 2 when a one-term chain needs the seat
+  // (Artificial Intelligence's MATH 116 → STAT 241 → STAT 242 → CMPT 317).
+  { courses: indigenousLearning, need: 1, label: 'Indigenous learning', year: 1 },
   { courses: ['PHIL232', 'GE449'], need: 1, year: 2 },
   { courses: ['MATH110', 'MATH133', 'MATH176'], need: 1, year: 1 },
   // Business Science: 3 cu from this list, or an Economics course in C2 plus 3 cu more in C5 — the

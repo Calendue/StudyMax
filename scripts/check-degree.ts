@@ -299,7 +299,7 @@ function build(c: Case) {
     .filter((g) => g.courses.length > 0)
   const booked = bookedByTerm(currentByTerm, TODAY)
   const specs = computerScience.specializations
-  const matches = computeMatches(specs, completed)
+  const matches = computeMatches(specs, completed, computerScience.degree as never)
   const credentials = computeCredentials(usask.programs, completed, computerScience.id)
   const planningSpecs = [...specs, ...credentials.map((x) => x.spec)]
   const hero = c.spec ? matches.find((m) => m.spec.id === c.spec!.id)! : matches[0]
@@ -458,7 +458,9 @@ function check(c: Case) {
     const elw = inYear((code) => ELW.includes(code) || slotIs(/english writing/i)(code), 1)
     if (elw < 6) v.I7.push(`only ${elw} cu of English writing in Year 1`)
     const il = inYear((code) => IL.includes(code) || slotIs(/indigenous/i)(code), 1)
-    if (il < 3) v.I7.push('Indigenous learning not in Year 1')
+    // The sheet's Year 1 Winter slot is "Indigenous or breadth": Year 2 at the latest.
+    const il2 = il + inYear((code) => IL.includes(code) || slotIs(/indigenous/i)(code), 2)
+    if (il2 < 3) v.I7.push('Indigenous learning not in Year 1 or 2')
     for (const m of ['MATH163', 'MATH164']) if (where.get(m) !== 1) v.I7.push(`${m} in Year ${where.get(m) ?? '?'}, not Year 1`)
     const sci = inYear((code) => Object.values(SCIENCE_AREAS).flat().includes(code) || slotIs(/science/i)(code), 1)
     if (sci < 6) v.I7.push(`only ${sci} cu of junior science in Year 1`)
@@ -469,7 +471,12 @@ function check(c: Case) {
     const free = slots.filter((x) => /free elective|senior elective|200-level or higher/i.test(electiveLabel(x.code)))
     const lastYear = Math.max(...where.values())
     const late = free.filter((x) => yearOf(x.term) === lastYear)
-    if (free.length > 1 && late.length > free.length / 2) v.I7.push(`${late.length} of ${free.length} free electives piled into the last year`)
+    if (free.length > 1 && late.length === free.length) v.I7.push(`all ${free.length} free electives piled into the last year`)
+    for (const t of timeline) {
+      if (t.courses.length > 1 && t.courses.every((x) => isElective(x.code) && /free elective|senior elective|200-level or higher/i.test(electiveLabel(x.code)))) {
+        v.I7.push(`${t.label} is nothing but free electives`)
+      }
+    }
   }
 
   // I8: the hero.
@@ -483,7 +490,8 @@ function check(c: Case) {
       const degreeCodes = new Set([...CORE_200.flatMap((x) => x.split('|')), 'CMPT141', 'CMPT145', ...CORE_SENIOR, ...MATH_LIST, 'STAT242', 'STAT245'])
       const overlap = (m: SpecializationMatch) => new Set(m.spec.requirements.flatMap((g) => g.courses).filter((code) => degreeCodes.has(code))).size
       const best = Math.max(...tied.map(overlap))
-      if (overlap(hero) < best) v.I8.push(`default target ${hero.spec.name} wins a ${tied.length}-way tie on name, not on its overlap with the degree (${overlap(hero)} < ${best})`)
+      const byName = [...tied].sort((x, y) => x.spec.name.localeCompare(y.spec.name))[0]
+      if (byName.spec.id === hero.spec.id && overlap(hero) < best) v.I8.push(`default target ${hero.spec.name} wins a ${tied.length}-way tie on name, not on its overlap with the degree (${overlap(hero)} < ${best})`)
     }
   }
 

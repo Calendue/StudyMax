@@ -32,7 +32,9 @@ assert.ok(
   const dead = { ...closest, id: 'dead', name: 'AAA Dead', unavailable: 'needs a course the catalogue dropped' }
   const ranked = computeMatches([dead, ...specializations], completed)
   assert.equal(ranked[0].spec.id, 'social-computing', 'an unavailable specialization is never the closest')
-  assert.equal(ranked[ranked.length - 1].spec.id, 'dead', 'an unavailable specialization ranks last')
+  const firstUnavailable = ranked.findIndex((m) => m.spec.unavailable)
+  assert.ok(ranked.slice(firstUnavailable).every((m) => m.spec.unavailable), 'unavailable specializations rank last')
+  assert.ok(ranked.slice(firstUnavailable).some((m) => m.spec.id === 'dead'), 'an unavailable specialization ranks last')
   // A first-year is 6 courses from several; the tie goes to the one sharing most with the degree,
   // not the alphabet (Computational Modelling, which needs the dropped BINF 451).
   const firstYear = computeMatches(specializations, new Set(), computerScienceDegree)

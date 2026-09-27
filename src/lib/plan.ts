@@ -145,8 +145,10 @@ export function optionRanker(
   }
   const overlap = new Map(computeCourseOverlap(lists, completed).map((o) => [o.course, o.specs]))
   const standingOk = (code: string) => honours || ![...(creditPrereqs[code] ?? []), ...(courseInfo[code]?.creditRequires ?? [])].some((r) => r.standing === 'honours')
-  const offered = (code: string) =>
-    standingOk(code) && ((offerings[code]?.length ?? 0) > 0 || (courseInfo[code]?.offered !== undefined && courseInfo[code]?.offered !== 'none'))
+  // How surely it runs: sections in USask's class search (2025-27) beat a catalogue listing alone,
+  // which can outlive the course (CMPT 260 is still "Term 1 only" in the catalogue, with no sections).
+  const runs = (code: string) =>
+    !standingOk(code) ? 0 : (offerings[code]?.length ?? 0) > 0 ? 2 : courseInfo[code]?.offered && courseInfo[code]?.offered !== 'none' ? 1 : 0
   const programRank = (code: string) => preferRank.get(code) ?? (listed.has(code) ? 100 : 200)
 
   return (options, exceptSpecId, planned) => {
@@ -156,14 +158,14 @@ export function optionRanker(
     // on the strength of that list.
     const superseded = (code: string) =>
       choiceGroups.some(
-        (g) => g.includes(code) && g.some((c) => c !== code && (planned?.has(c) || (!offered(code) && offered(c)))),
+        (g) => g.includes(code) && g.some((c) => c !== code && (planned?.has(c) || runs(code) < runs(c))),
       )
     return [...options].sort(
       (a, b) =>
         Number(superseded(a)) - Number(superseded(b)) ||
         programRank(a) - programRank(b) ||
         Number(!courseInfo[a]) - Number(!courseInfo[b]) ||
-        Number(!offered(a)) - Number(!offered(b)) ||
+        runs(b) - runs(a) ||
         advances(b) - advances(a) ||
         Number(!core.has(subjectOf(a))) - Number(!core.has(subjectOf(b))) ||
         unmetPrerequisites(a, likely).length - unmetPrerequisites(b, likely).length ||
@@ -230,8 +232,10 @@ export function selectCourses(
       continue
     }
 
+    // Never a course the 2026-27 catalogue doesn't list (BINF 451): a slot with no live option stays
+    // unplanned, and the specialization says why it can't be finished (Specialization.unavailable).
     const ranked = rank(
-      slot.options.filter((code) => !pickedCodes.has(code)),
+      slot.options.filter((code) => !pickedCodes.has(code) && courseInfo[code] !== undefined),
       slot.specId,
     )
 
@@ -501,6 +505,31 @@ export function buildPlan(
       return cu >= rule.cu
     })
 
+  // Slack: the latest Fall/Winter term each named course can go in without the plan running past
+  // the terms its courses fill, worked back from what needs it and the seasons each runs in. A
+  // course with none left goes first: AI's MATH 116 → STAT 241 → STAT 242 → CMPT 317 → CMPT 423 →
+  // CMPT 489 runs in one term each, so MATH 116 can't wait for Year 2 the way the sheet's Year-1
+  // writing, Indigenous learning and science can't wait for Year 3.
+  const fwIndex = (t: TermStart) => t.year * 2 + (t.season === 'Fall' ? 1 : 0)
+  const base = fwIndex(start.season === 'Spring/Summer' ? { season: 'Fall', year: start.year } : start)
+  const seasonAt = (i: number): Season => ((base + i) % 2 === 1 ? 'Fall' : 'Winter')
+  const bookedAhead = bookedTerms.filter((b) => b.order >= termOrder(start)).reduce((n, b) => n + b.codes.length, 0)
+  const horizon = Math.max(1, Math.ceil((items.length + bookedAhead) / perTerm))
+  const latestMemo = new Map<string, number>()
+  const latest = (code: string, depth = 0): number => {
+    if (latestMemo.has(code)) return latestMemo.get(code)!
+    let bound = horizon - 1
+    if (depth <= 40) {
+      for (const d of dependants.get(code) ?? []) {
+        if (namedCodes.has(d.code)) bound = Math.min(bound, latest(d.code, depth + 1) - (d.concurrent ? 0 : 1))
+      }
+    }
+    while (bound >= 0 && !runsIn(code, seasonAt(bound))) bound--
+    latestMemo.set(code, bound)
+    return bound
+  }
+  const critical = (item: Item, at: number) => item.named && latest(item.course.code) <= at
+
   const terms: PlannedTerm[] = []
   let pending = [...items]
   let term = start
@@ -558,9 +587,14 @@ export function buildPlan(
       return true
     }
     if (limit > 0) {
+      const at = fwIndex(term) - base
       const ordered = [...pending].sort(
         (a, b) =>
+          Number(critical(b, at)) - Number(critical(a, at)) ||
           Number(a.due > year) - Number(b.due > year) ||
+          // The advising sheet's own year before chain length: Year 1's writing, Indigenous learning and
+          // science keep their seats ahead of a Year-2 chain's prerequisite (MATH 116 for STAT 242).
+          (a.course.year ?? a.due) - (b.course.year ?? b.due) ||
           b.chain - a.chain ||
           a.due - b.due ||
           Number(!a.named) - Number(!b.named) ||

@@ -26,7 +26,11 @@ assert.equal(courseInfo.CMPT141.creditUnits, 3)
 // --- selection covers exactly the outstanding requirement, never a completed course ---
 for (const match of matches) {
   const picked = selectCourses(match, specializations, completed)
-  assert.equal(picked.length, match.remaining, `${match.spec.id}: one pick per outstanding course`)
+  // A course the 2026-27 catalogue dropped (BINF 451) is never picked: an unavailable
+  // specialization is one short, and says why.
+  const dead = match.unsatisfied.filter((g) => !g.label && g.options.every((c) => !courseInfo[c])).reduce((n, g) => n + g.need, 0)
+  assert.equal(picked.length, match.remaining - dead, `${match.spec.id}: one pick per outstanding course`)
+  if (dead > 0) assert.ok(match.spec.unavailable, `${match.spec.id}: a dropped course means it's marked unavailable`)
   assert.ok(
     picked.every((p) => !completed.has(p.code)),
     `${match.spec.id}: never plans a course already taken`,
@@ -215,7 +219,9 @@ assert.deepEqual(upcomingTerm(new Date('2026-10-01')), { season: 'Winter', year:
     const freeRoom = degree.totalCourses - degree.requirements.reduce((n, g) => n + g.need, 0)
     assert.equal(courses.length, degree.totalCourses + Math.max(0, unused - freeRoom), `${spec.id}: a whole degree`)
     // The specialization is finished and every named degree slot is filled, by a course or a slot.
-    assert.equal(computeMatches([spec], everything)[0].remaining, 0, `${spec.id}: specialization complete`)
+    // (Short only the courses the 2026-27 catalogue dropped, for a specialization marked unavailable.)
+    const dropped = spec.unavailable ? spec.requirements.filter((g) => g.courses.every((c) => !courseInfo[c])).reduce((n, g) => n + g.need, 0) : 0
+    assert.equal(computeMatches([spec], everything)[0].remaining, dropped, `${spec.id}: specialization complete`)
     const degreeLeft = computeMatches([degree], everything)[0].unsatisfied
     assert.ok(degreeLeft.every((g) => g.label), `${spec.id}: only open-choice slots are left for unnamed electives`)
     const unnamed = courses.filter((c) => isElective(c.code)).length

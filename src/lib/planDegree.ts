@@ -58,8 +58,13 @@ export function planDegree(degree: Degree): PlanDegree {
     groupOf: (code) => groupFor(code)?.label,
     slots(taken) {
       const out: DegreeSlot[] = []
+      // Unsatisfied slots come back in the degree's order, so walk its groups alongside them: two
+      // groups can share a label (Junior science in Year 1 and Year 2).
+      let at = 0
       for (const slot of computeMatches([degree], taken)[0].unsatisfied) {
-        const group = slot.label ? byLabel.get(slot.label) : undefined
+        if (!slot.label) continue
+        while (at < degree.requirements.length && degree.requirements[at].label !== slot.label) at++
+        const group = degree.requirements[at++] ?? byLabel.get(slot.label)
         if (!group) continue
         for (let i = 0; i < slot.need; i++) out.push({ label: slot.label!, year: group.year, ...slotShape(group), free: false })
       }
