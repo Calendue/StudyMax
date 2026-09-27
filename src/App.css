@@ -906,6 +906,21 @@
   color: var(--on-accent);
 }
 
+/* The degree's named options (Four-year, Honours, Three-year): beside the label where they fit on one
+   line, on a full-width line of their own below it where they don't (the desktop's settings panel). */
+.per-term--wrap {
+  flex-wrap: wrap;
+  row-gap: var(--s2);
+}
+
+.per-term--wrap .segmented {
+  flex: 1 0 auto;
+}
+
+.per-term--wrap .segmented__option {
+  white-space: nowrap;
+}
+
 /* The graph: terms stacked top to bottom, each term's courses sharing the full width, and
    prerequisite connectors flowing down between them, so the hidden cost of a prerequisite is a
    line you can follow instead of a note you have to read. */

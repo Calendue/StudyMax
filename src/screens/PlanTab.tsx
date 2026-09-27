@@ -91,7 +91,7 @@ export function PlanControls() {
   return (
     <>
       {variants.length > 1 && (
-        <Appear index={1} className="per-term">
+        <Appear index={1} className="per-term per-term--wrap">
           <span id="degree-variant-label">Degree</span>
           <div className="segmented segmented--labels" role="radiogroup" aria-labelledby="degree-variant-label">
             {variants.map((d) => (
