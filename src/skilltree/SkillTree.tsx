@@ -12,6 +12,7 @@ import { Sheet } from '../ui/Sheet.tsx'
 import { useBackLayer } from '../ui/useBackLayer.ts'
 import { useTreeSource, type TreeSelection } from './planView.ts'
 import { useTreeTransition } from './useTreeTransition.ts'
+import { useMaxDemo } from '../maxLive/useMaxDemo.ts'
 import { movable, useCourseDrag, type DropResult } from './useCourseDrag.ts'
 import { DegreeReadout } from './DegreeReadout.tsx'
 import { PlanIssues } from '../ui/WhatChanged.tsx'
@@ -69,6 +70,7 @@ export function SkillTree({
   contained?: boolean
 }) {
   const m = useModel()
+  useMaxDemo()
   const reduce = useReducedMotion() ?? false
   // The app's plan, or Max's frame while he's reshaping it on a call (planView.ts useTreeSource).
   const source = useTreeSource()
@@ -230,7 +232,7 @@ export function SkillTree({
   // Max reshaping the tree on a call: glide, sprout and prune between his frames, and bring what
   // changed into view (after the roots re-pin to the new height).
   const ghosts = useTreeTransition(boardRef, layout, source.liveKey, reduce, (y) => {
-    setTimeout(() => scrollToY(y), 150)
+    setTimeout(() => scrollToY(y), 60)
   })
   const toRoots = () => {
     fromBottom.current = 0
@@ -562,12 +564,13 @@ export function SkillTree({
               <div
                 key={`ghost-${g.node.code}`}
                 className="tree-node tree-node--ghost"
-                style={{ left: g.node.x, top: g.top, width: g.node.w, height: g.node.h }}
+                style={{ left: g.node.x, top: g.top, width: g.node.w, height: g.node.h, ['--to-trunk' as string]: `${(layout.width / 2 - (g.node.x + g.node.w / 2)) * 0.7}px` }}
                 aria-hidden
               >
                 <span className="tree-node__head">
                   <span className="tree-node__code">{courseCode(g.node.code)}</span>
                 </span>
+                <span className="tree-node__dropped">Dropped by Max</span>
               </div>
             ))}
 

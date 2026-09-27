@@ -42,7 +42,8 @@ export function parseCallPlanInputs(raw: unknown): { inputs: CallPlanInputs } | 
   if (!targetIds || !concentrationIds) return { rejected: 'targets' }
 
   const coursesPerTerm = intIn(r.coursesPerTerm, 1, 7)
-  const summerPerTerm = intIn(r.summerPerTerm, 1, 4)
+  // 0 is a real choice (no Spring/Summer, loads.ts SUMMER_LOADS): rejecting it sent Max back to the saved plan.
+  const summerPerTerm = intIn(r.summerPerTerm, 0, 4)
   if (coursesPerTerm === null || summerPerTerm === null || typeof r.springSummer !== 'boolean') return { rejected: 'load' }
 
   const start = r.start as { season?: unknown; year?: unknown } | undefined
