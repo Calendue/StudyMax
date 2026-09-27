@@ -1,9 +1,11 @@
 // The PAWS agent's rules, checked without a browser or a phone. Run:
 //   node --experimental-strip-types scripts/check-paws-agent.ts
 // 1. The URL guards: only Banner's own class registration page is ever scripted.
-// 2. The session (when to inject): once, only after that page has loaded, never on CAS or Microsoft.
+// 2. The session (when to inject): once, only after that page has loaded, and only after the view went
+//    out to sign in and came back; never on CAS or Microsoft.
 // 3. The script's source: no path to Submit, no values, cookies, storage or tokens read.
-// 4. The script run in a small fake Banner page on a virtual clock, native and bookmarklet.
+// 4. The script run in a small fake Banner page on a virtual clock, native and bookmarklet, with a
+//    header, user menu and site notices holding a name and student number its diagnostics must miss.
 // 5. pawsAgent.ts's plugin options: nothing persists, cookies cleared, one executeScript.
 import assert from 'node:assert/strict'
 import { readdirSync, readFileSync } from 'node:fs'
@@ -105,9 +107,30 @@ const tick = () => new Promise((resolve) => setImmediate(resolve))
   assert.equal(emitted.filter((m) => m.type === 'signed-in').length, 1, 'signed-in only once')
 }
 {
+  // Banner's registration page without the sign-in hop (a session that somehow survived) is never
+  // scripted, and isn't "signed in"; after going out to CAS and back, it is, once.
+  const { s, emitted, executed } = session()
+  s.opened('v1')
+  s.onUrl({ id: 'v1', url: REG_URL })
+  s.onUrl({ id: 'v1', url: CLASS_REG })
+  s.onLoaded({ id: 'v1' })
+  s.onUrl({ id: 'v1', url: CLASS_REG + '#enterCRNs' })
+  s.onLoaded({ id: 'v1' })
+  assert.equal(executed.length, 0, 'no sign-in hop, no injection')
+  assert.deepEqual(types(emitted), [], 'and no signed-in')
+  s.onUrl({ id: 'v1', url: CAS })
+  s.onLoaded({ id: 'v1' })
+  assert.equal(executed.length, 0, 'never on CAS')
+  s.onUrl({ id: 'v1', url: CLASS_REG })
+  s.onLoaded({ id: 'v1' })
+  assert.equal(executed.length, 1, 'back from CAS: injected once')
+  assert.deepEqual(types(emitted), ['signed-in', 'status'])
+}
+{
   // Messages: only after injection, only known page types, trimmed; other views ignored.
   const { s, emitted } = session()
   s.opened('v1')
+  s.onUrl({ id: 'v1', url: CAS })
   s.onUrl({ id: 'v1', url: CLASS_REG })
   s.onLoaded({ id: 'v1' })
   emitted.length = 0
@@ -132,6 +155,7 @@ const tick = () => new Promise((resolve) => setImmediate(resolve))
 {
   // The page loads before openWebView answers: injected once the id is known, not before.
   const { s, executed } = session()
+  s.onUrl({ url: CAS })
   s.onUrl({ url: CLASS_REG })
   s.onLoaded({})
   assert.equal(executed.length, 0, 'no id, no injection')
@@ -142,6 +166,7 @@ const tick = () => new Promise((resolve) => setImmediate(resolve))
   // Leaving the page mid-fill, and a failed executeScript, each report one error.
   const a = session()
   a.s.opened('v1')
+  a.s.onUrl({ id: 'v1', url: CAS })
   a.s.onUrl({ id: 'v1', url: CLASS_REG })
   a.s.onLoaded({ id: 'v1' })
   a.s.onUrl({ id: 'v1', url: CAS })
@@ -150,6 +175,7 @@ const tick = () => new Promise((resolve) => setImmediate(resolve))
   const b = session()
   b.failNext()
   b.s.opened('v1')
+  b.s.onUrl({ id: 'v1', url: MICROSOFT })
   b.s.onUrl({ id: 'v1', url: CLASS_REG })
   b.s.onLoaded({ id: 'v1' })
   await tick()
@@ -328,6 +354,9 @@ class El {
   querySelectorAll(sel: string) {
     return this.all().filter((el) => matches(el, sel))
   }
+  querySelector(sel: string) {
+    return this.querySelectorAll(sel)[0] ?? null
+  }
   closest(sel: string): El | null {
     return matches(this, sel) ? this : (this.parentElement?.closest(sel) ?? null)
   }
@@ -360,6 +389,7 @@ function matches(el: El, sel: string): boolean {
 }
 
 let clicks: string[] = []
+const STUDENT = 'Jane Doe 11223344'
 
 interface Page {
   url: string
@@ -367,6 +397,7 @@ interface Page {
   termFirst?: boolean // a term chooser shows before the tabs, and goes after 5 s
   trap?: 'label' | 'form' // Add to Summary is really a Submit, or sits in a submitRegistration form
   noTab?: boolean
+  noPanel?: boolean // no Enter CRNs tab or panel to find (Banner renamed them): the dump falls back to the main content
 }
 
 function run(page: Page, mode: 'native' | 'bookmarklet', opts: { twice?: boolean } = {}) {
@@ -388,14 +419,29 @@ function run(page: Page, mode: 'native' | 'bookmarklet', opts: { twice?: boolean
     createElement: (tag: string) => new El(tag),
     getElementById: (id: string) => html.all().find((el) => el.id === id) ?? null,
     querySelectorAll: (sel: string) => html.querySelectorAll(sel),
+    querySelector: (sel: string) => html.querySelector(sel),
   }
   const id = (s: string) => (page.ids ? s : '')
 
-  body.appendChild(new El('div', { text: 'Register for Classes. Term: 2027 Winter Term' }))
-  body.appendChild(new El('a', { id: id('search-tab'), text: 'Find Classes', attrs: { role: 'tab', href: '#search' } }))
-  const tab = body.appendChild(new El('a', { id: id('enterCRNs-tab'), text: 'Enter CRNs', attrs: { role: 'tab', href: '#enterCRNs' }, visible: !page.termFirst && !page.noTab }))
-  const chooser = body.appendChild(new El('div', { id: 's2id_txt_term', visible: !!page.termFirst }))
-  const panel = body.appendChild(new El('div', { id: 'enterCRNs', visible: false }))
+  // Banner's header, with the student's name and number in its user menu and a greeting of its own.
+  const header = body.appendChild(new El('header'))
+  const menu = header.appendChild(new El('div', { id: 'user-menu' }))
+  menu.appendChild(new El('button', { text: STUDENT }))
+  header.appendChild(new El('div', { text: `Welcome back, ${STUDENT}.`, attrs: { role: 'alert' } }))
+  // Outside the registration content too: a site-wide notice and a control.
+  const elsewhere = body.appendChild(new El('div', { id: 'elsewhere' }))
+  elsewhere.appendChild(new El('div', { text: `Your session ends soon, ${STUDENT}.`, attrs: { role: 'alert' } }))
+  elsewhere.appendChild(new El('button', { id: 'outside', text: 'Continue' }))
+  // The registration content.
+  const main = body.appendChild(new El('div', { id: 'content' }))
+  main.appendChild(new El('div', { text: 'Register for Classes. Term: 2027 Winter Term' }))
+  main.appendChild(new El('a', { id: id('search-tab'), text: 'Find Classes', attrs: { role: 'tab', href: '#search' } }))
+  const tab = main.appendChild(new El('a', { id: id('enterCRNs-tab'), text: 'Enter CRNs', attrs: { role: 'tab', href: '#enterCRNs' }, visible: !page.termFirst && !page.noTab && !page.noPanel }))
+  const chooser = main.appendChild(new El('div', { id: 's2id_txt_term', visible: !!page.termFirst }))
+  const panel = main.appendChild(new El('div', { id: page.noPanel ? '' : 'enterCRNs', visible: false }))
+  // Inside it, the student's name on a control that isn't one of Banner's, and a profile link.
+  main.appendChild(new El('button', { text: STUDENT, className: 'chip' }))
+  main.appendChild(new El('a', { text: STUDENT, className: 'user-profile' }))
   const boxes: Input[] = []
   const addBox = () => {
     const n = boxes.length + 1
@@ -414,10 +460,10 @@ function run(page: Page, mode: 'native' | 'bookmarklet', opts: { twice?: boolean
     summary = boxes.map((b) => b.typed).filter(Boolean)
     notice.visible = true
   }
-  const notice = body.appendChild(new El('div', { text: 'CRN 30463 needs its linked lab.', attrs: { role: 'alert' }, visible: false }))
-  body.appendChild(new Input({ attrs: { type: 'password', name: 'pin' } }))
-  body.appendChild(new Input({ attrs: { type: 'hidden', name: 'synchronizerTokenField' } }))
-  const save = body.appendChild(new El('button', { id: 'saveButton', text: 'Submit' }))
+  const notice = main.appendChild(new El('div', { text: 'CRN 30463 needs its linked lab.', attrs: { role: 'alert' }, visible: false }))
+  main.appendChild(new Input({ attrs: { type: 'password', name: 'pin' } }))
+  main.appendChild(new Input({ attrs: { type: 'hidden', name: 'synchronizerTokenField' } }))
+  const save = main.appendChild(new El('button', { id: 'saveButton', text: 'Submit' }))
   let submitted = false
   save.onclick = () => (submitted = true)
 
@@ -500,6 +546,7 @@ for (const ids of [true, false]) {
   assert.equal(msgs.at(-1)?.text, READY)
   for (const [i, crn] of CRNS.entries()) assert.ok(msgs.some((m) => m.text === `Typing CRN ${crn} (${i + 1} of ${CRNS.length}).`), `${label}: says CRN ${i + 1}`)
   assert.ok(msgs.some((m) => m.text === 'Banner says: CRN 30463 needs its linked lab.'), `${label}: relays Banner's notice`)
+  assert.ok(!msgs.some((m) => /Jane|11223344/.test(m.text ?? '')), `${label}: never relays the header's or the site's notices`)
   assert.ok(!msgs.some((m) => /another term/.test(m.text ?? '')), `${label}: no term warning when Banner shows the term`)
   assert.ok(!r.submitted() && !r.save.events.includes('click') && !r.save.events.includes('focus'), `${label}: Submit untouched`)
   assert.equal(valueReads, 0, `${label}: no input value read`)
@@ -523,13 +570,22 @@ for (const ids of [true, false]) {
   assert.ok(bubble?.textContent.includes(READY), 'bookmarklet bubble shows ready')
   assert.ok(r.infos.length > 0, 'bookmarklet logs progress to the console')
 }
-{
-  const r = run({ url: CLASS_REG, ids: true, termFirst: true }, 'native')
+for (const mode of ['native', 'bookmarklet'] as const) {
+  // Banner asks for the term on the registration page itself: pressing Continue would reload the page
+  // (and end the script), so Max stops and says how to start again, rather than wait.
+  const r = run({ url: CLASS_REG, ids: true, termFirst: true }, mode)
   await r.settle()
-  const msgs = r.msgs()
-  assert.ok(msgs.some((m) => m.text === 'Choose Winter 2027 and press Continue.'), 'asks the student to choose the term')
-  assert.equal(msgs.at(-1)?.type, 'ready', 'then fills once the tabs appear')
-  assert.deepEqual(r.summary(), CRNS)
+  const again =
+    mode === 'native'
+      ? "Close PAWS, tap Fill it in on PAWS again and pick Winter 2027 on Banner’s term page when it asks."
+      : 'Choose Winter 2027, press Continue, then click Fill it in for me again.'
+  const said = `Banner is asking for the term first. ${again}`
+  if (mode === 'native') assert.deepEqual(r.msgs().slice(-1), [{ type: 'error', text: said }], 'term first: one error, no dump')
+  assert.ok(r.body.children.find((c) => c.getAttribute('role') === 'status')?.textContent.includes(said), `term first (${mode}): the bubble says so`)
+  assert.ok(!r.msgs().some((m) => m.type === 'ready' || /^Choose/.test(m.text ?? '')), `term first (${mode}): never asks to press Continue mid-script`)
+  assert.deepEqual(clicks, [], `term first (${mode}): nothing clicked`)
+  assert.ok(r.boxes.every((b) => !b.typed) && r.summary().length === 0, `term first (${mode}): nothing typed`)
+  assert.ok(r.clock <= 5000, `term first (${mode}): stops at once, without waiting on the chooser`)
 }
 for (const trap of ['label', 'form'] as const) {
   const r = run({ url: CLASS_REG, ids: true, trap }, 'native')
@@ -540,7 +596,12 @@ for (const trap of ['label', 'form'] as const) {
   assert.ok(!r.add.events.includes('click') && !r.submitted(), `trap ${trap}: the trap is never pressed`)
   const rows = msgs.at(-1)!.rows!
   assert.ok(rows.length > 0 && rows.length <= 80, `trap ${trap}: dump rows`)
-  assert.ok(rows.some((row) => row.startsWith('BUTTON#saveButton')), `trap ${trap}: dump lists buttons`)
+  assert.ok(rows.some((row) => row.startsWith('BUTTON#saveButton "Submit"')), `trap ${trap}: dump lists buttons`)
+  assert.ok(rows.includes('A#enterCRNs-tab "Enter CRNs"'), `trap ${trap}: Banner's control words kept`)
+  assert.ok(rows.some((row) => row.startsWith('A#addAnotherCRN') && row.endsWith('"Add Another CRN"')), `trap ${trap}: "+ Add Another CRN" kept as its words`)
+  assert.ok(rows.includes('BUTTON.chip'), `trap ${trap}: any other text is left out, tag and class only`)
+  assert.ok(!rows.some((row) => /Jane|11223344/.test(row)), `trap ${trap}: no name or student number in the dump`)
+  assert.ok(!rows.some((row) => /user|#outside/i.test(row)), `trap ${trap}: dump stays inside the registration content, off the user menu`)
   assert.ok(!rows.some((row) => /pin|synchronizer|type=password|type=hidden/.test(row)), `trap ${trap}: dump skips password and hidden fields`)
   assert.ok(!rows.some((row) => CRNS.some((crn) => row.includes(crn))), `trap ${trap}: dump holds no typed values`)
   assert.equal(valueReads, 0, `trap ${trap}: no value read`)
@@ -554,6 +615,14 @@ for (const trap of ['label', 'form'] as const) {
   assert.match(msgs.at(-2)!.text!, /The Enter CRNs tab didn't show up in 20 seconds/)
   assert.deepEqual(clicks, [], 'no tab: nothing clicked')
   assert.ok(r.clock >= 20000 && r.clock < 21000, 'no tab: gives up after its 20 s wait, no retry')
+}
+{
+  const r = run({ url: CLASS_REG, ids: true, noPanel: true }, 'native')
+  await r.settle()
+  const rows = r.msgs().at(-1)!.rows!
+  assert.equal(r.msgs().at(-1)!.type, 'dump', 'no panel: error then dump')
+  assert.ok(rows.some((row) => row.startsWith('BUTTON#saveButton')), 'no panel: the dump reads the main content')
+  assert.ok(!rows.some((row) => /Jane|11223344|user|#outside/i.test(row)), 'no panel: and nothing outside it')
 }
 for (const url of ['https://cas.usask.ca/cas/login?TARGET=' + encodeURIComponent(CLASS_REG), 'https://banner.usask.ca.evil.com/StudentRegistrationSsb/ssb/classRegistration/classRegistration', TERM_SELECT]) {
   for (const mode of ['native', 'bookmarklet'] as const) {
@@ -589,5 +658,17 @@ for (const file of readdirSync(new URL('api/', ROOT), { recursive: true }) as st
   const src = readFileSync(new URL(`api/${file}`, ROOT), 'utf8')
   assert.doesNotMatch(src, /cas\.usask\.ca|registerPostSignIn|ssb\/classRegistration|submitRegistration|mode=registration/, `api/${file} stays off sign-in and registration`)
 }
+
+// --- 6. the in-app browser is the patched 8.20.0 (patches/, applied on postinstall) ---
+const plugin = new URL('node_modules/@capgo/capacitor-inappbrowser/', ROOT)
+assert.equal(JSON.parse(readFileSync(new URL('package.json', plugin), 'utf8')).version, '8.20.0', 'the installed plugin is the patched version')
+const pkg = JSON.parse(readFileSync(new URL('package.json', ROOT), 'utf8'))
+assert.equal(pkg.dependencies['@capgo/capacitor-inappbrowser'], '8.20.0', 'the plugin is pinned')
+assert.match(pkg.scripts.postinstall, /patch-package --error-on-fail/, 'a patch that fails to apply fails the install')
+const droid = readFileSync(new URL('android/src/main/java/ee/forgr/capacitor_inappbrowser/WebViewDialog.java', plugin), 'utf8')
+assert.ok(droid.includes('SCRIPT_ORIGIN = "https://banner.usask.ca"') && droid.includes('scriptsAllowedNow()'), 'Android: the plugin scripts banner.usask.ca only')
+assert.doesNotMatch(droid, /Collections\.singleton\("\*"\)/, 'Android: no document-start script for every origin')
+const swift = readFileSync(new URL('ios/Sources/InAppBrowserPlugin/WKWebViewController.swift', plugin), 'utf8')
+assert.ok(swift.includes('func syncUserScripts') && swift.includes('func scriptsAllowedNow'), 'iOS: the plugin scripts banner.usask.ca only')
 
 console.log('check-paws-agent: ok')

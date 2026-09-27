@@ -1,6 +1,7 @@
 // The practice run: a simulated registration page that plays out Max's real picks (a RegPlan from
 // registrationData.ts) as a script, and the hash-based practice sections the offline fallback uses.
-// Pure apart from the saved practice run in localStorage. No network, no real USask call.
+// Pure apart from the saved practice run in localStorage. No network, no real USask call. As on PAWS,
+// Max stops once the summary is filled: the student presses the simulated Submit, never Max.
 import type { SectionStatus } from './classTracker.ts'
 import type { RegMeeting, RegPick, RegPlan } from './registration.ts'
 
@@ -23,7 +24,7 @@ export interface RegRow {
   seatStatus: SectionStatus
   /** Set when Max picked this course for an elective slot ("Indigenous learning"). */
   slotLabel?: string
-  /** 'error' is a full section the practice run's submit would have been refused. */
+  /** 'error' is a full section the student's simulated Submit would have been refused. */
   status: 'pending' | 'registered' | 'error'
 }
 
@@ -109,9 +110,13 @@ export function optionsFor(code: string) {
 /**
  * One beat of the agent's script. `type-subject`/`type-number`/`search` point at `courseIndex` (into
  * the returned `courses`, whose search results the panel should be showing); `add` points at
- * `rowIndex` (into the returned `rows`, the section it just added). `note` only narrates.
+ * `rowIndex` (into the returned `rows`, the section it just added). `note` only narrates. `ready`,
+ * always last, is where Max stops: the summary is filled and Submit is the student's to press.
  */
-export type StepAction = 'type-subject' | 'type-number' | 'search' | 'add' | 'note' | 'submit'
+export type StepAction = 'type-subject' | 'type-number' | 'search' | 'add' | 'note' | 'ready'
+
+/** What Max says on the ready beat. */
+export const READY_TEXT = "Everything's in your summary. Press Submit when you're ready."
 
 export interface RegStep {
   action: StepAction
@@ -177,7 +182,8 @@ function rowFrom(pick: RegPick, status: RegRow['status']): RegRow {
  * The practice run's script from Max's real picks: for each course, type its subject and number,
  * search, say which elective slot it fills (when it fills one), and add its sections in the plan's
  * order (the lecture, then its linked lab or tutorial). Courses Max couldn't place are narrated, then
- * one submit closes it. Deterministic: the same plan gives the same script.
+ * one ready beat ends it, waiting on the student's Submit. Deterministic: the same plan gives the same
+ * script.
  */
 export function scriptFromPlan(plan: Pick<RegPlan, 'picks' | 'booked' | 'unplaced'>): PickResult {
   const rows = plan.picks.map((p) => rowFrom(p, 'pending'))
@@ -207,7 +213,7 @@ export function scriptFromPlan(plan: Pick<RegPlan, 'picks' | 'booked' | 'unplace
   })
 
   for (const u of plan.unplaced) steps.push({ action: 'note', text: u.text })
-  steps.push({ action: 'submit', text: 'Submitting' })
+  steps.push({ action: 'ready', text: READY_TEXT })
 
   return { courses, rows, booked, steps }
 }

@@ -1,0 +1,527 @@
+diff --git a/node_modules/@capgo/capacitor-inappbrowser/android/src/main/java/ee/forgr/capacitor_inappbrowser/WebViewDialog.java b/node_modules/@capgo/capacitor-inappbrowser/android/src/main/java/ee/forgr/capacitor_inappbrowser/WebViewDialog.java
+index 36ca929..a8aa930 100644
+--- a/node_modules/@capgo/capacitor-inappbrowser/android/src/main/java/ee/forgr/capacitor_inappbrowser/WebViewDialog.java
++++ b/node_modules/@capgo/capacitor-inappbrowser/android/src/main/java/ee/forgr/capacitor_inappbrowser/WebViewDialog.java
+@@ -573,6 +573,26 @@ public class WebViewDialog extends ComponentDialog implements ProxyResponseRouti
+     // the blocking evaluateJavascript injection in onPageFinished is skipped in that case.
+     private boolean preShowInjectedAtDocumentStart = false;
+ 
++    // StudyMax: scripts only on banner.usask.ca. None of the plugin's own JavaScript (its document-start
++    // scripts, or anything it evaluates by itself) runs on any other host: not on cas.usask.ca, not on
++    // Microsoft's sign-in. The app's explicit executeScript/postMessage calls are the app's to gate.
++    static final String SCRIPT_ORIGIN = "https://banner.usask.ca";
++    // True only while the main frame's committed document is on banner.usask.ca: set when a load commits
++    // (doUpdateVisitedHistory), cleared as soon as a main-frame load elsewhere is seen.
++    private volatile boolean documentScriptsAllowed = false;
++
++    static boolean scriptsAllowed(String url) {
++        if (url == null) return false;
++        Uri uri = Uri.parse(url);
++        return "https".equalsIgnoreCase(uri.getScheme()) && "banner.usask.ca".equalsIgnoreCase(uri.getHost());
++    }
++
++    // StudyMax: UI thread (WebView.getUrl). getUrl alone isn't enough: during a load it can be the URL
++    // being loaded while the old document is still the one a script would run in.
++    private boolean scriptsAllowedNow() {
++        return documentScriptsAllowed && _webView != null && scriptsAllowed(_webView.getUrl());
++    }
++
+     public PermissionRequest currentPermissionRequest;
+     public ValueCallback<Uri> mUploadMessage;
+     public ValueCallback<Uri[]> mFilePathCallback;
+@@ -2235,6 +2255,8 @@ public class WebViewDialog extends ComponentDialog implements ProxyResponseRouti
+                 Log.w("InAppBrowser", "Skipping blob download bridge dispatch because the WebView is no longer available");
+                 return;
+             }
++            // StudyMax: scripts only on banner.usask.ca.
++            if (!scriptsAllowedNow()) return;
+ 
+             webView.evaluateJavascript(script, null);
+         });
+@@ -2426,10 +2448,16 @@ public class WebViewDialog extends ComponentDialog implements ProxyResponseRouti
+         // Apply insets to fix edge-to-edge issues on Android 15+
+         applyInsets();
+ 
++        // StudyMax: these are native objects the WebView exposes to every page (Android has no per-origin
++        // addJavascriptInterface), not scripts: nothing of the plugin's runs on a page because of them.
++        // The postMessage bridge and the document-start script are banner.usask.ca only (below).
+         _webView.addJavascriptInterface(new JavaScriptInterface(), "AndroidInterface");
+         // Provide window.mobileApp at document start via native interface
+         _webView.addJavascriptInterface(new JavaScriptInterface(), "mobileApp");
+-        _webView.addJavascriptInterface(new PreShowScriptInterface(), "PreShowScriptInterface");
++        // StudyMax: only when a pre-show script is configured (StudyMax configures none).
++        if (_options.getPreShowScript() != null && !_options.getPreShowScript().isEmpty()) {
++            _webView.addJavascriptInterface(new PreShowScriptInterface(), "PreShowScriptInterface");
++        }
+         _webView.addJavascriptInterface(new PrintInterface(this._context, _webView), "PrintInterface");
+         if (_options.shouldEnableNativeProxy()) {
+             proxyAccessToken = UUID.randomUUID().toString();
+@@ -2572,7 +2600,8 @@ public class WebViewDialog extends ComponentDialog implements ProxyResponseRouti
+                     // For image-only inputs, try to detect capture attribute using JavaScript.
+                     // Mixed accept lists (e.g. "image/*,application/pdf") must skip the camera
+                     // path entirely — the camera can only produce images.
+-                    if (FileChooserAcceptSupport.isImageOnlyAcceptTypes(acceptTypes)) {
++                    // StudyMax: scripts only on banner.usask.ca; elsewhere the regular file picker opens.
++                    if (FileChooserAcceptSupport.isImageOnlyAcceptTypes(acceptTypes) && scriptsAllowedNow()) {
+                         // Check if HTML content contains capture attribute on file inputs (synchronous check)
+                         webView.evaluateJavascript(
+                             "document.querySelector('input[type=\"file\"][capture]') !== null",
+@@ -3235,6 +3264,8 @@ public class WebViewDialog extends ComponentDialog implements ProxyResponseRouti
+                 return;
+             case WEBVIEW_GO_BACK:
+                 if (_webView != null) {
++                    // StudyMax: a history load may land off banner.usask.ca; scripting resumes when it commits there.
++                    documentScriptsAllowed = false;
+                     _webView.goBack();
+                 }
+                 return;
+@@ -3749,7 +3780,10 @@ public class WebViewDialog extends ComponentDialog implements ProxyResponseRouti
+                 return;
+             }
+             requestWebViewContentRelayout();
+-            _webView.evaluateJavascript("(function(){window.dispatchEvent(new Event('resize'));})();", null);
++            // StudyMax: scripts only on banner.usask.ca. The native relayout above still applies everywhere.
++            if (scriptsAllowedNow()) {
++                _webView.evaluateJavascript("(function(){window.dispatchEvent(new Event('resize'));})();", null);
++            }
+         });
+     }
+ 
+@@ -4155,7 +4189,8 @@ public class WebViewDialog extends ComponentDialog implements ProxyResponseRouti
+             right
+         );
+         _webView.post(() -> {
+-            if (_webView == null) {
++            // StudyMax: scripts only on banner.usask.ca; the cache is dropped so banner gets them later.
++            if (_webView == null || !scriptsAllowedNow()) {
+                 resetInjectedSafeAreaCssVariables();
+                 return;
+             }
+@@ -4244,7 +4279,8 @@ public class WebViewDialog extends ComponentDialog implements ProxyResponseRouti
+         }
+         String script = "window.__capgoInAppBrowserResolveScreenshot(" + jsonPayload + ");";
+         _webView.post(() -> {
+-            if (_webView != null) {
++            // StudyMax: scripts only on banner.usask.ca.
++            if (_webView != null && scriptsAllowedNow()) {
+                 _webView.evaluateJavascript(script, null);
+             }
+         });
+@@ -4263,7 +4299,8 @@ public class WebViewDialog extends ComponentDialog implements ProxyResponseRouti
+         }
+         String script = "window.__capgoInAppBrowserRejectScreenshot(" + jsonPayload + ");";
+         _webView.post(() -> {
+-            if (_webView != null) {
++            // StudyMax: scripts only on banner.usask.ca.
++            if (_webView != null && scriptsAllowedNow()) {
+                 _webView.evaluateJavascript(script, null);
+             }
+         });
+@@ -4359,7 +4396,8 @@ public class WebViewDialog extends ComponentDialog implements ProxyResponseRouti
+             String script = createMobileAppBridgeScript();
+ 
+             _webView.post(() -> {
+-                if (_webView != null) {
++                // StudyMax: scripts only on banner.usask.ca, checked when it runs (the URL may have moved on).
++                if (_webView != null && scriptsAllowedNow()) {
+                     try {
+                         _webView.evaluateJavascript(script, null);
+                         injectBlankTargetInCurrentWebViewScript();
+@@ -4385,13 +4423,14 @@ public class WebViewDialog extends ComponentDialog implements ProxyResponseRouti
+ 
+         try {
+             injectDocumentStartPostMessageBridge();
+-            WebViewCompat.addDocumentStartJavaScript(_webView, createMobileAppBridgeScript(), Collections.singleton("*"));
++            // StudyMax: scripts only on banner.usask.ca. WebView injects these only into frames of that origin.
++            WebViewCompat.addDocumentStartJavaScript(_webView, createMobileAppBridgeScript(), Collections.singleton(SCRIPT_ORIGIN));
+             // Honor preShowScriptInjectionTime: "documentStart" (matches iOS WKUserScript
+             // .atDocumentStart). Runs before page scripts and persists across navigations,
+             // so the blocking semaphore injection in onPageFinished is not needed.
+             String preShowScript = _options.getPreShowScript();
+             if (preShowScript != null && !preShowScript.isEmpty() && "documentStart".equals(_options.getPreShowScriptInjectionTime())) {
+-                WebViewCompat.addDocumentStartJavaScript(_webView, preShowScript, Collections.singleton("*"));
++                WebViewCompat.addDocumentStartJavaScript(_webView, preShowScript, Collections.singleton(SCRIPT_ORIGIN));
+                 preShowInjectedAtDocumentStart = true;
+             }
+         } catch (Exception e) {
+@@ -4409,10 +4448,11 @@ public class WebViewDialog extends ComponentDialog implements ProxyResponseRouti
+         }
+ 
+         try {
++            // StudyMax: the postMessage bridge object exists only in banner.usask.ca frames.
+             WebViewCompat.addWebMessageListener(
+                 _webView,
+                 MobileAppBridgeScript.POST_MESSAGE_BRIDGE_NAME,
+-                Collections.singleton("*"),
++                Collections.singleton(SCRIPT_ORIGIN),
+                 (view, message, sourceOrigin, isMainFrame, replyProxy) -> {
+                     if (message == null || message.getType() != WebMessageCompat.TYPE_STRING) {
+                         Log.e("InAppBrowser", "Received unsupported postMessage payload from WebView");
+@@ -4527,7 +4567,8 @@ public class WebViewDialog extends ComponentDialog implements ProxyResponseRouti
+                 """;
+ 
+             _webView.post(() -> {
+-                if (_webView != null) {
++                // StudyMax: scripts only on banner.usask.ca.
++                if (_webView != null && scriptsAllowedNow()) {
+                     try {
+                         _webView.evaluateJavascript(googlePayScript, (result) -> {
+                             Log.d("InAppBrowser", "Google Pay polyfills injected successfully");
+@@ -4572,7 +4613,8 @@ public class WebViewDialog extends ComponentDialog implements ProxyResponseRouti
+             new Runnable() {
+                 @Override
+                 public void run() {
+-                    if (_webView != null) {
++                    // StudyMax: scripts only on banner.usask.ca; elsewhere it's skipped like a missing WebView.
++                    if (_webView != null && scriptsAllowedNow()) {
+                         _webView.evaluateJavascript(script, null);
+                     } else {
+                         // If WebView is null, release semaphore to prevent deadlock
+@@ -5597,6 +5639,8 @@ public class WebViewDialog extends ComponentDialog implements ProxyResponseRouti
+                     @Override
+                     public void onClick(View view) {
+                         if (_webView != null && _webView.canGoBack()) {
++                            // StudyMax: a history load may land off banner.usask.ca; scripting resumes when it commits there.
++                            documentScriptsAllowed = false;
+                             _webView.goBack();
+                         }
+                     }
+@@ -5618,6 +5662,8 @@ public class WebViewDialog extends ComponentDialog implements ProxyResponseRouti
+                     @Override
+                     public void onClick(View view) {
+                         if (_webView != null && _webView.canGoForward()) {
++                            // StudyMax: a history load may land off banner.usask.ca; scripting resumes when it commits there.
++                            documentScriptsAllowed = false;
+                             _webView.goForward();
+                         }
+                     }
+@@ -5780,7 +5826,8 @@ public class WebViewDialog extends ComponentDialog implements ProxyResponseRouti
+         );
+ 
+         _webView.post(() -> {
+-            if (_webView != null) {
++            // StudyMax: scripts only on banner.usask.ca.
++            if (_webView != null && scriptsAllowedNow()) {
+                 try {
+                     _webView.evaluateJavascript(script, null);
+                 } catch (Exception e) {
+@@ -5969,6 +6016,9 @@ public class WebViewDialog extends ComponentDialog implements ProxyResponseRouti
+                     Context context = view.getContext();
+                     String url = request.getUrl().toString();
+                     Log.d("InAppBrowser", "shouldOverrideUrlLoading: " + url);
++                    // StudyMax: a main-frame load elsewhere (redirects included) ends the plugin's scripting
++                    // before its document commits.
++                    if (request.isForMainFrame() && !scriptsAllowed(url)) documentScriptsAllowed = false;
+ 
+                     if (HtmlDataUrlSupport.isDataUrl(url)) {
+                         return false;
+@@ -6185,6 +6235,8 @@ public class WebViewDialog extends ComponentDialog implements ProxyResponseRouti
+                     if (view == null || _webView == null) {
+                         return null;
+                     }
++                    // StudyMax: same for a main-frame request elsewhere, POSTs included (a background thread).
++                    if (request.isForMainFrame() && !scriptsAllowed(request.getUrl().toString())) documentScriptsAllowed = false;
+ 
+                     if (shouldUseNativeProxy()) {
+                         String requestUrl = request.getUrl().toString();
+@@ -6527,6 +6579,8 @@ public class WebViewDialog extends ComponentDialog implements ProxyResponseRouti
+                 @Override
+                 public void onPageStarted(WebView view, String url, Bitmap favicon) {
+                     super.onPageStarted(view, url, favicon);
++                    // StudyMax: scripts only on banner.usask.ca.
++                    if (!scriptsAllowed(url)) documentScriptsAllowed = false;
+                     if (
+                         (isFullscreen() && !java.util.Objects.equals(fullscreenOrigin, origin(url))) ||
+                         (_options.isFullscreen() && !java.util.Objects.equals(origin(_options.getUrl()), origin(url)))
+@@ -6537,7 +6591,12 @@ public class WebViewDialog extends ComponentDialog implements ProxyResponseRouti
+                     if (_options.getCallbacks() != null) {
+                         _options.getCallbacks().pageLoadStart();
+                     }
+-                    if (ProxyRequestSupport.shouldInjectBridge(_options) && proxyBridgeScript != null && proxyAccessToken != null) {
++                    if (
++                        ProxyRequestSupport.shouldInjectBridge(_options) &&
++                        proxyBridgeScript != null &&
++                        proxyAccessToken != null &&
++                        scriptsAllowedNow()
++                    ) {
+                         String preparedProxyBridgeScript = prepareProxyBridgeScript();
+                         if (preparedProxyBridgeScript != null) {
+                             view.evaluateJavascript(preparedProxyBridgeScript, null);
+@@ -6554,6 +6613,8 @@ public class WebViewDialog extends ComponentDialog implements ProxyResponseRouti
+                 }
+ 
+                 public void doUpdateVisitedHistory(WebView view, String url, boolean isReload) {
++                    // StudyMax: the main frame committed this URL; the plugin may script it only on banner.usask.ca.
++                    documentScriptsAllowed = scriptsAllowed(url);
+                     if (view == null || _webView == null) {
+                         return;
+                     }
+@@ -6686,6 +6747,8 @@ public class WebViewDialog extends ComponentDialog implements ProxyResponseRouti
+      */
+     public boolean goBack() {
+         if (_webView != null && _webView.canGoBack()) {
++            // StudyMax: a history load may land off banner.usask.ca; scripting resumes when it commits there.
++            documentScriptsAllowed = false;
+             _webView.goBack();
+             return true;
+         }
+@@ -6820,7 +6883,8 @@ public class WebViewDialog extends ComponentDialog implements ProxyResponseRouti
+                           }
+                         })();
+                         """;
+-                    _webView.evaluateJavascript(clearInputsScript, null);
++                    // StudyMax: scripts only on banner.usask.ca (the web view is destroyed next either way).
++                    if (scriptsAllowedNow()) _webView.evaluateJavascript(clearInputsScript, null);
+                 } catch (Exception e) {
+                     Log.w("InAppBrowser", "Could not clear file inputs (WebView may be in invalid state): " + e.getMessage());
+                 }
+@@ -6832,7 +6896,8 @@ public class WebViewDialog extends ComponentDialog implements ProxyResponseRouti
+                     _webView.clearSslPreferences();
+                 }
+ 
+-                forceStopMediaCapture(_webView);
++                // StudyMax: scripts only on banner.usask.ca.
++                if (scriptsAllowedNow()) forceStopMediaCapture(_webView);
+ 
+                 // Remove JavaScript interfaces before destroying
+                 _webView.removeJavascriptInterface("AndroidInterface");
+@@ -7771,6 +7836,10 @@ public class WebViewDialog extends ComponentDialog implements ProxyResponseRouti
+         if (datePickerInjected) {
+             return;
+         }
++        // StudyMax: scripts only on banner.usask.ca (tried again on a later page).
++        if (!scriptsAllowedNow()) {
++            return;
++        }
+ 
+         datePickerInjected = true;
+ 
+@@ -7802,7 +7871,8 @@ public class WebViewDialog extends ComponentDialog implements ProxyResponseRouti
+ 
+         // Execute the script in the WebView
+         _webView.post(() -> {
+-            if (_webView != null) {
++            // StudyMax: scripts only on banner.usask.ca.
++            if (_webView != null && scriptsAllowedNow()) {
+                 try {
+                     _webView.evaluateJavascript(script, null);
+                     Log.d("InAppBrowser", "Applied minimal date picker fixes");
+diff --git a/node_modules/@capgo/capacitor-inappbrowser/ios/Sources/InAppBrowserPlugin/WKWebViewController+ReloadGesture.swift b/node_modules/@capgo/capacitor-inappbrowser/ios/Sources/InAppBrowserPlugin/WKWebViewController+ReloadGesture.swift
+index ed9f86b..7d7beb4 100644
+--- a/node_modules/@capgo/capacitor-inappbrowser/ios/Sources/InAppBrowserPlugin/WKWebViewController+ReloadGesture.swift
++++ b/node_modules/@capgo/capacitor-inappbrowser/ios/Sources/InAppBrowserPlugin/WKWebViewController+ReloadGesture.swift
+@@ -158,7 +158,10 @@ extension WKWebViewController {
+             self.hardResetReloadGestureScroll(on: scrollView)
+             self.configureReloadGesture(for: activeWebView)
+             self.hardResetReloadGestureScroll(on: activeWebView.scrollView)
+-            activeWebView.evaluateJavaScript("window.scrollTo(0, 0);", completionHandler: nil)
++            // StudyMax: scripts only on banner.usask.ca.
++            if self.scriptsAllowedNow() {
++                activeWebView.evaluateJavaScript("window.scrollTo(0, 0);", completionHandler: nil)
++            }
+ 
+             // One more pass after layout / JS scroll restoration.
+             DispatchQueue.main.async { [weak self] in
+diff --git a/node_modules/@capgo/capacitor-inappbrowser/ios/Sources/InAppBrowserPlugin/WKWebViewController.swift b/node_modules/@capgo/capacitor-inappbrowser/ios/Sources/InAppBrowserPlugin/WKWebViewController.swift
+index 68ff4d2..5504533 100644
+--- a/node_modules/@capgo/capacitor-inappbrowser/ios/Sources/InAppBrowserPlugin/WKWebViewController.swift
++++ b/node_modules/@capgo/capacitor-inappbrowser/ios/Sources/InAppBrowserPlugin/WKWebViewController.swift
+@@ -1108,6 +1108,8 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
+         """
+ 
+         DispatchQueue.main.async {
++            // StudyMax: scripts only on banner.usask.ca.
++            guard self.scriptsAllowedNow() else { return }
+             webView.evaluateJavaScript(script) { _, error in
+                 if let error {
+                     self.emitDownloadFailed(sourceURL: blobUrl, error: "Failed to capture blob download: \(error.localizedDescription)")
+@@ -1384,6 +1386,45 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
+ 
+     var textZoom: Int?
+ 
++    // StudyMax: scripts only on banner.usask.ca. None of the plugin's own JavaScript (its document-start
++    // user scripts, or anything it evaluates by itself) runs on any other host: not on cas.usask.ca, not on
++    // Microsoft's sign-in. The app's explicit executeScript/postMessage calls are the app's to gate.
++    static let scriptHost = "banner.usask.ca"
++
++    static func scriptsAllowed(_ url: URL?) -> Bool {
++        guard let url, url.scheme?.lowercased() == "https" else { return false }
++        return url.host?.lowercased() == scriptHost
++    }
++
++    // StudyMax: the plugin's user scripts, kept aside (main frame only) and put in the content controller
++    // only while the main frame is headed to banner.usask.ca (syncUserScripts(for:)).
++    var pluginUserScripts: [WKUserScript] = []
++    var userScriptsInstalled = false
++    // StudyMax: true only while the main frame's committed document is on banner.usask.ca.
++    var committedDocumentAllowsScripts = false
++
++    // StudyMax: main thread. webView.url alone isn't enough: during a load it's the URL being loaded
++    // while the old document is still the one a script would run in.
++    func scriptsAllowedNow() -> Bool {
++        return committedDocumentAllowsScripts && WKWebViewController.scriptsAllowed(webView?.url)
++    }
++
++    // StudyMax: WebKit has no per-host user scripts, so the main frame's navigation decisions install the
++    // plugin's scripts before a banner.usask.ca document commits and remove them before any other does.
++    func syncUserScripts(_ webView: WKWebView, for url: URL?) {
++        let controller = webView.configuration.userContentController
++        if WKWebViewController.scriptsAllowed(url) {
++            if !userScriptsInstalled {
++                pluginUserScripts.forEach { controller.addUserScript($0) }
++                userScriptsInstalled = true
++            }
++        } else {
++            controller.removeAllUserScripts()
++            userScriptsInstalled = false
++            committedDocumentAllowsScripts = false
++        }
++    }
++
+     var capableWebView: WKWebView? {
+         return webView
+     }
+@@ -1644,7 +1685,10 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
+         webView.layoutIfNeeded()
+         webView.scrollView.setNeedsLayout()
+         webView.scrollView.layoutIfNeeded()
+-        webView.evaluateJavaScript("window.dispatchEvent(new Event('resize'));", completionHandler: nil)
++        // StudyMax: scripts only on banner.usask.ca (the keyboard on a sign-in page lands here too).
++        if scriptsAllowedNow() {
++            webView.evaluateJavaScript("window.dispatchEvent(new Event('resize'));", completionHandler: nil)
++        }
+     }
+ 
+     private func configureWebViewScrollViewSafeArea(_ webView: WKWebView) {
+@@ -1699,6 +1743,10 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
+             left: Int(leftInset.rounded()),
+             right: Int(rightInset.rounded())
+         )
++        // StudyMax: scripts only on banner.usask.ca. The native layout above still applies everywhere.
++        guard scriptsAllowedNow() else {
++            return
++        }
+         if lastInjectedSafeAreaInsets == roundedInsets {
+             return
+         }
+@@ -1728,6 +1776,8 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
+         }
+         let script = "window.__capgoInAppBrowserResolveScreenshot(\(payload));"
+         DispatchQueue.main.async {
++            // StudyMax: scripts only on banner.usask.ca.
++            guard self.scriptsAllowedNow() else { return }
+             self.webView?.evaluateJavaScript(script, completionHandler: nil)
+         }
+     }
+@@ -1738,6 +1788,8 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
+         }
+         let script = "window.__capgoInAppBrowserRejectScreenshot(\(payload));"
+         DispatchQueue.main.async {
++            // StudyMax: scripts only on banner.usask.ca.
++            guard self.scriptsAllowedNow() else { return }
+             self.webView?.evaluateJavaScript(script, completionHandler: nil)
+         }
+     }
+@@ -2036,6 +2088,8 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
+     func injectJavaScriptInterface() {
+         let script = mobileAppScriptSource()
+         DispatchQueue.main.async {
++            // StudyMax: scripts only on banner.usask.ca, checked when it runs (the URL may have moved on).
++            guard self.scriptsAllowedNow() else { return }
+             self.webView?.evaluateJavaScript(script) { result, error in
+                 if let error = error {
+                     print("JavaScript evaluation error: \(error)")
+@@ -2202,6 +2256,16 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
+             userContentController.addUserScript(googlePayScript)
+         }
+ 
++        // StudyMax: scripts only on banner.usask.ca. Every user script above is kept aside, main frame
++        // only (so no frame inside a page gets one), and the web view starts with none: the main frame's
++        // navigation decisions add them for a banner.usask.ca document (syncUserScripts(for:)).
++        pluginUserScripts = userContentController.userScripts.map {
++            WKUserScript(source: $0.source, injectionTime: $0.injectionTime, forMainFrameOnly: true)
++        }
++        userContentController.removeAllUserScripts()
++        userScriptsInstalled = false
++        committedDocumentAllowsScripts = false
++
+         let webView = WKWebView(frame: .zero, configuration: webConfiguration)
+ 
+         //        if webView.responds(to: Selector(("setInspectable:"))) {
+@@ -2596,9 +2660,14 @@ public extension WKWebViewController {
+         let userScript = WKUserScript(
+             source: preShowScript,
+             injectionTime: .atDocumentStart,
+-            forMainFrameOnly: false
++            forMainFrameOnly: true
+         )
+-        webView.configuration.userContentController.addUserScript(userScript)
++        // StudyMax: scripts only on banner.usask.ca. Kept with the plugin's scripts, in the content
++        // controller only while they are.
++        pluginUserScripts.append(userScript)
++        if userScriptsInstalled {
++            webView.configuration.userContentController.addUserScript(userScript)
++        }
+         print("[InAppBrowser] Injected preShowScript at document start")
+ 
+         // Reload the webview so the script executes at document start
+@@ -3552,10 +3621,17 @@ extension WKWebViewController: WKNavigationDelegate {
+         }
+         emit("browserPageLoadStart")
+     }
++    // StudyMax: a new main-frame document is live. The plugin may script it only if it's on
++    // banner.usask.ca and its scripts were in place for it.
++    public func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
++        committedDocumentAllowsScripts = userScriptsInstalled && WKWebViewController.scriptsAllowed(webView.url)
++    }
+     public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
++        // StudyMax: scripts only on banner.usask.ca (the pre-show script and text zoom below).
++        let scriptsAllowedHere = scriptsAllowedNow()
+         if !didpageInit && self.capBrowserPlugin?.isPresentAfterPageLoad == true {
+             // Only inject preShowScript if it wasn't already injected at document start
+-            let shouldInjectScript = self.preShowScript.map { !$0.isEmpty } ?? false &&
++            let shouldInjectScript = scriptsAllowedHere && (self.preShowScript.map { !$0.isEmpty } ?? false) &&
+                 self.preShowScriptInjectionTime != "documentStart"
+ 
+             if shouldInjectScript {
+@@ -3575,7 +3651,8 @@ extension WKWebViewController: WKNavigationDelegate {
+             } else if !self.opensHidden {
+                 self.capBrowserPlugin?.presentView(webViewId: instanceId)
+             }
+-        } else if self.preShowScript != nil &&
++        } else if scriptsAllowedHere &&
++                    self.preShowScript != nil &&
+                     !self.preShowScript!.isEmpty &&
+                     self.capBrowserPlugin?.isPresentAfterPageLoad == true &&
+                     self.preShowScriptInjectionTime != "documentStart" {
+@@ -3586,7 +3663,7 @@ extension WKWebViewController: WKNavigationDelegate {
+         }
+ 
+         // Apply text zoom if set
+-        if let zoom = self.textZoom {
++        if let zoom = self.textZoom, scriptsAllowedHere {
+             applyTextZoom(zoom)
+         }
+ 
+@@ -3655,6 +3732,11 @@ extension WKWebViewController: WKNavigationDelegate {
+     }
+ 
+     public func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
++        // StudyMax: scripts only on banner.usask.ca. Decided before any main-frame load goes ahead
++        // (redirects included), so the plugin's scripts are gone before cas.usask.ca or a sign-in page commits.
++        if navigationAction.targetFrame?.isMainFrame == true {
++            syncUserScripts(webView, for: navigationAction.request.url)
++        }
+         if handleDownloads && navigationAction.shouldPerformDownload {
+             decisionHandler(.download)
+             return
+@@ -3749,6 +3831,9 @@ extension WKWebViewController: WKNavigationDelegate {
+     public func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse, decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
+         if navigationResponse.isForMainFrame {
+             exitFullscreenIfOriginChanges(to: navigationResponse.response.url)
++            // StudyMax: the response is the document that commits next, after every redirect: the last word
++            // on whether the plugin's scripts are in place for it.
++            syncUserScripts(webView, for: navigationResponse.response.url)
+         }
+         if shouldInterceptDownload(for: navigationResponse) {
+             decisionHandler(.download)

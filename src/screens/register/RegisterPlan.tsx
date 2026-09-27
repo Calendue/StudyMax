@@ -57,7 +57,8 @@ function byCourse(picks: RegPick[]): CoursePicks[] {
   return courses
 }
 
-function SectionRow({ pick, index }: { pick: RegPick; index: number }) {
+/** One picked section. A preview's CRNs are another term's, so they aren't shown. */
+function SectionRow({ pick, index, crn }: { pick: RegPick; index: number; crn: boolean }) {
   return (
     <Row
       index={index}
@@ -69,9 +70,11 @@ function SectionRow({ pick, index }: { pick: RegPick; index: number }) {
       }
       subtitle={meetingsText(pick.meetings)}
       trailing={
-        <span className="reg-crn">
-          CRN <span className="tnum">{pick.crn}</span>
-        </span>
+        crn ? (
+          <span className="reg-crn">
+            CRN <span className="tnum">{pick.crn}</span>
+          </span>
+        ) : undefined
       }
     />
   )
@@ -147,10 +150,15 @@ type Agent = {
   error: string | null
   /** The page's diagnostics (no credentials in them by construction), for Copy diagnostics. */
   rows: string[]
-  closed: boolean
+  /** Max reported the summary filled: from here, Submit was the student's to press. */
+  ready: boolean
 }
 
-const IDLE: Agent = { open: false, line: null, error: null, rows: [], closed: false }
+const IDLE: Agent = { open: false, line: null, error: null, rows: [], ready: false }
+
+// What Max says once PAWS is closed. He can't see whether the student pressed Submit, so he says so.
+const CLOSED_AFTER_READY = 'PAWS is closed. If you pressed Submit there, PAWS has your schedule; if you didn’t, nothing was registered.'
+const CLOSED = 'PAWS is closed. Nothing was submitted by Max.'
 
 /**
  * The PAWS session in the app: opens once per tap, never reopens by itself, and turns what the web
@@ -180,13 +188,13 @@ function usePawsSession(plan: RegPlan | null) {
       const rows = msg.rows ?? a.rows
       switch (msg.type) {
         case 'closed':
-          return { ...a, rows, open: false, closed: true }
+          return { ...a, rows, open: false, line: a.ready ? CLOSED_AFTER_READY : CLOSED }
         case 'dump':
           return { ...a, rows }
         case 'signed-in':
-          return { ...a, rows, error: null, line: 'You’re signed in. Max takes over on Register for Classes.' }
+          return { ...a, rows, error: null, line: 'You’re signed in. Max fills in your CRNs on Register for Classes.' }
         case 'ready':
-          return { ...a, rows, error: null, line: 'Everything’s in your summary. Review it and press Submit when you’re ready.' }
+          return { ...a, rows, error: null, ready: true, line: 'Everything’s in your summary. Review it and press Submit when you’re ready.' }
         case 'error':
           return { ...a, rows, error: msg.text ?? 'something on the page didn’t answer' }
         default:
@@ -236,7 +244,6 @@ function AgentLine({ agent, crns }: { agent: Agent; crns: string[] }) {
   return (
     <MaxSays busy={agent.open}>
       <p>{agent.line}</p>
-      {agent.closed && <p className="reg-max__note">PAWS is closed. If you didn&rsquo;t press Submit there, nothing was registered.</p>}
     </MaxSays>
   )
 }
@@ -316,6 +323,8 @@ function SourceLine({ plan, loading, failed, termLabel, retry }: { plan: RegPlan
       </MaxSays>
     )
   }
+  // A preview reads the same season's timetable a year earlier, since this term's isn't out yet.
+  const which = plan.preview ? `${plan.preview.termLabel}’s` : 'this term’s'
   if (plan.source === 'cached') {
     return (
       <MaxSays>
@@ -328,7 +337,7 @@ function SourceLine({ plan, loading, failed, termLabel, retry }: { plan: RegPlan
   }
   return (
     <MaxSays>
-      <p>Max checked this term&rsquo;s sections live from USask&rsquo;s class search.</p>
+      <p>Max checked {which} sections live from USask&rsquo;s class search.</p>
     </MaxSays>
   )
 }
@@ -359,8 +368,10 @@ export function RegisterPlan({ request, loaded, onPractice }: { request: RegRequ
   const termLabel = request.termLabel
   const courses = plan ? byCourse(plan.picks) : []
   const credits = plan ? plan.picks.filter((p) => p.main).reduce((sum, p) => sum + p.credits, 0) : 0
-  // Practice CRNs are placeholders: they never go near PAWS.
-  const real = !!plan && plan.source !== 'offline' && plan.crns.length > 0
+  // Practice CRNs are placeholders, and a preview's are another term's: neither goes near PAWS.
+  const real = !!plan && plan.source !== 'offline' && !plan.preview && plan.crns.length > 0
+  // A term Banner lists as view-only isn't taking registrations yet: the list waits, the PAWS buttons too.
+  const registrable = real && plan.termOpen !== false
   const canPractise = !!plan && plan.picks.length > 0
 
   return (
@@ -385,13 +396,22 @@ export function RegisterPlan({ request, loaded, onPractice }: { request: RegRequ
 
         {plan && (
           <>
-            {plan.termOpen === false && (
+            {plan.preview ? (
               <Appear index={0} className="notice">
                 <p>
-                  <strong>PAWS isn&rsquo;t taking registrations for {termLabel} yet.</strong> USask&rsquo;s class search lists it as
-                  view-only. Max&rsquo;s list is ready for when your registration opens.
+                  <strong>{termLabel}&rsquo;s timetable isn&rsquo;t out yet.</strong> Max planned it on{' '}
+                  {plan.preview.termLabel}&rsquo;s timetable, so sections, times and CRNs will change.
                 </p>
               </Appear>
+            ) : (
+              plan.termOpen === false && (
+                <Appear index={0} className="notice">
+                  <p>
+                    <strong>PAWS isn&rsquo;t taking registrations for {termLabel} yet.</strong> USask&rsquo;s class search lists it as
+                    view-only. Max&rsquo;s list is ready for when your registration opens.
+                  </p>
+                </Appear>
+              )
             )}
 
             {courses.length > 0 && (
@@ -413,7 +433,7 @@ export function RegisterPlan({ request, loaded, onPractice }: { request: RegRequ
                       )}
                     </div>
                     {c.picks.map((p, i) => (
-                      <SectionRow key={p.crn} pick={p} index={ci + i} />
+                      <SectionRow key={p.crn} pick={p} index={ci + i} crn={!plan.preview} />
                     ))}
                   </Appear>
                 ))}
@@ -471,8 +491,8 @@ export function RegisterPlan({ request, loaded, onPractice }: { request: RegRequ
               </>
             )}
 
-            {!canFillOnPaws && real && <CrnSteps plan={plan} />}
-            {!canFillOnPaws && real && wide && <Bookmarklet crns={plan.crns} termLabel={termLabel} />}
+            {!canFillOnPaws && registrable && <CrnSteps plan={plan} />}
+            {!canFillOnPaws && registrable && wide && <Bookmarklet crns={plan.crns} termLabel={termLabel} />}
 
             <p className="footnote">
               {canFillOnPaws ? PAWS_COPY.pitch : 'Max plans your registration; you sign in and press Submit on PAWS.'} {PAWS_COPY.tuition}
@@ -490,11 +510,11 @@ export function RegisterPlan({ request, loaded, onPractice }: { request: RegRequ
         ) : (
           <>
             {canFillOnPaws ? (
-              <Button block disabled={!real || paws.agent.open} onClick={() => setConfirming(true)}>
+              <Button block disabled={!registrable || paws.agent.open} onClick={() => setConfirming(true)}>
                 {paws.agent.open ? 'PAWS is open' : 'Fill it in on PAWS'}
               </Button>
             ) : (
-              <Button block icon="external" disabled={!real} onClick={() => window.open(REG_URL, '_blank', 'noopener')}>
+              <Button block icon="external" disabled={!registrable} onClick={() => window.open(REG_URL, '_blank', 'noopener')}>
                 Open PAWS registration
               </Button>
             )}
