@@ -3,7 +3,7 @@
 // else — or whenever it drops — polling the snapshot, which is the source of truth either way.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../platform.ts'
-import type { LiveEvent, LiveFrame, LiveInputs, LiveOption, LiveScenario, LiveSnapshot } from '../lib/max/live.ts'
+import type { AppAction, LiveEvent, LiveFrame, LiveInputs, LiveOption, LiveScenario, LiveSnapshot } from '../lib/max/live.ts'
 import type { PlannedTerm } from '../lib/plan.ts'
 import { openLiveChannel, type LiveChannel } from './realtime.ts'
 
@@ -36,7 +36,7 @@ export interface MaxLive {
   busy: boolean
   error: string | null
   start(callId: string, token: string): void
-  /** Save the open proposal from the app (the only way to save a specialization switch). */
+  /** Save the open proposal from the app (a spoken yes to Max saves it too). */
   keep(): Promise<void>
   leave(): Promise<void>
   stop(): void
@@ -45,6 +45,8 @@ export interface MaxLive {
 interface Options {
   /** The app sets its own state to a saved proposal's inputs (App.tsx adoptMaxPlan). */
   onCommitted: (inputs: LiveInputs, terms: PlannedTerm[]) => void
+  /** Max doing something in the app outside the plan (open a tab, look up a class). */
+  onAction?: (action: AppAction) => void
 }
 
 interface Saved {
@@ -72,7 +74,7 @@ function writeSaved(s: Saved | null) {
   }
 }
 
-export function useMaxLive({ onCommitted }: Options): MaxLive {
+export function useMaxLive({ onCommitted, onAction }: Options): MaxLive {
   const [saved, setSaved] = useState<Saved | null>(readSaved)
   const [transport, setTransport] = useState<Transport | null>(null)
   const [callStatus, setCallStatus] = useState<string | null>(null)
@@ -94,6 +96,8 @@ export function useMaxLive({ onCommitted }: Options): MaxLive {
   const shownKey = useRef<string | null>(null)
   const committedRef = useRef(onCommitted)
   committedRef.current = onCommitted
+  const actionRef = useRef(onAction)
+  actionRef.current = onAction
 
   const clear = useCallback(() => {
     queue.current = []
@@ -166,6 +170,10 @@ export function useMaxLive({ onCommitted }: Options): MaxLive {
           setScenario((s) => (s && s.scenarioId === event.scenarioId ? { ...s, status: 'discarded' } : s))
           queue.current = []
           setFrame(null)
+          break
+        case 'app.action':
+          setWorking(false)
+          actionRef.current?.(event.action)
           break
       }
     },

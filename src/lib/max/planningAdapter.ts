@@ -73,6 +73,10 @@ export interface AdapterInput {
   /** An academic year left empty for an internship (PlanOptions.away): the app's own on a live call,
    * else StudentProfile.internshipAcademicYear, which the app resolved and saved. */
   away?: number | null
+  /** Courses the student put in a term themselves, by term label (PlanOptions.pinned). */
+  pinned?: Record<string, string[]>
+  /** Courses the student asked for in no particular term (PlanOptions.added). */
+  added?: string[]
 }
 
 /** Where a plan starts when nobody picked: the next Fall for someone with nothing taken or under way, else the upcoming term (the app's rule). */
@@ -176,6 +180,8 @@ export function regenerate(input: AdapterInput): { terms: PlannedTerm[] } {
       degree,
       booked: bookedNow(input),
       away: input.away ?? null,
+      pinned: input.pinned,
+      added: input.added,
     },
   )
   return { terms }

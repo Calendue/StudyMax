@@ -1,7 +1,7 @@
 // End-to-end of Max live on the Skill Tree, in-process: the real route handlers (call, webhook, tool,
 // live) against the real shared DB, as the guest demo student — no HTTP server, no phone, no Vapi.
 // Places a dry-run call with the app's plan inputs, then plays a whole call: overview, pace options,
-// a proposal, a change stacked on it, a voice save, a specialization switch that voice may NOT save,
+// a proposal, a change stacked on it, a voice save, a specialization switch a hedge doesn't save,
 // a stale and a foreign tap refused, the real Keep tap, and the end. Supabase publishing is a no-op
 // without SUPABASE_* env; everything is checked through the snapshot the app reads.
 //
@@ -104,15 +104,15 @@ const named = await tool('update_name', { name: 'Jordan' })
 assert.equal(named.ok, true); assert.equal(named.name, 'Jordan')
 const demoUser = await db().userInfo.findUnique({ where: { authUid: 'baymax-demo-student' } })
 assert.equal(demoUser.firstName, 'Demo', "a guest's name is never saved where the next guest would be greeted by it")
-// 7. Specialization switch: voice save refused, app Keep works
+// 7. Specialization switch: saves on a clear spoken yes like any change (a hedge re-asks), or the app's Keep
 const specs = await tool('get_plan_options', { about: 'specialization' })
 console.log('spec options:', specs.options.map((o: any) => `${o.label}→${o.graduation}(${o.vsNow})`).join(' | '), '| rec', specs.recommended?.label ?? 'none')
 const pick = specs.recommended ?? specs.options[0]
 const r3 = await tool('run_scenario', { ops: pick.ops })
 console.log('switch:', r3.headline, '| requiresAppConfirmation', r3.requiresAppConfirmation)
-assert.equal(r3.requiresAppConfirmation, true)
-const voiceTry = await tool('commit_scenario', { scenarioId: r3.scenarioId, presentedHash: r3.presentedHash, confirmationUtterance: 'yes' })
-assert.equal(voiceTry.code, 'REQUIRES_APP_CONFIRMATION')
+assert.equal(r3.requiresAppConfirmation, false)
+const voiceTry = await tool('commit_scenario', { scenarioId: r3.scenarioId, presentedHash: r3.presentedHash, confirmationUtterance: 'maybe, I guess' })
+assert.equal(voiceTry.code, 'AMBIGUOUS_CONFIRMATION')
 // a stale hash from the app is refused
 let y = res()
 await liveHandler({ method: 'POST', body: { action: 'commit', token: liveToken, scenarioId: r3.scenarioId, presentedHash: 'stale' } }, y.o)

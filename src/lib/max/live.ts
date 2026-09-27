@@ -31,6 +31,12 @@ export interface CallPlanInputs {
   /** Server-kept after a save in the call: what they're enrolled in, and what the saved plan dropped. */
   enrolled?: string[]
   droppedCourses?: string[]
+  /** Courses the student put in a term themselves (PlanOptions.pinned), and ones asked for in no term (added). */
+  pinned?: Record<string, string[]>
+  added?: string[]
+  /** The app's internship answer, and the academic year each answer leaves empty (Max's SET_INTERNSHIP). */
+  internship?: 3 | 4 | null
+  internshipAYs?: Partial<Record<'3' | '4', number>>
   /** Server-kept: the inputs the call started with, so a guest's "undo" returns to their own plan. */
   original?: Omit<CallPlanInputs, 'original'>
 }
@@ -43,6 +49,13 @@ export interface LiveInputs {
   springSummer: boolean
   summerPerTerm: number
   droppedCourses: string[]
+  /** Set by scenarios that can change them (missing on older ones): what the app adopts on a save. */
+  programId?: string
+  minorId?: string | null
+  degreeVariant?: string | null
+  pinned?: Record<string, string[]>
+  added?: string[]
+  internship?: 3 | 4 | null
 }
 
 /** One step of Max's proposal: the tree after one more change. */
@@ -78,6 +91,10 @@ export type LiveEvent =
   | { type: 'scenario.committed'; seq: number; scenarioId: string; inputs: LiveInputs; terms: PlannedTerm[] }
   | { type: 'scenario.discarded'; seq: number; scenarioId: string }
   | { type: 'options.presented'; seq: number; about: string; options: LiveOption[]; recommended: string | null }
+  | { type: 'app.action'; seq: number; action: AppAction }
+
+/** Something Max does in the app itself, outside the plan: open a tab, or look a course up in the Class Tracker. */
+export type AppAction = { kind: 'open_tab'; tab: 'overview' | 'plan' | 'awards' | 'classes' } | { kind: 'find_class'; courseCode: string }
 
 /** GET /api/max/live — the whole state, for catching up on subscribe, reconnect and in polling mode. */
 export interface LiveSnapshot {
