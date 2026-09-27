@@ -1808,6 +1808,37 @@
   color: var(--accent);
 }
 
+/* The pace tried here; the note says what the real plan uses once they differ. */
+.whatif__pace {
+  margin: 0 0 var(--s4);
+}
+
+.whatif__pace-note {
+  display: block;
+  font-size: var(--fs-caption);
+  font-weight: 400;
+  color: var(--ink-2);
+}
+
+.whatif__courses {
+  margin: var(--s4) var(--s1) 0;
+}
+
+.whatif__courses h3 {
+  margin: 0;
+}
+
+.whatif__courses .footnote {
+  margin-top: var(--s1);
+}
+
+.whatif__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin-top: var(--s2);
+}
+
 /* ─────────────────────────────────────────────────────────── share card */
 
 .share-preview {
