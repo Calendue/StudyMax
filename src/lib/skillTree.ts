@@ -56,10 +56,6 @@ export interface TreeBand {
   y: number
   h: number
   current: boolean
-  /** The year has Spring/Summer courses: they sit on the Winter side above its Winter courses, and
-   *  this is where the "Winter" label goes between them (null when there's no Winter row under them). */
-  summer: boolean
-  winterLabelY: number | null
 }
 
 export interface TreeNode {
@@ -77,7 +73,7 @@ export interface TreeNode {
   term: string
   /** False for a completed course the transcript gave no term for: its place is approximate. */
   termKnown: boolean
-  /** A Spring/Summer course: drawn on the Winter side, above that year's Winter courses. */
+  /** A Spring/Summer course: drawn on the Winter side, above that year's Winter courses, and tagged. */
   summer: boolean
   /** In progress, but in a term after the one running now (registered ahead). */
   later: boolean
@@ -407,10 +403,6 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
       : Math.round(trunkX + trunkWidth / 2 + g.innerGap + col * (nodeW + g.colGap))
 
   const rowsInYear = new Map<number, number>()
-  const regularRows = new Map<number, number>()
-  const hasSummer = new Map<number, boolean>()
-  // The room between a year's Winter rows and the Spring/Summer rows above them, for their label.
-  const summerGap = 22
   for (let year = 1; year <= maxYear; year++) {
     const inYear = [...drafts.values()]
       .filter((d) => d.year === year)
@@ -430,12 +422,13 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
       return taken[lane].get(row)!
     }
     let rows = 0
-    let regular = 0
+    let winterRows = 0
     for (const d of inYear) {
       const lane = d.lane!
-      // Spring/Summer comes after Winter, so its courses sit above every Fall and Winter row.
+      // Spring/Summer comes after Winter, so its courses sit above that year's Winter rows, level with
+      // any Fall rows still going on the other side (the card's tag says which term it is).
       let row = Math.max(
-        d.summer ? rows : 0,
+        d.summer ? winterRows : 0,
         ...links
           .filter((l) => l.sequencing && l.to === d.code && drafts.get(l.from)!.year === year)
           .map((l) => drafts.get(l.from)!.row + 1),
@@ -451,11 +444,9 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
         break
       }
       rows = Math.max(rows, d.row + 1)
-      if (!d.summer) regular = rows
+      if (!d.summer && lane === 'winter') winterRows = Math.max(winterRows, d.row + 1)
     }
     rowsInYear.set(year, rows)
-    regularRows.set(year, regular)
-    hasSummer.set(year, inYear.some((d) => d.summer))
   }
 
   // ── the canopy: the hero crowns the trunk, the rest branch off in pairs below it ──
@@ -478,25 +469,20 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
 
   // ── bands, top to bottom: canopy, the years from the last down to Year 1, the roots ──
   const bands: TreeBand[] = []
-  bands.push({ key: 'canopy', kind: 'canopy', year: 0, label: 'Canopy', y: 0, h: canopyH, current: false, summer: false, winterLabelY: null })
+  bands.push({ key: 'canopy', kind: 'canopy', year: 0, label: 'Canopy', y: 0, h: canopyH, current: false })
   let y = canopyH
   const bandY = new Map<number, { y: number; h: number }>()
   for (let year = maxYear; year >= 1; year--) {
     const rows = rowsInYear.get(year) ?? 0
-    const summer = hasSummer.get(year) ?? false
-    const regular = regularRows.get(year) ?? 0
-    const gap = summer && regular > 0 ? summerGap : 0
-    const h = rows === 0 ? g.emptyBand : g.bandTop + rows * g.nodeH + (rows - 1) * g.rowGap + gap + g.bandBottom
-    const bottom = y + h - g.bandBottom
-    const winterLabelY = gap > 0 ? Math.round(bottom - regular * (g.nodeH + g.rowGap) - summerGap / 2 + g.rowGap / 2) : null
-    bands.push({ key: `year-${year}`, kind: 'year', year, label: `Year ${year}`, y, h, current: year === currentYear, summer, winterLabelY })
+    const h = rows === 0 ? g.emptyBand : g.bandTop + rows * g.nodeH + (rows - 1) * g.rowGap + g.bandBottom
+    bands.push({ key: `year-${year}`, kind: 'year', year, label: `Year ${year}`, y, h, current: year === currentYear })
     bandY.set(year, { y, h })
     y += h
   }
   const trunkBase = y
   // A sapling (nothing completed yet) gets a line of encouragement under its roots.
   const rootsH = g.rootsH + (completed.size === 0 ? 44 : 0)
-  bands.push({ key: 'roots', kind: 'roots', year: 0, label: 'Roots', y, h: rootsH, current: false, summer: false, winterLabelY: null })
+  bands.push({ key: 'roots', kind: 'roots', year: 0, label: 'Roots', y, h: rootsH, current: false })
   const height = y + rootsH
   const trunkTop = canopyH
 
@@ -504,8 +490,7 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
     .sort((a, b) => a.year - b.year || a.row - b.row || (a.lane === b.lane ? a.col - b.col : a.lane === 'fall' ? -1 : 1))
     .map((d) => {
       const band = bandY.get(d.year)!
-      const lift = d.summer && (regularRows.get(d.year) ?? 0) > 0 ? summerGap : 0
-      const bottom = band.y + band.h - g.bandBottom - lift
+      const bottom = band.y + band.h - g.bandBottom
       return {
         code: d.code,
         status: d.status,

@@ -488,6 +488,12 @@
   color: var(--tree-now);
 }
 
+/* The term a Spring/Summer card was (or will be) taken in: quiet, it's a fact, not a status. */
+.tree-node__tag--term {
+  background: var(--selected);
+  color: var(--ink-2);
+}
+
 .tree-node__dots {
   position: absolute;
   right: 8px;
@@ -901,7 +907,9 @@
 }
 
 .tree__float-inner {
+  position: relative; /* `left` puts it on the trunk, which sits a little right of the board's centre */
   display: flex;
+  flex-direction: column;
   gap: var(--s2);
   opacity: 0;
   transform: translateY(8px);
@@ -919,9 +927,10 @@
 .tree__float-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 38px;
-  padding: 0 16px;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
   border-radius: 999px;
   background: var(--raised);
   color: var(--ink);
