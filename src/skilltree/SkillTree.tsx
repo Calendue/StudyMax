@@ -648,7 +648,9 @@ function NodeCard({
     status === 'locked'
       ? needs
         ? `Needs ${courseCode(needs)} first`
-        : 'Needs its prerequisites first'
+        : node.needsCredits
+          ? `Needs ${node.needsCredits} first`
+          : 'Needs its prerequisites first'
       : registered
         ? `Registered · ${node.term.replace(' ', '\u00a0')}`
         : isElective(node.code)

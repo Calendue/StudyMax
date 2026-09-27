@@ -1,4 +1,5 @@
 import { courseInfo } from '../data/prereqs.ts'
+import { creditPrereqs } from '../data/creditPrereqs.ts'
 import type { RequirementGroup } from '../data/specializations.ts'
 import type { SpecializationMatch } from './match.ts'
 import { courseLevel, DEFAULT_SUMMER_COURSES, isElective, upcomingTerm, type PlannedTerm, type Season, type TermStart } from './plan.ts'
@@ -107,6 +108,8 @@ export interface TreeNode {
   cu: number
   /** The degree requirement it counts toward, when the degree is mapped: "C4 Major: Senior core". */
   degreeGroup: string | null
+  /** A credit-count prerequisite still unmet by what's done or under way: "6 cu of 100-level CMPT". */
+  needsCredits: string | null
   /** Leaf indexes this course counts toward. */
   creds: number[]
   /** A requirement slot where any `need` of `of` courses count: drawn as a dashed elective. */
@@ -399,12 +402,25 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
   }
 
   // ── status: planned, locked, the one beacon ──
+  const needsCredits = new Map<string, string>()
   for (const d of drafts.values()) {
     if (d.status !== 'planned') continue
     const unmet = (courseInfo[d.code]?.requires ?? []).some(
       (options) => options.length > 0 && !options.some((o) => doneOrNow.has(o)),
     )
     if (unmet) d.status = 'locked'
+    // "Completion of at least 6 credit units in 100-level CMPT" (PHIL 232) locks it too.
+    const short = [...(creditPrereqs[d.code] ?? []), ...(courseInfo[d.code]?.creditRequires ?? [])].find((rule) => {
+      if (rule.standing) return false
+      const have = [...doneOrNow]
+        .filter((c) => (!rule.subjects || rule.subjects.includes(c.match(/^[A-Z]+/)?.[0] ?? '')) && (!rule.level || courseLevel(c) * 100 === rule.level))
+        .reduce((n, c) => n + cuOf(c), 0)
+      return have < rule.cu
+    })
+    if (short) {
+      d.status = 'locked'
+      needsCredits.set(d.code, `${short.cu} cu of ${short.level ? `${short.level}-level ` : ''}${short.subjects?.join(' or ') ?? 'courses'}`)
+    }
   }
   // An unnamed elective is never the one course to take next: there's nothing specific to take. A
   // first term of only electives passes the beacon to the first named course after it.
@@ -612,6 +628,7 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
         current: d.current,
         cu: cuOf(d.code),
         degreeGroup: input.degree?.countsToward[d.code] ?? null,
+        needsCredits: needsCredits.get(d.code) ?? null,
         creds: d.creds.filter((c) => c < leafCount),
         elective: d.elective,
         prereqs: [],

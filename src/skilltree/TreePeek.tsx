@@ -90,6 +90,7 @@ export function TreePeek({
       {node && (
         <>
           <Codes label="Needs" codes={node.prereqs} onSelect={toCourse} />
+          {node.prereqs.length === 0 && node.needsCredits && <p className="tree-peek__title">Needs {node.needsCredits} first</p>}
           <Codes label="Unlocks" codes={node.unlocks} onSelect={toCourse} arrow />
         </>
       )}
