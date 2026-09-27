@@ -878,6 +878,7 @@
 
 .segmented {
   display: flex;
+  min-width: 0;
   gap: 2px;
   padding: 3px;
   border-radius: var(--r2);
@@ -885,7 +886,9 @@
 }
 
 .segmented__option {
-  width: 44px;
+  /* Shrinks toward 32px so six options (full-degree programs) still fit a 375px phone. */
+  flex: 0 1 44px;
+  min-width: 32px;
   height: 36px;
   border-radius: 9px;
   font-weight: 600;

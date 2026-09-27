@@ -10,7 +10,7 @@ import type { School } from './data/schools/types.ts'
 import { computerScience } from './data/programs/computerScience.ts'
 import type { Program } from './data/programs/types.ts'
 import { buildCallScript, type CallContext } from './lib/callScript.ts'
-import { buildStudentPlan, termsFrom, upcomingTerm, type TermStart } from './lib/plan.ts'
+import { buildStudentPlan, DEFAULT_SUMMER_COURSES, termsFrom, upcomingTerm, type TermStart } from './lib/plan.ts'
 import { computeCredentials } from './lib/credentials.ts'
 import { searchCourses, catalogueTitle } from './lib/courseSearch.ts'
 import { courseInfo } from './data/prereqs.ts'
@@ -152,6 +152,9 @@ interface SavedState {
   registered?: string[]
   /** Whether the plan may use Spring/Summer terms. */
   springSummer?: boolean
+  /** The most courses the plan puts in a Fall/Winter term, and in a Spring/Summer term. */
+  coursesPerTerm?: number
+  summerPerTerm?: number
 }
 
 
@@ -220,6 +223,9 @@ function useStudyMax() {
   const [gradYear, setGradYear] = useState<number | null>(saved.gradYear ?? null)
   const [registered, setRegistered] = useState<string[]>(() => registeredFrom(saved.registered))
   const [springSummer, setSpringSummer] = useState(saved.springSummer ?? false)
+  // The plan's load limits: the most courses per Fall/Winter term, and per Spring/Summer term.
+  const [coursesPerTerm, setCoursesPerTerm] = useState(saved.coursesPerTerm ?? 2)
+  const [summerPerTerm, setSummerPerTerm] = useState(saved.summerPerTerm ?? DEFAULT_SUMMER_COURSES)
 
   const selectedSchool = universityId === 'usask' ? usask : null
   const availablePrograms = useMemo(() => selectedSchool?.programs ?? [], [selectedSchool])
@@ -345,6 +351,8 @@ function useStudyMax() {
     gradYear,
     registered,
     springSummer,
+    coursesPerTerm,
+    summerPerTerm,
   }
   const snapshotJson = JSON.stringify(snapshot)
   useEffect(() => {
@@ -372,6 +380,9 @@ function useStudyMax() {
     minorId,
     concentrationIds,
     registered,
+    springSummer,
+    coursesPerTerm,
+    summerPerTerm,
     ...(phone.trim() ? { phone: phone.trim() } : {}),
   } satisfies CloudSession)
   const accountUid = account?.uid ?? null
@@ -741,7 +752,6 @@ function useStudyMax() {
   }, [])
 
   // --- term-by-term path to the closest specialization ---
-  const [coursesPerTerm, setCoursesPerTerm] = useState(2)
   // Extra targets the student added to the same plan. Only ids from what they're already close to;
   // an id that stops resolving (they switched program) simply drops out.
   const [extraTargetIds, setExtraTargetIds] = useState<string[]>(() => seedOf(saved).slice(1))
@@ -771,8 +781,9 @@ function useStudyMax() {
         coursesPerTerm,
         startTerm,
         springSummer,
+        summerPerTerm,
       ),
-    [targets, planningSpecs, completed, inProgressCourses, coursesPerTerm, startTerm, springSummer],
+    [targets, planningSpecs, completed, inProgressCourses, coursesPerTerm, startTerm, springSummer, summerPerTerm],
   )
   const [planCopied, setPlanCopied] = useState(false)
   // Clipboard writes are blocked in some browsers and contexts. Rather than a button that appears to
@@ -980,6 +991,8 @@ function useStudyMax() {
     setGradYear(state.gradYear ?? null)
     setRegistered(registeredFrom(state.registered))
     setSpringSummer(state.springSummer ?? false)
+    setCoursesPerTerm(state.coursesPerTerm ?? 2)
+    setSummerPerTerm(state.summerPerTerm ?? DEFAULT_SUMMER_COURSES)
     setUploadStatus('idle')
     seedTargets(seedOf(state))
     setLookup(null)
@@ -1234,6 +1247,8 @@ function useStudyMax() {
     setRegistered([])
     setRegisteredQuery('')
     setSpringSummer(false)
+    setCoursesPerTerm(2)
+    setSummerPerTerm(DEFAULT_SUMMER_COURSES)
     setUniversityId('')
     setProgramId('')
     setCompleted(new Set())
@@ -1423,6 +1438,8 @@ function useStudyMax() {
     toggleRegistered,
     springSummer,
     setSpringSummer,
+    summerPerTerm,
+    setSummerPerTerm,
     removeRegistered,
     inProgressCourses,
     // courses

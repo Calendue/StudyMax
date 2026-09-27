@@ -25,8 +25,9 @@ export interface PlannedTerm {
 
 export type Season = 'Fall' | 'Winter' | 'Spring/Summer'
 
-// A Spring/Summer term is short (May to August, compressed sessions), so it carries a light load.
-const SPRING_SUMMER_COURSES = 2
+// A Spring/Summer term is short (May to August, compressed sessions), so by default it carries a
+// light load; the student can set their own cap.
+export const DEFAULT_SUMMER_COURSES = 2
 
 export interface TermStart {
   season: Season
@@ -207,8 +208,8 @@ export function nextTerm({ season, year }: TermStart, springSummer = false): Ter
 }
 
 /**
- * Spreads the courses across terms, `coursesPerTerm` at a time, never scheduling a course in the
- * same term as (or before) one of its prerequisites.
+ * Spreads the courses across terms, `coursesPerTerm` at a time (`summerPerTerm` in a Spring/Summer
+ * term), never scheduling a course in the same term as (or before) one of its prerequisites.
  */
 export function buildPlan(
   target: SpecializationMatch | SpecializationMatch[],
@@ -216,9 +217,14 @@ export function buildPlan(
   completed: Set<string>,
   coursesPerTerm: number,
   start: TermStart,
-  { includePrerequisites = true, springSummer = false }: { includePrerequisites?: boolean; springSummer?: boolean } = {},
+  {
+    includePrerequisites = true,
+    springSummer = false,
+    summerPerTerm = DEFAULT_SUMMER_COURSES,
+  }: { includePrerequisites?: boolean; springSummer?: boolean; summerPerTerm?: number } = {},
 ): PlannedTerm[] {
   const perTerm = Math.max(1, Math.floor(coursesPerTerm))
+  const perSummer = Math.max(1, Math.floor(summerPerTerm))
   const picked = selectCourses(target, allSpecializations, completed)
   const withPrereqs = includePrerequisites ? withPrerequisites(picked, completed) : picked
   const ordered = topologicalOrder(withPrereqs, completed)
@@ -230,7 +236,7 @@ export function buildPlan(
 
   while (pending.length > 0) {
     const thisTerm: PlannedCourse[] = []
-    const limit = term.season === 'Spring/Summer' ? Math.min(perTerm, SPRING_SUMMER_COURSES) : perTerm
+    const limit = term.season === 'Spring/Summer' ? perSummer : perTerm
     for (const course of pending) {
       if (thisTerm.length === limit) break
       // A prerequisite taken this same term doesn't count — it has to be finished first.
@@ -265,10 +271,13 @@ export function buildStudentPlan(
   coursesPerTerm: number,
   start: TermStart,
   springSummer = false,
+  summerPerTerm = DEFAULT_SUMMER_COURSES,
 ): PlannedTerm[] {
   const done = new Set([...completed, ...inProgress])
   const open = computeMatches(targets, done).filter((m) => m.remaining > 0)
-  return open.length > 0 ? buildPlan(open, allSpecializations, done, coursesPerTerm, start, { springSummer }) : []
+  return open.length > 0
+    ? buildPlan(open, allSpecializations, done, coursesPerTerm, start, { springSummer, summerPerTerm })
+    : []
 }
 
 /** `count` consecutive terms from `start`, for a start-term picker. */

@@ -1,4 +1,5 @@
 import { useModel } from '../model.ts'
+import { MAX_COURSES_PER_TERM, MAX_SUMMER_COURSES } from '../lib/cloudSession.ts'
 import { KIND_LABEL, plural } from '../format.ts'
 import { ScreenTitle } from '../ui/chrome.tsx'
 import { Icon } from '../ui/Icon.tsx'
@@ -70,15 +71,19 @@ export function PlanTargets() {
   )
 }
 
-/** Courses per term, and the term it starts in. */
+/** Spring/Summer: off, or the most courses a Spring/Summer term may take. */
+const SUMMER_CHOICES = [0, ...Array.from({ length: MAX_SUMMER_COURSES }, (_, i) => i + 1)]
+
+/** Courses per term (Fall/Winter and Spring/Summer), and the term it starts in. */
 export function PlanControls() {
   const m = useModel()
+  const summer = m.springSummer ? m.summerPerTerm : 0
   return (
     <>
       <Appear index={1} className="per-term">
         <span id="per-term-label">Courses per term</span>
         <div className="segmented" role="radiogroup" aria-labelledby="per-term-label">
-          {[1, 2, 3, 4].map((n) => (
+          {Array.from({ length: MAX_COURSES_PER_TERM }, (_, i) => i + 1).map((n) => (
             <button
               key={n}
               type="button"
@@ -88,6 +93,28 @@ export function PlanControls() {
               onClick={() => m.setCoursesPerTerm(n)}
             >
               {n}
+            </button>
+          ))}
+        </div>
+      </Appear>
+
+      <Appear index={1} className="per-term">
+        <span id="summer-label">Spring/Summer</span>
+        <div className="segmented" role="radiogroup" aria-labelledby="summer-label">
+          {SUMMER_CHOICES.map((n) => (
+            <button
+              key={n}
+              type="button"
+              role="radio"
+              aria-checked={summer === n}
+              aria-label={n === 0 ? 'No Spring/Summer terms' : `Up to ${n} in a Spring/Summer term`}
+              className={`segmented__option${summer === n ? ' segmented__option--on' : ''}`}
+              onClick={() => {
+                m.setSpringSummer(n > 0)
+                if (n > 0) m.setSummerPerTerm(n)
+              }}
+            >
+              {n === 0 ? 'Off' : n}
             </button>
           ))}
         </div>

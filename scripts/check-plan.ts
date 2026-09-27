@@ -182,6 +182,19 @@ assert.ok(buildPlan(matches[0], specializations, completed, 0, { season: 'Fall',
   assert.deepEqual(buildStudentPlan([target.spec], specializations, completed, everything, 2, start), [], 'finished by in-progress = no plan')
 }
 
+// --- load limits: Fall/Winter take up to coursesPerTerm, Spring/Summer up to its own cap ---
+{
+  const big = matches.reduce((a, b) => (b.remaining > a.remaining ? b : a))
+  const loaded = buildStudentPlan([big.spec], specializations, new Set(), [], 3, { season: 'Fall', year: 2026 }, true, 1)
+  assert.ok(loaded.some((t) => t.label.startsWith('Spring/Summer')), 'Spring/Summer terms appear when on')
+  for (const term of loaded) {
+    const cap = term.label.startsWith('Spring/Summer') ? 1 : 3
+    assert.ok(term.courses.length <= cap, `${term.label} holds at most ${cap}`)
+  }
+  const off = buildStudentPlan([big.spec], specializations, new Set(), [], 3, { season: 'Fall', year: 2026 }, false, 1)
+  assert.ok(!off.some((t) => t.label.startsWith('Spring/Summer')), 'no Spring/Summer terms when off')
+}
+
 assert.deepEqual(upcomingTerm(new Date('2026-03-01')), { season: 'Fall', year: 2026 })
 assert.deepEqual(upcomingTerm(new Date('2026-10-01')), { season: 'Winter', year: 2027 })
 

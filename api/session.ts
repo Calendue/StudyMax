@@ -83,6 +83,10 @@ async function load(uid: string): Promise<CloudSession | null> {
     concentrationIds: profile?.concentrationIds ?? [],
     registered: codesWith('registered'),
     ...(row.phoneNumber ? { phone: row.phoneNumber } : {}),
+    // No profile yet: the columns' own defaults.
+    springSummer: profile?.springSummer ?? false,
+    coursesPerTerm: profile?.maxCoursesPerTerm ?? 2,
+    summerPerTerm: profile?.maxSummerCourses ?? 2,
   }
 }
 
@@ -116,6 +120,9 @@ async function save(user: VerifiedUser, session: CloudSession) {
     majorProgramId: session.programId,
     minorProgramId: session.minorId,
     concentrationIds: session.concentrationIds,
+    springSummer: session.springSummer,
+    maxCoursesPerTerm: session.coursesPerTerm,
+    maxSummerCourses: session.summerPerTerm,
   }
 
   const rows = [

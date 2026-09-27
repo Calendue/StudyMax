@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react'
+import { MAX_COURSES_PER_TERM, MAX_SUMMER_COURSES } from '../lib/cloudSession.ts'
 import { motion, useReducedMotion } from 'motion/react'
 import { useModel } from '../model.ts'
 import type { Screen } from '../App.tsx'
@@ -617,6 +618,27 @@ export function RegisteredScreen() {
           <span />
         </span>
       </button>
+
+      <Field label="Classes per term" hint="Fall and Winter" index={2}>
+        <div className="opt-chips" role="radiogroup" aria-label="Classes per term" data-choices>
+          {Array.from({ length: MAX_COURSES_PER_TERM }, (_, i) => i + 1).map((n) => (
+            <OptionChip key={n} selected={m.coursesPerTerm === n} onClick={() => m.setCoursesPerTerm(n)}>
+              <span className="tnum">{n}</span>
+            </OptionChip>
+          ))}
+        </div>
+      </Field>
+      {m.springSummer && (
+        <Field label="Spring/Summer classes" hint="Most per term" index={3}>
+          <div className="opt-chips" role="radiogroup" aria-label="Spring/Summer classes" data-choices>
+            {Array.from({ length: MAX_SUMMER_COURSES }, (_, i) => i + 1).map((n) => (
+              <OptionChip key={n} selected={m.summerPerTerm === n} onClick={() => m.setSummerPerTerm(n)}>
+                <span className="tnum">{n}</span>
+              </OptionChip>
+            ))}
+          </div>
+        </Field>
+      )}
     </Step>
   )
 }
