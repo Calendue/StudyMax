@@ -199,6 +199,14 @@ interface SavedState {
   overrides?: CourseOverride[]
 }
 
+/** Saved overrides in canonical order; anything not shaped like one is dropped (the planner validates the rest). */
+function storedOverrides(value: unknown): CourseOverride[] {
+  if (!Array.isArray(value)) return []
+  return sortOverrides(
+    value.filter((o): o is CourseOverride => !!o && typeof o === 'object' && typeof o.code === 'string' && typeof o.term === 'string' && typeof o.kind === 'string'),
+  )
+}
+
 /** A session from the database: its load is one the student saved, so it's kept as chosen. */
 function fromCloud(session: CloudSession): Partial<SavedState> {
   return { ...session, coursesPerTermChosen: true }
@@ -283,7 +291,7 @@ function useStudyMax() {
   // A stored 3 (the old maximum) is 2 now; 0 is off, the same as springSummer false.
   const [summerPerTerm, setSummerPerTerm] = useState(clampSummer(saved.summerPerTerm ?? DEFAULT_SUMMER_COURSES, DEFAULT_SUMMER_COURSES))
   // Failed, withdrew, not running, later: applied before planning, kept in canonical order.
-  const [overrides, setOverrides] = useState<CourseOverride[]>(() => sortOverrides(Array.isArray(saved.overrides) ? saved.overrides : []))
+  const [overrides, setOverrides] = useState<CourseOverride[]>(() => storedOverrides(saved.overrides))
 
   const selectedSchool = universityId === 'usask' ? usask : null
   const availablePrograms = useMemo(() => selectedSchool?.programs ?? [], [selectedSchool])
@@ -1228,7 +1236,7 @@ function useStudyMax() {
     if (state.internship !== undefined) setInternship(state.internship)
     setCoursesPerTerm(chosenLoad(state))
     setSummerPerTerm(clampSummer(state.summerPerTerm ?? DEFAULT_SUMMER_COURSES, DEFAULT_SUMMER_COURSES))
-    setOverrides(sortOverrides(Array.isArray(state.overrides) ? state.overrides : []))
+    setOverrides(storedOverrides(state.overrides))
     setLastChange(null)
     setUploadStatus('idle')
     seedTargets(seedOf(state))
