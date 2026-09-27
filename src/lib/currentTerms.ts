@@ -47,3 +47,29 @@ export function withCurrentCourses(
   }
   return [...byLabel.values()].sort((a, b) => termOrder(a.label) - termOrder(b.label))
 }
+
+/**
+ * What the student is taking: the transcript's in-progress courses and the ones they added by hand,
+ * once each. A course that's also completed is completed, so it's never listed here as well.
+ */
+export function takingNow(uploaded: string[], registered: string[], completed: ReadonlySet<string>): string[] {
+  return [...new Set([...uploaded, ...registered])].filter((code) => !completed.has(code))
+}
+
+/**
+ * The terms of the courses under way after a transcript upload. The newest transcript's word
+ * replaces the last one's (a course since finished would otherwise stay "Taking now"); a course the
+ * student added by hand keeps the term they gave it.
+ */
+export function termsAfterUpload(
+  previous: Record<string, Season>,
+  uploaded: Record<string, Season>,
+  registered: string[],
+): Record<string, Season> {
+  return { ...Object.fromEntries(Object.entries(previous).filter(([code]) => registered.includes(code))), ...uploaded }
+}
+
+/** Each course under way with its term as the plan and the tree write it ("Winter 2027"). */
+export function termLabels(current: { season: Season; courses: string[] }[], today: Date): Record<string, string> {
+  return Object.fromEntries(current.flatMap((g) => g.courses.map((code) => [code, termLabel(g.season, today)])))
+}
