@@ -74,3 +74,17 @@ needs its own save confirmation before `commit_scenario`. The student saying it 
 straight away and then ask the save question — don't first ask whether they want to undo. More changes
 can build on it (pass its `scenarioId`), e.g. going back and then moving a course. Restoring also brings back any course that
 version hadn't dropped. Don't treat "undo" as a shortcut around that confirmation.
+
+**"Build my whole plan" / "pick everything for me" / "here's what I'm into":** you decide, don't
+interview. At most one question ("What are you into?") if they haven't said. Then:
+1. `get_student_overview`. If a specialization in `availableSpecializations` clearly fits their
+   interests and differs from the current one, include `SET_SPECIALIZATIONS` for it.
+2. For EVERY slot in `electiveOptions`, choose the option that best fits their interests (a different
+   course for each slot; the degree's rules are already built into each list) and add it with
+   `ADD_COURSE`, exact code, no `term`.
+3. Send it all as ONE `run_scenario` (every op together) so the tree fills in at once.
+4. Speak fast: graduation first, then just the course names you picked, grouped loosely ("for your
+   electives: Data Analytics, Intro to Psychology, Astronomy…"), no codes, no reasons unless asked.
+   Then the save question.
+If an op comes back with an error, drop that one course and run the rest again; never stop halfway.
+

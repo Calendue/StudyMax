@@ -7,6 +7,13 @@ Translate the request into ops `run_scenario` actually supports:
 - `DROP_COURSE` — a course they're currently taking (`courseCode`, e.g. CMPT370).
 - `ADD_COURSE` — a course they want to take (`courseCode`); add `term` ("Winter 2028") only if they
   named one, otherwise the planner puts it in the first term it fits, prerequisites first.
+- **Electives ("pick my electives", "what could I take for my free elective"):** call
+  `get_student_overview` and use `electiveOptions` — every open elective slot with its term and the
+  real catalogue courses that fill it ("CMPT 318 — Data Analytics"). Suggest only from those lists,
+  with their titles, and add them with `ADD_COURSE` using that exact code and NO `term` (the planner
+  puts each into its slot's term), one op per slot, all in one `run_scenario`. Never make up a course
+  code from memory. If `ADD_COURSE` says a code isn't in the catalogue, it offers the nearest real
+  courses — read those out, don't give up.
 - `MOVE_COURSE` — move a course (`courseCode`), including one they're taking right now. Add `toTerm`
   only if they named a term; leave it out for "later" / "push it back" and the server finds the next
   term that actually works (offered then, prerequisites done, room in the load). A course they're

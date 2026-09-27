@@ -490,3 +490,23 @@
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+
+/* The phone's floating call gets out of the way of editing: while a sheet (a course's details, an
+   elective's choices, the plan settings) or a course's peek is open it steps aside, and it keeps to
+   the call line and the caption so it never covers more than it must. */
+body:has([role='dialog']) .max-live--compact,
+body:has(.tree-peek) .max-live--compact {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.max-live--compact .max-live__log,
+.max-live--compact .max-live__hint {
+  display: none;
+}
+
+/* What sits under the tree (the plan's settings) scrolls clear of the floating call. */
+body:has(.max-live--compact:not(.max-live--ended)) .plan-after {
+  padding-bottom: 160px;
+}
