@@ -1346,6 +1346,9 @@ p.card__empty {
   height: 100%;
   display: grid;
   grid-template-columns: minmax(340px, 5fr) minmax(0, 7fr);
+  /* One row the height of the window: a long answer list scrolls inside the pane, never stretching
+     the panel beside it. */
+  grid-template-rows: minmax(0, 1fr);
 }
 
 /* Deep ink with a soft Cherry Rose glow rising from the corner: the brand without a rose slab. */
