@@ -371,6 +371,29 @@ interface PlanRun {
 }
 
 /**
+ * Whether a course runs in a season, from the same Catalog the planner schedules with (Banner, then
+ * the catalogue). A course neither source dates runs in Fall or Winter, never silently anywhere (the
+ * planner flags it "offering unconfirmed"). Max's live replanning checks moves with this.
+ */
+export function courseRunsIn(code: string, season: Season, springSummer = false, offerings?: Record<string, Season[]>, catalog: Catalog = defaultCatalog()): boolean {
+  if (season === 'Spring/Summer' && !springSummer) return false
+  // No 300- or 400-level CMPT course ran in a Spring/Summer term in 2025-27 (USask's class search).
+  if (isElective(code)) return season !== 'Spring/Summer' || !/410 or higher|senior cmpt/i.test(electiveLabel(code))
+  const listed = offerings?.[code]
+  const seasons = listed && listed.length > 0 ? listed : (catalog[code]?.seasons ?? [])
+  if (seasons.length === 0) return season !== 'Spring/Summer'
+  return seasons.includes(season)
+}
+
+/** Whether a course's prerequisite groups are met: `before` passed earlier, `alongside` this same term (corequisites). */
+export function prerequisitesMet(code: string, before: ReadonlySet<string>, alongside: ReadonlySet<string>, catalog: Catalog = defaultCatalog()): boolean {
+  const c = catalog[code]
+  if (!c) return prerequisiteGroups(code).every((g) => g.options.some((o) => before.has(o) || (g.concurrent && alongside.has(o))))
+  const credited = (o: string) => before.has(o) || (catalog[o]?.antirequisites ?? []).some((a) => before.has(a))
+  return c.requires.every((g) => g.some(credited)) && c.concurrent.every((g) => g.some((o) => credited(o) || alongside.has(o)))
+}
+
+/**
  * Spreads the courses across terms, `coursesPerTerm` at a time (`summerPerTerm` in a Spring/Summer
  * term), under the college's 15-credit-unit ceiling and at most three senior CMPT courses a term:
  * the earliest graduation the hard rules allow (src/lib/planner/schedule.ts), found exactly.

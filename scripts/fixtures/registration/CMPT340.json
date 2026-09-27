@@ -1,0 +1,260 @@
+[
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "28326",
+  "subject": "CMPT",
+  "courseNumber": "340",
+  "sequenceNumber": "04",
+  "courseTitle": "Programming Language Paradigms",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Lecture",
+  "creditHours": 3,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 150,
+  "enrollment": 110,
+  "seatsAvailable": 40,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "M1",
+  "isSectionLinked": true,
+  "reservedSeatSummary": {
+   "maximumEnrollmentReserved": 93,
+   "seatsAvailableUnreserved": 38
+  },
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": true,
+     "tuesday": false,
+     "wednesday": true,
+     "thursday": false,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "1030",
+     "endTime": "1120",
+     "buildingDescription": null,
+     "room": null
+    }
+   },
+   {
+    "meetingTime": {
+     "monday": false,
+     "tuesday": false,
+     "wednesday": false,
+     "thursday": false,
+     "friday": true,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "1030",
+     "endTime": "1120",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "21755",
+  "subject": "CMPT",
+  "courseNumber": "340",
+  "sequenceNumber": "T02",
+  "courseTitle": "Programming Language Paradigms",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Tutorial",
+  "creditHours": 0,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 30,
+  "enrollment": 30,
+  "seatsAvailable": 0,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "T1",
+  "isSectionLinked": true,
+  "reservedSeatSummary": null,
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": false,
+     "tuesday": false,
+     "wednesday": true,
+     "thursday": false,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "1130",
+     "endTime": "1220",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "21756",
+  "subject": "CMPT",
+  "courseNumber": "340",
+  "sequenceNumber": "T04",
+  "courseTitle": "Programming Language Paradigms",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Tutorial",
+  "creditHours": 0,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 30,
+  "enrollment": 28,
+  "seatsAvailable": 2,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "T1",
+  "isSectionLinked": true,
+  "reservedSeatSummary": null,
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": false,
+     "tuesday": false,
+     "wednesday": false,
+     "thursday": false,
+     "friday": true,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "0930",
+     "endTime": "1020",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "25617",
+  "subject": "CMPT",
+  "courseNumber": "340",
+  "sequenceNumber": "T06",
+  "courseTitle": "Programming Language Paradigms",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Tutorial",
+  "creditHours": 0,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 30,
+  "enrollment": 28,
+  "seatsAvailable": 2,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "T1",
+  "isSectionLinked": true,
+  "reservedSeatSummary": null,
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": true,
+     "tuesday": false,
+     "wednesday": false,
+     "thursday": false,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "1530",
+     "endTime": "1620",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "27802",
+  "subject": "CMPT",
+  "courseNumber": "340",
+  "sequenceNumber": "T08",
+  "courseTitle": "Programming Language Paradigms",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Tutorial",
+  "creditHours": 0,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 30,
+  "enrollment": 8,
+  "seatsAvailable": 22,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "T1",
+  "isSectionLinked": true,
+  "reservedSeatSummary": null,
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": true,
+     "tuesday": false,
+     "wednesday": false,
+     "thursday": false,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "0830",
+     "endTime": "0920",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "28328",
+  "subject": "CMPT",
+  "courseNumber": "340",
+  "sequenceNumber": "T10",
+  "courseTitle": "Programming Language Paradigms",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Tutorial",
+  "creditHours": 0,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 30,
+  "enrollment": 16,
+  "seatsAvailable": 14,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "T1",
+  "isSectionLinked": true,
+  "reservedSeatSummary": null,
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": false,
+     "tuesday": false,
+     "wednesday": false,
+     "thursday": true,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "1600",
+     "endTime": "1650",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ }
+]

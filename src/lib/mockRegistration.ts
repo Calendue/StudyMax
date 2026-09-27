@@ -1,18 +1,30 @@
-// Fake, deterministic "class registration" for the demo. No network, no real USask call.
+// The practice run: a simulated registration page that plays out Max's real picks (a RegPlan from
+// registrationData.ts) as a script, and the hash-based practice sections the offline fallback uses.
+// Pure apart from the saved practice run in localStorage. No network, no real USask call.
+import type { SectionStatus } from './classTracker.ts'
+import type { RegMeeting, RegPick, RegPlan } from './registration.ts'
 
 export type SectionType = 'Lecture' | 'Lab' | 'Tutorial'
 
+/** One section on the simulated page: one of Max's picks, or a booked course's section (context). */
 export interface RegRow {
   crn: string
   code: string
   title: string
   section: string
-  type: SectionType
+  /** Banner's schedule type: 'Lecture', 'Laboratory', 'Tutorial', ... */
+  type: string
+  /** The lecture, which carries the credit units; a linked lab or tutorial has 0. */
+  main: boolean
   credits: number
-  days: string[]
-  start: string
-  end: string
-  status: 'pending' | 'searching' | 'full' | 'added' | 'registered'
+  /** Every meeting of the section (a lecture can meet MW at one time and F at another). */
+  meetings: RegMeeting[]
+  seats: number
+  seatStatus: SectionStatus
+  /** Set when Max picked this course for an elective slot ("Indigenous learning"). */
+  slotLabel?: string
+  /** 'error' is a full section the practice run's submit would have been refused. */
+  status: 'pending' | 'registered' | 'error'
 }
 
 export interface RegState {
@@ -21,7 +33,7 @@ export interface RegState {
   submittedAt: string | null
 }
 
-interface FakeSection {
+export interface FakeSection {
   section: string
   type: SectionType
   crn: string
@@ -49,7 +61,7 @@ function crnFrom(seed: number): string {
   return String(10000 + (seed % 90000)).slice(0, 5)
 }
 
-/** Deterministic fake sections for a course, derived from a hash of its code. */
+/** Deterministic practice sections for a course, derived from a hash of its code (the offline fallback). */
 export function sectionsFor(code: string, hasLab: boolean): FakeSection[] {
   const h = hashCode(code)
   // 8:30 to 16:00 window. MWF: 50 min slots. TR: 80 min slots.
@@ -89,28 +101,17 @@ export function sectionsFor(code: string, hasLab: boolean): FakeSection[] {
   return sections
 }
 
-function toMinutes(t: string): number {
-  const [h, m] = t.split(':').map(Number)
-  return h * 60 + m
-}
-
-function clashes(a: FakeSection, b: FakeSection): boolean {
-  if (!a.days.some((d) => b.days.includes(d))) return false
-  return toMinutes(a.start) < toMinutes(b.end) && toMinutes(b.start) < toMinutes(a.end)
-}
-
-export interface PlanCourseInput {
-  code: string
-  title: string
-  credits: number
+/** The practice sections for a course, with the lab a third of courses get. */
+export function optionsFor(code: string) {
+  return sectionsFor(code, hashCode(code) % 3 === 0)
 }
 
 /**
  * One beat of the agent's script. `type-subject`/`type-number`/`search` point at `courseIndex` (into
- * the input course list, whose search results the panel should be showing); `add` points at
- * `rowIndex` (into the returned `rows`, the specific section it just added).
+ * the returned `courses`, whose search results the panel should be showing); `add` points at
+ * `rowIndex` (into the returned `rows`, the section it just added). `note` only narrates.
  */
-export type StepAction = 'open' | 'type-subject' | 'type-number' | 'search' | 'add' | 'submit'
+export type StepAction = 'type-subject' | 'type-number' | 'search' | 'add' | 'note' | 'submit'
 
 export interface RegStep {
   action: StepAction
@@ -121,13 +122,21 @@ export interface RegStep {
   number?: string
 }
 
-/** Same fake sections `pickSchedule` would look up for this course, for rendering search results. */
-export function optionsFor(code: string) {
-  return sectionsFor(code, hashCode(code) % 3 === 0)
+/** A course the practice run searches for, in the order the picks name it. */
+export interface PracticeCourse {
+  code: string
+  title: string
+  subject: string
+  number: string
+  slotLabel?: string
 }
 
 export interface PickResult {
+  courses: PracticeCourse[]
+  /** Max's picks, in order: exactly the sections the run adds. */
   rows: RegRow[]
+  /** Courses already registered this term, drawn on the week as context. Never added. */
+  booked: RegRow[]
   steps: RegStep[]
 }
 
@@ -137,110 +146,130 @@ function splitCode(code: string): { subject: string; number: string } {
   return m ? { subject: m[1], number: m[2] } : { subject: code, number: '' }
 }
 
-/**
- * Greedy scheduler: for each course, pick the first section (in declared order) that doesn't clash
- * with sections already picked. The very first course's first section is always marked full, so the
- * agent visibly falls back to its next section. Alongside the rows, it scripts the search-and-add
- * steps an agent driving the real form would take, one per course (typing, searching, adding) plus
- * a closing submit.
- */
-export function pickSchedule(courses: PlanCourseInput[]): PickResult {
-  const steps: RegStep[] = []
-  const rows: RegRow[] = []
-  const picked: FakeSection[] = []
-  // Group by course so we choose one lecture + (if present) one lab per course.
-  courses.forEach((course, courseIndex) => {
-    const { subject, number } = splitCode(course.code)
-    steps.push({ action: 'type-subject', courseIndex, subject, text: `Typing ${subject}` })
-    steps.push({ action: 'type-number', courseIndex, number, text: `Typing ${number}` })
-    steps.push({ action: 'search', courseIndex, text: `Searching ${course.code}` })
-
-    const hasLab = hashCode(course.code) % 3 === 0
-    const options = sectionsFor(course.code, hasLab)
-    const lectures = options.filter((s) => s.type === 'Lecture')
-    const others = options.filter((s) => s.type !== 'Lecture')
-
-    let chosenLecture: FakeSection | null = null
-    for (let i = 0; i < lectures.length; i++) {
-      const candidate = lectures[i]
-      const isFirstCourseFirstSection = courseIndex === 0 && i === 0
-      if (isFirstCourseFirstSection) {
-        steps.push({
-          action: 'search',
-          courseIndex,
-          text: `Section ${candidate.section} is full, taking ${lectures[i + 1]?.section ?? candidate.section}`,
-        })
-        continue
-      }
-      if (!picked.some((p) => clashes(p, candidate))) {
-        chosenLecture = candidate
-        break
-      }
-    }
-    if (chosenLecture) {
-      picked.push(chosenLecture)
-      rows.push({
-        crn: chosenLecture.crn,
-        code: course.code,
-        title: course.title,
-        section: chosenLecture.section,
-        type: chosenLecture.type,
-        credits: course.credits,
-        days: chosenLecture.days,
-        start: chosenLecture.start,
-        end: chosenLecture.end,
-        status: 'pending',
-      })
-      steps.push({ action: 'add', rowIndex: rows.length - 1, text: `Adding ${course.code} (Section ${chosenLecture.section})` })
-    }
-
-    for (const extra of others) {
-      if (picked.some((p) => clashes(p, extra))) continue
-      picked.push(extra)
-      rows.push({
-        crn: extra.crn,
-        code: course.code,
-        title: course.title,
-        section: extra.section,
-        type: extra.type,
-        credits: 0,
-        days: extra.days,
-        start: extra.start,
-        end: extra.end,
-        status: 'pending',
-      })
-      steps.push({ action: 'add', rowIndex: rows.length - 1, text: `Adding ${course.code} (Section ${extra.section})` })
-    }
-  })
-
-  steps.push({ action: 'submit', text: 'Submitting' })
-
-  return { rows, steps }
+/** "CMPT370" -> "CMPT 370". Local, so the check script runs on plain Node. */
+function spaced(code: string): string {
+  return code.replace(/^([A-Z]+)(\d+)/, '$1 $2')
 }
 
-export const STORAGE_KEY = 'studymax:mock-registration'
+/** Banner's "Laboratory" reads as "Lab" beside a section number. */
+export function typeWord(type: string): string {
+  return type === 'Laboratory' ? 'Lab' : type
+}
 
-export function load(termLabel: string): RegState | null {
+function rowFrom(pick: RegPick, status: RegRow['status']): RegRow {
+  return {
+    crn: pick.crn,
+    code: pick.code,
+    title: pick.title,
+    section: pick.section,
+    type: pick.type,
+    main: pick.main,
+    credits: pick.main ? pick.credits : 0,
+    meetings: pick.meetings,
+    seats: pick.seats,
+    seatStatus: pick.status,
+    ...(pick.slotLabel ? { slotLabel: pick.slotLabel } : {}),
+    status,
+  }
+}
+
+/**
+ * The practice run's script from Max's real picks: for each course, type its subject and number,
+ * search, say which elective slot it fills (when it fills one), and add its sections in the plan's
+ * order (the lecture, then its linked lab or tutorial). Courses Max couldn't place are narrated, then
+ * one submit closes it. Deterministic: the same plan gives the same script.
+ */
+export function scriptFromPlan(plan: Pick<RegPlan, 'picks' | 'booked' | 'unplaced'>): PickResult {
+  const rows = plan.picks.map((p) => rowFrom(p, 'pending'))
+  const booked = plan.booked.map((p) => rowFrom(p, 'registered'))
+  const courses: PracticeCourse[] = []
+  const steps: RegStep[] = []
+
+  rows.forEach((row, rowIndex) => {
+    let courseIndex = courses.findIndex((c) => c.code === row.code)
+    if (courseIndex < 0) {
+      courseIndex = courses.length
+      const { subject, number } = splitCode(row.code)
+      courses.push({ code: row.code, title: row.title, subject, number, slotLabel: row.slotLabel })
+      steps.push({ action: 'type-subject', courseIndex, subject, text: `Typing ${subject}` })
+      steps.push({ action: 'type-number', courseIndex, number, text: `Typing ${number}` })
+      steps.push({ action: 'search', courseIndex, text: `Searching ${spaced(row.code)}` })
+      // "Junior science: Biology, Chemistry or Earth Science" narrows the slot; the pick already says which.
+      if (row.slotLabel) steps.push({ action: 'search', courseIndex, text: `${row.slotLabel.split(': ')[0]}: ${spaced(row.code)} fits` })
+    }
+    const what = `${spaced(row.code)} (${typeWord(row.type)} ${row.section})`
+    steps.push({
+      action: 'add',
+      courseIndex,
+      rowIndex,
+      text: row.seatStatus === 'full' ? `Adding ${what}. It's full, so PAWS would say so` : `Adding ${what}`,
+    })
+  })
+
+  for (const u of plan.unplaced) steps.push({ action: 'note', text: u.text })
+  steps.push({ action: 'submit', text: 'Submitting' })
+
+  return { courses, rows, booked, steps }
+}
+
+// ─────────────────────────────────────────────────────────────── the saved practice run
+
+/**
+ * A practice run is saved per student, term and exact list of CRNs, so another student on the same
+ * device, another term or a changed list never opens someone else's finished run.
+ */
+export interface RegScope {
+  /** The signed-in student's uid; null for a guest. */
+  uid: string | null
+  termLabel: string
+  crns: string[]
+}
+
+export const STORAGE_PREFIX = 'studymax:mock-registration'
+
+function scopePrefix(uid: string | null, termLabel: string): string {
+  return `${STORAGE_PREFIX}:${uid ?? 'guest'}:${termLabel}:`
+}
+
+/** 'studymax:mock-registration:<uid or guest>:<termLabel>:<crns joined by commas>'. */
+export function storageKey(scope: RegScope): string {
+  return `${scopePrefix(scope.uid, scope.termLabel)}${scope.crns.join(',')}`
+}
+
+export function load(scope: RegScope): RegState | null {
   try {
-    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null') as RegState | null
-    return parsed && parsed.termLabel === termLabel ? parsed : null
+    const parsed = JSON.parse(localStorage.getItem(storageKey(scope)) ?? 'null') as RegState | null
+    // Rows from before sections carried their meetings aren't drawable: treat them as no run.
+    const ok = parsed && parsed.termLabel === scope.termLabel && parsed.rows.every((r) => Array.isArray(r.meetings))
+    return ok ? parsed : null
   } catch {
     return null
   }
 }
 
-export function save(state: RegState) {
+export function save(scope: RegScope, state: RegState) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+    localStorage.setItem(storageKey(scope), JSON.stringify(state))
   } catch {
-    // storage blocked: the registration still works for this session
+    // storage blocked: the practice run still works for this session
   }
 }
 
-export function clear() {
+export function clear(scope: RegScope) {
   try {
-    localStorage.removeItem(STORAGE_KEY)
+    localStorage.removeItem(storageKey(scope))
   } catch {
     // ignore
+  }
+}
+
+/** Whether this student finished a practice run for this term, whatever its CRNs (the Plan's button). */
+export function hasSavedRun(uid: string | null, termLabel: string): boolean {
+  try {
+    const prefix = scopePrefix(uid, termLabel)
+    for (let i = 0; i < localStorage.length; i++) if (localStorage.key(i)?.startsWith(prefix)) return true
+    return false
+  } catch {
+    return false
   }
 }

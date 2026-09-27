@@ -8,7 +8,8 @@ import { haptic } from '../platform.ts'
 import { laneSeason, layoutSkillTree, pathThrough, type SkillTreeLayout, type TreeMilestone, type TreeNode } from '../lib/skillTree.ts'
 import { Icon } from '../ui/Icon.tsx'
 import { Sheet } from '../ui/Sheet.tsx'
-import { useTreeInputs, type TreeSelection } from './planView.ts'
+import { useTreeSource, type TreeSelection } from './planView.ts'
+import { useTreeTransition } from './useTreeTransition.ts'
 import { DegreeReadout } from './DegreeReadout.tsx'
 import { PlanIssues } from '../ui/WhatChanged.tsx'
 import { TreeDetail } from './TreeDetail.tsx'
@@ -66,7 +67,9 @@ export function SkillTree({
 }) {
   const m = useModel()
   const reduce = useReducedMotion() ?? false
-  const inputs = useTreeInputs()
+  // The app's plan, or Max's frame while he's reshaping it on a call (planView.ts useTreeSource).
+  const source = useTreeSource()
+  const { inputs } = source
 
   const sectionRef = useRef<HTMLElement>(null)
   const boardRef = useRef<HTMLDivElement>(null)
@@ -84,16 +87,15 @@ export function SkillTree({
     () =>
       width > 0
         ? layoutSkillTree({
-            // After the student's overrides: a failed course isn't done, a dropped one isn't under way.
-            completed: m.planCompleted,
-            inProgress: m.planInProgress,
-            plan: m.plan,
+            completed: source.completed,
+            inProgress: source.inProgress,
+            plan: source.plan,
             ...inputs,
             internshipYear: m.internshipYear,
             width,
           })
         : null,
-    [m.planCompleted, m.planInProgress, m.plan, m.internshipYear, inputs, width],
+    [source, m.internshipYear, inputs, width],
   )
 
   const [selection, setSelection] = useState<TreeSelection | null>(null)
@@ -200,6 +202,12 @@ export function SkillTree({
     const top = board.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop
     scroller.scrollTo({ top: top + y - scroller.clientHeight / 2, behavior: reduce ? 'auto' : 'smooth' })
   }
+
+  // Max reshaping the tree on a call: glide, sprout and prune between his frames, and bring what
+  // changed into view (after the roots re-pin to the new height).
+  const ghosts = useTreeTransition(boardRef, layout, source.liveKey, reduce, (y) => {
+    setTimeout(() => scrollToY(y), 150)
+  })
   const toRoots = () => {
     fromBottom.current = 0
     const board = boardRef.current
@@ -513,6 +521,19 @@ export function SkillTree({
                   select(live?.kind === 'node' && live.code === n.code ? null : { kind: 'node', code: n.code })
                 }}
               />
+            ))}
+            {/* What Max just took out, fading where it was (useTreeTransition). */}
+            {ghosts.map((g) => (
+              <div
+                key={`ghost-${g.node.code}`}
+                className="tree-node tree-node--ghost"
+                style={{ left: g.node.x, top: g.top, width: g.node.w, height: g.node.h }}
+                aria-hidden
+              >
+                <span className="tree-node__head">
+                  <span className="tree-node__code">{courseCode(g.node.code)}</span>
+                </span>
+              </div>
             ))}
 
 

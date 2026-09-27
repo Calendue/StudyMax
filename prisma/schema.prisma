@@ -261,6 +261,12 @@ model MaxCall {
   durationSec  Int?
   recordingUrl String?   @db.VarChar // retention: purge per policy
   transcript   Json? // purge per retention policy
+  /// Unguessable topic for the live Plan-tab channel (Supabase Broadcast), returned only to the caller.
+  liveToken    String?   @unique @db.VarChar
+  /// The app's exact plan inputs at call time (CallPlanInputs), so Max plans what's on screen; advanced on each save.
+  planInputs   Json?
+  /// Last time the app read the live snapshot — uiVisible = seen in the last 25 s.
+  uiSeenAt     DateTime? @db.Timestamp(6)
   createdAt    DateTime  @default(now()) @db.Timestamp(6)
   updatedAt    DateTime  @updatedAt @db.Timestamp(6)
 

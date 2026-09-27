@@ -5,27 +5,32 @@ import { createHash } from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import { db } from './_db.js'
 import type { PlannedTerm } from '../src/lib/plan.js'
-import type { PlanInputs, ValidationResult } from '../src/lib/max/planningAdapter.js'
+import type { ValidationResult } from '../src/lib/max/planningAdapter.js'
 
 // v2: PlannedCourse carries cu, group and year; the scheduler honours offerings, credit and level
 // gates, and the senior CMPT limit.
-// v3: Max's plan is the app's plan: the program's degree, the student's own Fall/Winter and
-// Spring/Summer loads, registered courses booked in their terms; the hash covers every input.
-export const PLANNER_VERSION = 'lib/planner@exact-v3'
+// v3: server plans go through planningAdapter.regenerate(), the app's own plan — the whole degree,
+// credentials and a declared minor, at the student's load and Spring/Summer preferences.
+// v4: the exact planner (src/lib/planner): earliest graduation proven, no relaxed rules, loads 1-5
+// and Spring/Summer 0-2, full-year courses in two terms; the hash covers every planner input.
+export const PLANNER_VERSION = 'lib/planner@exact-v4'
 
-const byCode = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
+const sortedCodes = (codes: readonly string[] | undefined) => [...new Set(codes ?? [])].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
 
-/**
- * sha256 of every planner input, sorted, so the same student and settings always hash the same.
- * A snapshot without `inputs` (a scenario commit's resultInputs) hashes the fields it has, in a fixed
- * key order.
- */
-export function hashInputs(snapshot: Omit<PlanSnapshot, 'terms' | 'validation'>): string {
-  const inputs = snapshot.inputs ?? {
-    program: snapshot.targetProgramId,
-    specializations: [...snapshot.targetSpecializationIds].sort(byCode),
-    load: snapshot.coursesPerTerm,
-    start: { season: snapshot.startSeason, year: snapshot.startYear },
+/** Every planner input, normalised and sorted, so the same student always hashes the same. */
+function hashInputs(snapshot: PlanSnapshot): string {
+  const inputs = {
+    targetProgramId: snapshot.targetProgramId,
+    minorProgramId: snapshot.minorProgramId,
+    targetSpecializationIds: sortedCodes(snapshot.targetSpecializationIds),
+    coursesPerTerm: snapshot.coursesPerTerm,
+    springSummer: snapshot.springSummer,
+    summerPerTerm: snapshot.summerPerTerm,
+    startSeason: snapshot.startSeason,
+    startYear: snapshot.startYear,
+    completed: sortedCodes(snapshot.completed),
+    inProgress: sortedCodes(snapshot.inProgress),
+    away: snapshot.away ?? null,
   }
   return createHash('sha256').update(JSON.stringify(inputs)).digest('hex')
 }
@@ -35,12 +40,17 @@ export interface PlanSnapshot {
   minorProgramId: string | null
   targetSpecializationIds: string[]
   coursesPerTerm: number
+  /** Spring/Summer preferences the plan was built with. No GeneratedPlan/PlanVersion columns — kept in the inputs hash. */
+  springSummer: boolean
+  summerPerTerm: number
   startSeason: string
   startYear: number
   terms: PlannedTerm[]
   validation: ValidationResult
-  /** Every input the plan was built from (regenerate()'s `inputs`); what inputsHash hashes. */
-  inputs?: PlanInputs
+  /** Hashed with the rest (not stored in columns): the courses and internship year the plan was built from. */
+  completed?: string[]
+  inProgress?: string[]
+  away?: number | null
 }
 
 /** Bumps GeneratedPlan.version, writes the head, and appends a PlanVersion — always together (I4). */

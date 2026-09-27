@@ -4,6 +4,7 @@
 // assistant's own top-level server URL, so these arrive at a different route.
 import type { Prisma } from '@prisma/client'
 import { db, hasDatabase } from '../_db.js'
+import { publish } from './_live.js'
 
 interface VercelRequest {
   method?: string
@@ -26,6 +27,8 @@ function verifiedByServerSecret(req: VercelRequest): boolean {
   if (!configured) return false
   return getHeader(req, 'x-vapi-secret') === configured
 }
+
+const TERMINAL = new Set(['ended', 'failed', 'voicemail', 'no_answer'])
 
 // Vapi's CallStatus values -> ours (spec 03's MaxCall.status enum).
 const STATUS_MAP: Record<string, string> = {
@@ -71,24 +74,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (type === 'status-update') {
     const vapiStatus = (message.status as string | undefined) ?? call?.status
     const mapped = vapiStatus ? STATUS_MAP[vapiStatus] : undefined
-    if (mapped) {
+    // Webhooks can arrive out of order: a late "ringing" must never reopen a finished call, which
+    // would hold max_call_one_active_uq and lock the student out of Max.
+    if (mapped && !TERMINAL.has(row.status)) {
       await db().maxCall.update({
         where: { callId: row.callId },
         data: { status: mapped, ...(mapped === 'in_progress' && !row.startedAt ? { startedAt: new Date() } : {}) },
       })
       console.log(`[Max] call ${row.callId} -> ${mapped}`)
+      await publish(row.liveToken, { type: 'call.status', status: mapped })
     }
   } else if (type === 'end-of-call-report') {
     const endedReason = (message.endedReason as string | undefined) ?? call?.endedReason ?? null
     const isVoicemail = endedReason?.includes('voicemail') === true
+    // Never reached "in-progress": nobody picked up (did-not-answer, busy, a failed dial).
+    // An end only a conversation can have also counts, in case the in-progress status-update was lost.
+    const answered = Boolean(row.startedAt) || /customer-ended-call|assistant-ended-call|assistant-said-end-call-phrase|exceeded-max-duration/.test(endedReason ?? '')
     const endedAt = new Date()
     const durationSec = row.startedAt ? Math.round((endedAt.getTime() - row.startedAt.getTime()) / 1000) : null
     const transcript = message.transcript ?? message.artifact
 
+    const finalStatus = isVoicemail ? 'voicemail' : answered ? 'ended' : 'no_answer'
     await db().maxCall.update({
       where: { callId: row.callId },
       data: {
-        status: isVoicemail ? 'voicemail' : 'ended',
+        status: finalStatus,
         endedReason,
         endedAt,
         durationSec,
@@ -96,15 +106,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
     })
 
-    // Flip hasMetMax after a real (non-voicemail) completed call — drives S1's returning-caller line.
+    // Flip hasMetMax after a call they actually picked up — drives the returning-caller greeting.
     // ConversationSummary generation is deferred (docs/BayMax/implementation/07): a single demo call
     // doesn't need cross-call memory yet.
-    if (!isVoicemail) {
+    if (!isVoicemail && answered) {
       await db()
         .maxSettings.update({ where: { userId: row.userId }, data: { hasMetMax: true } })
         .catch(() => {})
     }
     console.log(`[Max] call ${row.callId} ended (${endedReason ?? 'unknown'}) after ${durationSec ?? '?'}s`)
+    await publish(row.liveToken, { type: 'call.status', status: finalStatus, endedReason })
   }
   // hang / transcript-only events: logging only this weekend (spec 09) — acknowledged, not stored.
 

@@ -8,9 +8,7 @@
 // StudentProfile (present once onboarding has reached the results, removed on a reset).
 import { Prisma } from '@prisma/client'
 import { cleanCloudSession, internshipFrom, USASK_INSTITUTION, type CloudSession } from '../src/lib/cloudSession.js'
-import { regenerate, validate } from '../src/lib/max/planningAdapter.js'
-import { nextFall, upcomingTerm } from '../src/lib/plan.js'
-import { seasonNow, termLabel } from '../src/lib/currentTerms.js'
+import { defaultStart, regenerate, validate, type AdapterInput } from '../src/lib/max/planningAdapter.js'
 import { db, hasDatabase } from './_db.js'
 import { verifiedUser, type VerifiedUser } from './_firebaseAuth.js'
 import { allow } from './_rateLimit.js'
@@ -149,44 +147,63 @@ async function save(user: VerifiedUser, session: CloudSession) {
   let planSnapshot: PlanSnapshot | null = null
   if (profile) {
     try {
-      // The plan the app draws for this student (App.tsx): the program's own degree (the degree
-      // variant is device-only, so the Four-year for CS), their loads, and what they're taking and
-      // registered for booked in this term, as the app books a course with no term picked.
-      const now = new Date()
-      const taking = [...new Set([...session.inProgress, ...session.registered])].filter((c) => !session.completed.includes(c))
-      const start = session.completed.length === 0 && taking.length === 0 ? nextFall(now) : upcomingTerm(now)
-      const { terms, inputs } = regenerate({
-        completed: new Set(session.completed),
-        inProgress: new Set(taking),
+      const today = new Date()
+      const completed = new Set(session.completed)
+      const inProgress = new Set([...session.inProgress, ...session.registered])
+      const start = defaultStart(completed, inProgress, today)
+      const input: AdapterInput = {
+        completed,
+        inProgress,
         targetProgramId: session.programId,
         targetSpecializationIds: session.concentrationIds,
+        minorProgramId: session.minorId,
         coursesPerTerm: session.coursesPerTerm,
         springSummer: session.springSummer,
         summerPerTerm: session.summerPerTerm,
-        booked: taking.length > 0 ? { [termLabel(seasonNow(now), now)]: taking } : {},
         start,
+        today,
         // The internship year the app resolved; an older app build sends none, so the stored one.
         away:
           session.internshipAY !== undefined
             ? session.internshipAY
             : ((await prisma.studentProfile.findUnique({ where: { userId }, select: { internshipAcademicYear: true } }))?.internshipAcademicYear ?? null),
-      })
+      }
+      const { terms } = regenerate(input)
       planSnapshot = {
         targetProgramId: session.programId,
         minorProgramId: session.minorId,
         targetSpecializationIds: session.concentrationIds,
-        coursesPerTerm: inputs.load,
+        coursesPerTerm: session.coursesPerTerm,
+        springSummer: session.springSummer,
+        summerPerTerm: session.summerPerTerm,
         startSeason: start.season,
         startYear: start.year,
+        completed: [...completed],
+        inProgress: [...inProgress],
+        away: input.away ?? null,
         terms,
-        validation: validate(terms),
-        inputs,
+        validation: validate(terms, input),
       }
     } catch {
       planSnapshot = null
     }
   }
-  const existingPlan = planSnapshot ? await prisma.generatedPlan.findUnique({ where: { userId }, select: { planId: true, version: true } }) : null
+  const existingPlan = planSnapshot
+    ? await prisma.generatedPlan.findUnique({
+        where: { userId },
+        select: { planId: true, version: true, terms: true, targetSpecializationIds: true, coursesPerTerm: true, startSeason: true, startYear: true },
+      })
+    : null
+  // An autosave that changes nothing about the plan writes no new version. Every save used to, which
+  // bumped GeneratedPlan.version under a scenario open on a Max call and made its save come back STALE.
+  const planUnchanged =
+    planSnapshot !== null &&
+    existingPlan !== null &&
+    JSON.stringify(existingPlan.terms) === JSON.stringify(planSnapshot.terms) &&
+    JSON.stringify(existingPlan.targetSpecializationIds) === JSON.stringify(planSnapshot.targetSpecializationIds) &&
+    existingPlan.coursesPerTerm === planSnapshot.coursesPerTerm &&
+    existingPlan.startSeason === planSnapshot.startSeason &&
+    existingPlan.startYear === planSnapshot.startYear
 
   // One batch, so a reader never sees the courses half replaced. Batched (not interactive)
   // transactions are the kind that work through pgbouncer.
@@ -197,7 +214,7 @@ async function save(user: VerifiedUser, session: CloudSession) {
       ? prisma.studentProfile.upsert({ where: { userId }, update: profile, create: { userId, ...profile } })
       : prisma.studentProfile.deleteMany({ where: { userId } }),
   ]
-  if (planSnapshot && existingPlan) {
+  if (planSnapshot && existingPlan && !planUnchanged) {
     ops.push(...planVersionWrites(existingPlan.planId, existingPlan.version + 1, planSnapshot, { createdBy: 'onboarding' }))
   }
   await prisma.$transaction(ops)

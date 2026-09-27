@@ -3,14 +3,32 @@
 // bipartite audit engine from scratch — a deliberate scope substitution for the hackathon weekend
 // (docs/BayMax/implementation/03-planning-and-audit-adapter.md; docs/BayMax/spec/05-planning-engine.md).
 //
-// PREREQ_UNMET and OVER_LOAD can't occur by construction (buildPlan never places a course before an
-// unmet prerequisite, and never exceeds coursesPerTerm), and the current catalogue has no offering
-// calendar or exclusion data to check NOT_OFFERED/EXCLUSION_CONFLICT/PROGRAM_RESTRICTED against — so
-// `validate` below only warns about courses that haven't run in three years (catalog `atRisk`).
+// regenerate() builds the same plan the app's Plan tab does (src/App.tsx, the buildStudentPlan call):
+// the whole degree where the program maps one, the student's targets and the credentials they're
+// partway through, at the student's own load preferences. Every server path (Max's scenarios,
+// api/session.ts's autosave, the demo seed) goes through it, so a scenario always diffs like with like.
+//
+// validate() re-checks the planner's hard constraints on its output. The exact planner never relaxes
+// a rule (an unplaceable course is left out with a diagnostic), so an ERROR here means a real bug and
+// blocks the commit (spec 05); AT_RISK warns about a course with no section in three years.
 import { programs } from '../../data/programs/index.js'
-import { buildStudentPlan, type PlannedTerm, type TermStart } from '../plan.js'
-import { clampLoad, summerLoadOf } from '../planner/loads.js'
 import { defaultCatalog } from '../catalog.js'
+import type { Program } from '../../data/programs/types.js'
+import { computeCredentials } from '../credentials.js'
+import { bookedByTerm, seasonNow } from '../currentTerms.js'
+import { computeMatches, type SpecializationMatch } from '../match.js'
+import {
+  buildStudentPlan,
+  courseRunsIn,
+  electiveLabel,
+  isElective,
+  nextFall,
+  prerequisitesMet,
+  upcomingTerm,
+  type PlannedTerm,
+  type Season,
+  type TermStart,
+} from '../plan.js'
 
 /** "computer-science" -> "Computer Science", for anything Max says out loud — never speak a raw
  * Program.id slug. Falls back to the id itself if it's somehow unknown, rather than throwing. */
@@ -24,55 +42,45 @@ export function specializationName(programId: string, specializationId: string):
   return program?.specializations.find((s) => s.id === specializationId)?.name ?? specializationId
 }
 
+/** A plan entry as Max says it: a course code, or an open slot's label ("Breadth elective"). */
+export function speakableCourse(code: string): string {
+  return isElective(code) ? electiveLabel(code) : code
+}
+
 export interface AdapterInput {
   completed: Set<string>
-  /** From StudentCourse where status = "in_progress", minus any DROP_COURSE ops. */
+  /** From StudentCourse (in_progress + registered), minus any DROP_COURSE ops. */
   inProgress: Set<string>
   /** StudentProfile.majorProgramId, e.g. "computer-science". */
   targetProgramId: string
+  /** The concentrations the student picked (StudentProfile.concentrationIds). */
   targetSpecializationIds: string[]
-  /** Fall/Winter courses per term (1-5, clamped) — a ceiling, not an exact fill (spec 03 decision 5). */
+  /** A declared minor: its requirement lists become targets too, as onboarding seeds them. */
+  minorProgramId: string | null
+  /** StudentProfile.maxCoursesPerTerm — a hard ceiling per Fall/Winter term (spec 03), not an exact fill. */
   coursesPerTerm: number
+  /** StudentProfile.springSummer: whether the plan may use Spring/Summer terms. */
+  springSummer: boolean
+  /** StudentProfile.maxSummerCourses: the ceiling for a Spring/Summer term. */
+  summerPerTerm: number
   start: TermStart
-  /** StudentProfile.internshipAcademicYear: an academic year away on an internship, left empty. */
+  /** "Now", for the term the in-progress courses are booked in. */
+  today: Date
+  /** Each in-progress course's own season (the app's courseTerms). Missing: the season running now. */
+  inProgressSeasons?: Record<string, Season>
+  /** The degree variant the student chose (Program.degrees[].variant); missing: the program's default. */
+  degreeVariant?: string | null
+  /** An academic year left empty for an internship (PlanOptions.away): the app's own on a live call,
+   * else StudentProfile.internshipAcademicYear, which the app resolved and saved. */
   away?: number | null
-  /** StudentProfile.springSummer: Spring/Summer terms on. Omitted = off. */
-  springSummer?: boolean
-  /** StudentProfile.maxSummerCourses: courses per Spring/Summer term (0-2; 0 = off, like springSummer false). */
-  summerPerTerm?: number
-  /** Registered courses fixed in their terms, by term label ("Fall 2026"), counted against that term's load. */
-  booked?: Record<string, string[]>
-  /**
-   * The degree variant ('bsc-4', 'bsc-honours', 'bsc-3'). The app's pick is device-only, so the
-   * server omits it and gets the program's default degree (the Four-year for CS), as the app does.
-   */
-  degreeVariant?: string
 }
 
-/**
- * Every input the planner reads for one plan, normalised and sorted so the same student always
- * gives the same JSON: what PlanVersion.inputsHash hashes (api/_planVersion.ts).
- */
-export interface PlanInputs {
-  program: string
-  specializations: string[]
-  completed: string[]
-  inProgress: string[]
-  /** [term label, sorted codes], by term label. */
-  booked: [string, string[]][]
-  /** Fall/Winter courses per term, 1-5. */
-  load: number
-  /** Spring/Summer courses per term, 0-2; 0 = no Spring/Summer terms. */
-  summer: number
-  /** Degree.id ('usask-cmpt-bsc-4'); null for a program with no degree model. */
-  degree: string | null
-  start: TermStart
-  away: number | null
+/** Where a plan starts when nobody picked: the next Fall for someone with nothing taken or under way, else the upcoming term (the app's rule). */
+export function defaultStart(completed: ReadonlySet<string>, inProgress: ReadonlySet<string>, today: Date): TermStart {
+  return completed.size === 0 && inProgress.size === 0 ? nextFall(today) : upcomingTerm(today)
 }
 
-const sorted = (codes: Iterable<string>) => [...new Set(codes)].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
-
-export type ValidationSeverity = 'WARNING' | 'ERROR'
+export type ValidationSeverity = 'INFO' | 'WARNING' | 'ERROR'
 
 export interface ValidationIssue {
   code: string
@@ -100,80 +108,144 @@ export interface RoadmapDiff {
   headline: string[]
 }
 
+/** In-progress courses that aren't also completed (the app's takingNow rule). */
+function takingNow(input: AdapterInput): string[] {
+  return [...input.inProgress].filter((code) => !input.completed.has(code))
+}
+
+/** The in-progress courses, booked in their own season's term — the app's currentByTerm. Without
+ * per-course seasons (a saved account; they stay on the device) each goes in the season running now. */
+function bookedNow(input: AdapterInput): Record<string, string[]> {
+  const courses = takingNow(input)
+  const now = seasonNow(input.today)
+  const order: Season[] = ['Fall', 'Winter', 'Spring/Summer']
+  const from = order.indexOf(now)
+  const groups = [...order.slice(from), ...order.slice(0, from)]
+    .map((season) => ({ season, courses: courses.filter((c) => (input.inProgressSeasons?.[c] ?? now) === season) }))
+    .filter((g) => g.courses.length > 0)
+  return bookedByTerm(groups, input.today)
+}
+
+/** The program's degree as the student chose it: their variant, else the default. */
+function activeDegree(program: Program, variant: string | null | undefined) {
+  return program.degrees?.find((d) => d.variant === variant) ?? program.degree
+}
+
+/** A plan as one string ("Winter 2027:CMPT371,CMPT470|…") — equal plans, equal hashes. */
+export function planHash(terms: PlannedTerm[]): string {
+  return terms.map((t) => `${t.label}:${t.courses.map((c) => c.code).join(',')}`).join('|')
+}
+
 /**
- * Translates AdapterInput into what buildStudentPlan expects and runs it the way App.tsx does (the
- * program's degree, the chosen loads, booked courses, the internship year) — no planning logic of
- * its own. Returns the plan and its normalised inputs (for PlanVersion.inputsHash). Throws if
- * targetProgramId doesn't match a known program; returns an empty plan if none of
- * targetSpecializationIds resolve (matches buildStudentPlan's own "no targets = no plan" rule).
+ * The student's plan, built exactly as the app builds it. Throws if targetProgramId doesn't match a
+ * known program.
  */
-export function regenerate(input: AdapterInput): { terms: PlannedTerm[]; inputs: PlanInputs } {
+export function regenerate(input: AdapterInput): { terms: PlannedTerm[] } {
   const program = programs.find((p) => p.id === input.targetProgramId)
   if (!program) {
     throw new Error(`planningAdapter.regenerate: unknown targetProgramId "${input.targetProgramId}"`)
   }
-  const degree = (input.degreeVariant ? program.degrees?.find((d) => d.variant === input.degreeVariant) : undefined) ?? program.degree
-  const inputs: PlanInputs = {
-    program: program.id,
-    specializations: sorted(input.targetSpecializationIds),
-    completed: sorted(input.completed),
-    inProgress: sorted(input.inProgress),
-    booked: Object.keys(input.booked ?? {})
-      .sort()
-      .map((label): [string, string[]] => [label, sorted(input.booked![label])])
-      .filter(([, codes]) => codes.length > 0),
-    load: clampLoad(input.coursesPerTerm),
-    summer: summerLoadOf(input.springSummer, input.summerPerTerm),
-    degree: degree?.id ?? null,
-    start: { season: input.start.season, year: input.start.year },
-    away: input.away ?? null,
-  }
-  const targets = program.specializations.filter((s) => inputs.specializations.includes(s.id))
-  const terms =
-    targets.length === 0
-      ? []
-      : buildStudentPlan(targets, program.specializations, new Set(inputs.completed), inputs.inProgress, inputs.load, inputs.start, {
-          springSummer: inputs.summer > 0,
-          ...(inputs.summer > 0 ? { summerPerTerm: inputs.summer } : {}),
-          degree,
-          booked: Object.fromEntries(inputs.booked),
-          away: inputs.away,
-        })
-  return { terms, inputs }
+
+  const degree = activeDegree(program, input.degreeVariant)
+  const matches = computeMatches(program.specializations, input.completed, degree)
+  // Certificates and minors: planned by the same engine, and targets when the student declared one.
+  const credentials = computeCredentials(programs, input.completed, program.id)
+  const planningSpecs = [...program.specializations, ...credentials.map((c) => c.spec)]
+
+  // Onboarding's seed: the concentrations, then the declared minor's requirement lists.
+  const minorSpecIds = programs.find((p) => p.id === input.minorProgramId)?.specializations.map((s) => s.id) ?? []
+  const seed = [...input.targetSpecializationIds, ...minorSpecIds]
+  const hero = matches.find((m) => m.spec.id === seed[0]) ?? credentials.find((c) => c.spec.id === seed[0]) ?? matches[0]
+  const byId = new Map<string, SpecializationMatch>([...matches, ...credentials].map((m) => [m.spec.id, m]))
+  const extras = seed.slice(1).flatMap((id) => {
+    const m = byId.get(id)
+    return m ? [m] : []
+  })
+  const targets = [...(hero ? [hero] : []), ...extras].filter((m) => m.remaining > 0)
+
+  const terms = buildStudentPlan(
+    targets.map((t) => t.spec),
+    planningSpecs,
+    input.completed,
+    takingNow(input),
+    input.coursesPerTerm,
+    input.start,
+    {
+      springSummer: input.springSummer,
+      summerPerTerm: input.summerPerTerm,
+      degree,
+      booked: bookedNow(input),
+      away: input.away ?? null,
+    },
+  )
+  return { terms }
 }
 
 /**
- * Always ok: the planner's construction already rules out every ERROR code this catalogue could
- * produce. The one thing worth a WARNING is a planned course with no Banner section in the last
- * three years (src/lib/catalog.ts `atRisk`, e.g. CMPT 440), which Max can say out loud.
+ * Re-checks a plan against the hard constraints (spec 05's ERROR codes this data can support):
+ * OVER_LOAD (a term over the student's own ceiling, courses already under way counted), PREREQ_UNMET,
+ * NOT_OFFERED and DUPLICATE_COURSE, using the planner's own offering and prerequisite rules.
  */
-export function validate(terms: PlannedTerm[]): ValidationResult {
-  const catalog = defaultCatalog()
+export function validate(terms: PlannedTerm[], input: AdapterInput): ValidationResult {
   const issues: ValidationIssue[] = []
+  const catalog = defaultCatalog()
+  const booked = bookedNow(input)
+  const passed = new Set([...input.completed, ...takingNow(input)])
+  const seen = new Set<string>()
+
+  if (takingNow(input).length > 0) {
+    issues.push({ code: 'ASSUMES_IN_PROGRESS_PASS', severity: 'INFO', message: 'This plan assumes you pass the courses you are taking now.' })
+  }
+
   for (const term of terms) {
-    for (const course of term.courses) {
-      if (!catalog[course.code]?.atRisk) continue
-      const name = course.code.replace(/(\d)/, ' $1')
-      issues.push({
-        code: 'AT_RISK',
-        severity: 'WARNING',
-        message: `${name} hasn't had a class section in the last three years, so it may not run in ${term.label}.`,
-      })
+    const season = term.label.slice(0, term.label.lastIndexOf(' ')) as Season
+    const cap = season === 'Spring/Summer' ? input.summerPerTerm : input.coursesPerTerm
+    // Booked courses above the load are the student's own registration (shown, never grown); only
+    // planned courses past what's left of the load are an error.
+    const room = Math.max(0, cap - (booked[term.label]?.length ?? 0))
+    if (term.courses.length > room) {
+      issues.push({ code: 'OVER_LOAD', severity: 'ERROR', message: `${term.label} has ${term.courses.length + (booked[term.label]?.length ?? 0)} courses, over your limit of ${cap}.` })
+    }
+
+    const real = term.courses.map((c) => c.code).filter((code) => !isElective(code))
+    const alongside = new Set(real)
+    for (const code of real) {
+      if (seen.has(code) || passed.has(code)) {
+        issues.push({ code: 'DUPLICATE_COURSE', severity: 'ERROR', message: `${code} appears more than once.` })
+      }
+      if (!courseRunsIn(code, season, input.springSummer)) {
+        issues.push({ code: 'NOT_OFFERED', severity: 'ERROR', message: `${code} isn't offered in ${season}.` })
+      }
+      if (catalog[code]?.atRisk) {
+        issues.push({ code: 'AT_RISK', severity: 'WARNING', message: `${code.replace(/(\d)/, ' $1')} hasn't had a class section in the last three years, so it may not run in ${term.label}.` })
+      }
+      if (!prerequisitesMet(code, passed, alongside)) {
+        issues.push({ code: 'PREREQ_UNMET', severity: 'ERROR', message: `${code} is planned before its prerequisites are done.` })
+      }
+    }
+    for (const code of real) {
+      seen.add(code)
+      passed.add(code)
     }
   }
-  return { ok: true, issues }
+
+  return { ok: !issues.some((i) => i.severity === 'ERROR'), issues }
 }
 
-/** Every course code in a plan, mapped to the label of the term it's planned in. */
+/** Every named course in a plan, mapped to the label of the term it's planned in. Open elective
+ * slots are left out: their placeholders are numbered by position, so they'd look added/removed on
+ * any change without anything real having moved. */
 function courseTermMap(terms: PlannedTerm[]): Map<string, string> {
-  return new Map(terms.flatMap((term) => term.courses.map((c) => [c.code, term.label] as const)))
+  return new Map(
+    terms.flatMap((term) => term.courses.filter((c) => !isElective(c.code)).map((c) => [c.code, term.label] as const)),
+  )
 }
 
 /**
  * Compares two PlannedTerm[] snapshots by course code + term label. Templated headline strings,
  * not an LLM call (spec 05's RoadmapDiff.headline).
  */
-export function diff(before: PlannedTerm[], after: PlannedTerm[]): RoadmapDiff {
+export function diff(before: PlannedTerm[], after: PlannedTerm[], underWay: ReadonlySet<string> = new Set()): RoadmapDiff {
   const beforeLabel = before.length > 0 ? before[before.length - 1].label : null
   const afterLabel = after.length > 0 ? after[after.length - 1].label : null
   const changed = beforeLabel !== afterLabel
@@ -187,6 +259,7 @@ export function diff(before: PlannedTerm[], after: PlannedTerm[]): RoadmapDiff {
     .filter(([code, label]) => afterMap.has(code) && afterMap.get(code) !== label)
     .map(([code, from]) => ({ code, from, to: afterMap.get(code)! }))
 
+  // Graduation always comes first (spec 05), even unchanged — it's the answer to "what does that do?"
   const headline: string[] = []
   if (changed) {
     headline.push(
@@ -196,12 +269,20 @@ export function diff(before: PlannedTerm[], after: PlannedTerm[]): RoadmapDiff {
           ? `Graduation is now projected for ${afterLabel}.`
           : `This plan no longer has a projected graduation term.`,
     )
+  } else if (afterLabel) {
+    headline.push(`Graduation stays ${afterLabel}.`)
   }
   if (moved.length > 0) {
-    headline.push(`${moved.length} course${moved.length === 1 ? '' : 's'} shift to a later term.`)
+    headline.push(moved.length === 1 ? '1 course changes terms.' : `${moved.length} courses change terms.`)
   }
-  if (removed.length > 0) {
-    headline.push(`${removed.length} course${removed.length === 1 ? '' : 's'} no longer needed.`)
+  // A course that left the plan because it's under way again (an undone drop) isn't "no longer needed".
+  const backUnderWay = removed.filter((code) => underWay.has(code))
+  const unneeded = removed.length - backUnderWay.length
+  if (backUnderWay.length > 0) {
+    headline.push(`${backUnderWay.join(' and ')} ${backUnderWay.length === 1 ? 'is' : 'are'} back as something you're taking now.`)
+  }
+  if (unneeded > 0) {
+    headline.push(`${unneeded} course${unneeded === 1 ? '' : 's'} no longer needed.`)
   }
 
   return { graduation: { before: beforeLabel, after: afterLabel, changed }, added, removed, moved, headline: headline.slice(0, 3) }

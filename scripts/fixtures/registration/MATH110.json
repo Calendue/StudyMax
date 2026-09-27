@@ -1,0 +1,494 @@
+[
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "20507",
+  "subject": "MATH",
+  "courseNumber": "110",
+  "sequenceNumber": "02",
+  "courseTitle": "Calculus I",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Lecture",
+  "creditHours": 3,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 110,
+  "enrollment": 110,
+  "seatsAvailable": 0,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "M2",
+  "isSectionLinked": true,
+  "reservedSeatSummary": {
+   "maximumEnrollmentReserved": 94,
+   "seatsAvailableUnreserved": -1
+  },
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": true,
+     "tuesday": false,
+     "wednesday": true,
+     "thursday": false,
+     "friday": true,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "1030",
+     "endTime": "1120",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "20508",
+  "subject": "MATH",
+  "courseNumber": "110",
+  "sequenceNumber": "04",
+  "courseTitle": "Calculus I",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Lecture",
+  "creditHours": 3,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 110,
+  "enrollment": 110,
+  "seatsAvailable": 0,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "M2",
+  "isSectionLinked": true,
+  "reservedSeatSummary": {
+   "maximumEnrollmentReserved": 74,
+   "seatsAvailableUnreserved": 0
+  },
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": true,
+     "tuesday": false,
+     "wednesday": true,
+     "thursday": false,
+     "friday": true,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "1130",
+     "endTime": "1220",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "32375",
+  "subject": "MATH",
+  "courseNumber": "110",
+  "sequenceNumber": "92",
+  "courseTitle": "Calculus I",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Lecture",
+  "creditHours": 3,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 25,
+  "enrollment": 22,
+  "seatsAvailable": 3,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": null,
+  "isSectionLinked": false,
+  "reservedSeatSummary": {
+   "maximumEnrollmentReserved": 20,
+   "seatsAvailableUnreserved": 0
+  },
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": true,
+     "tuesday": false,
+     "wednesday": true,
+     "thursday": false,
+     "friday": true,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "1030",
+     "endTime": "1120",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "26687",
+  "subject": "MATH",
+  "courseNumber": "110",
+  "sequenceNumber": "96",
+  "courseTitle": "Calculus I",
+  "campusDescription": "St. Peter&#39;s College",
+  "scheduleTypeDescription": "Lecture",
+  "creditHours": 3,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 40,
+  "enrollment": 17,
+  "seatsAvailable": 23,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "M9",
+  "isSectionLinked": true,
+  "reservedSeatSummary": null,
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": false,
+     "tuesday": false,
+     "wednesday": true,
+     "thursday": false,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "0900",
+     "endTime": "1150",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "22444",
+  "subject": "MATH",
+  "courseNumber": "110",
+  "sequenceNumber": "L31",
+  "courseTitle": "Calculus I",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Laboratory",
+  "creditHours": 0,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 75,
+  "enrollment": 61,
+  "seatsAvailable": 14,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "L2",
+  "isSectionLinked": true,
+  "reservedSeatSummary": null,
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": false,
+     "tuesday": false,
+     "wednesday": false,
+     "thursday": true,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "0830",
+     "endTime": "0950",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "22451",
+  "subject": "MATH",
+  "courseNumber": "110",
+  "sequenceNumber": "L35",
+  "courseTitle": "Calculus I",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Laboratory",
+  "creditHours": 0,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 75,
+  "enrollment": 75,
+  "seatsAvailable": 0,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "L2",
+  "isSectionLinked": true,
+  "reservedSeatSummary": null,
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": false,
+     "tuesday": false,
+     "wednesday": false,
+     "thursday": true,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "1130",
+     "endTime": "1250",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "22455",
+  "subject": "MATH",
+  "courseNumber": "110",
+  "sequenceNumber": "L39",
+  "courseTitle": "Calculus I",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Laboratory",
+  "creditHours": 0,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 95,
+  "enrollment": 84,
+  "seatsAvailable": 11,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "L2",
+  "isSectionLinked": true,
+  "reservedSeatSummary": null,
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": false,
+     "tuesday": false,
+     "wednesday": false,
+     "thursday": true,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "1430",
+     "endTime": "1550",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "31386",
+  "subject": "MATH",
+  "courseNumber": "110",
+  "sequenceNumber": "LP1",
+  "courseTitle": "Calculus I",
+  "campusDescription": "St. Peter&#39;s College",
+  "scheduleTypeDescription": "Laboratory",
+  "creditHours": 0,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 40,
+  "enrollment": 17,
+  "seatsAvailable": 23,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "L9",
+  "isSectionLinked": true,
+  "reservedSeatSummary": null,
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": false,
+     "tuesday": false,
+     "wednesday": true,
+     "thursday": false,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "1200",
+     "endTime": "1250",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "28117",
+  "subject": "MATH",
+  "courseNumber": "110",
+  "sequenceNumber": "W02",
+  "courseTitle": "Calculus I",
+  "campusDescription": "Off-campus Site",
+  "scheduleTypeDescription": "Fully Online",
+  "creditHours": 3,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 115,
+  "enrollment": 79,
+  "seatsAvailable": 36,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": null,
+  "isSectionLinked": false,
+  "reservedSeatSummary": {
+   "maximumEnrollmentReserved": 28,
+   "seatsAvailableUnreserved": 36
+  },
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": false,
+     "tuesday": false,
+     "wednesday": false,
+     "thursday": false,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": null,
+     "endTime": null,
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "28416",
+  "subject": "MATH",
+  "courseNumber": "110",
+  "sequenceNumber": "W10",
+  "courseTitle": "Calculus I",
+  "campusDescription": "Suncrest College",
+  "scheduleTypeDescription": "Fully Online",
+  "creditHours": 3,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 2,
+  "enrollment": 0,
+  "seatsAvailable": 2,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": null,
+  "isSectionLinked": false,
+  "reservedSeatSummary": null,
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": false,
+     "tuesday": false,
+     "wednesday": false,
+     "thursday": false,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": null,
+     "endTime": null,
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "28417",
+  "subject": "MATH",
+  "courseNumber": "110",
+  "sequenceNumber": "W16",
+  "courseTitle": "Calculus I",
+  "campusDescription": " USask - Prince Albert Campus",
+  "scheduleTypeDescription": "Fully Online",
+  "creditHours": 3,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 10,
+  "enrollment": 9,
+  "seatsAvailable": 1,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": null,
+  "isSectionLinked": false,
+  "reservedSeatSummary": null,
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": false,
+     "tuesday": false,
+     "wednesday": false,
+     "thursday": false,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": null,
+     "endTime": null,
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "28418",
+  "subject": "MATH",
+  "courseNumber": "110",
+  "sequenceNumber": "W50",
+  "courseTitle": "Calculus I",
+  "campusDescription": "North West College",
+  "scheduleTypeDescription": "Fully Online",
+  "creditHours": 3,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 1,
+  "enrollment": 0,
+  "seatsAvailable": 1,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": null,
+  "isSectionLinked": false,
+  "reservedSeatSummary": null,
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": false,
+     "tuesday": false,
+     "wednesday": false,
+     "thursday": false,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": null,
+     "endTime": null,
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ }
+]

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useModel } from '../model.ts'
 import { termLabel } from '../lib/currentTerms.ts'
+import { treeDegreeProgress } from '../lib/degreeProgress.ts'
 import { currentTermOf, treeTargets, type TreeNode, type TreeStatus, type TreeTargetKind } from '../lib/skillTree.ts'
 
 export type PlanView = 'tree' | 'roadmap'
@@ -78,4 +79,47 @@ export function useTreeInputs() {
     }
   }, [hero, targets, credentials, today, topOverlap])
   return useMemo(() => ({ ...leaves, ...terms }), [leaves, terms])
+}
+
+/**
+ * What the tree draws: the app's own plan, or — while Max is on a call and showing a change — Max's
+ * frame (its plan, what's under way, the pace and the targets). Only the tree follows Max; the rest of
+ * the app keeps m.plan until the student saves and the app adopts it. `liveKey` changes with each
+ * frame, which is what the tree animates on (never on a resize).
+ */
+export function useTreeSource() {
+  const m = useModel()
+  const inputs = useTreeInputs()
+  const frame = m.maxLive.frame
+  // After the student's overrides: a failed course isn't done, a dropped one isn't under way.
+  const { planCompleted: completed, planInProgress: inProgressCourses, plan, matches, credentials, activeDegree } = m
+  return useMemo(() => {
+    if (!frame) return { completed, inProgress: inProgressCourses, plan, inputs, liveKey: null as string | null }
+    const f = frame.inputs
+    const byId = new Map([...matches, ...credentials].map((t) => [t.spec.id, t]))
+    const kindOf = (id: string): TreeTargetKind => {
+      const kind = credentials.find((c) => c.spec.id === id)?.program.kind
+      return kind === 'certificate' || kind === 'minor' ? kind : 'specialization'
+    }
+    const planned = f.targetIds
+      .map((id) => byId.get(id))
+      .filter((t) => t !== undefined && t.totalRequired > 0)
+      .map((match) => ({ match: match!, kind: kindOf(match!.spec.id) }))
+    const partway = credentials.map((match) => ({ match, kind: kindOf(match.spec.id) }))
+    const underWay = new Set(f.inProgress)
+    return {
+      completed,
+      inProgress: f.inProgress,
+      plan: frame.terms,
+      inputs: {
+        ...inputs,
+        targets: treeTargets(planned, partway),
+        inProgressTerms: Object.fromEntries(Object.entries(inputs.inProgressTerms).filter(([c]) => underWay.has(c))),
+        termLoad: f.coursesPerTerm,
+        summerLoad: f.summerPerTerm,
+        degree: activeDegree ? treeDegreeProgress(activeDegree, completed, f.inProgress, frame.terms) : inputs.degree,
+      },
+      liveKey: `${frame.caption}|${frame.terms.map((t) => `${t.label}:${t.courses.map((c) => c.code).join(',')}`).join('|')}`,
+    }
+  }, [frame, completed, inProgressCourses, plan, matches, credentials, activeDegree, inputs])
 }

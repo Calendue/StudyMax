@@ -21,7 +21,15 @@ export type ScenarioOp =
   | { op: 'RESTORE_VERSION'; versionNumber: number }
 
 /** Ops with real planner support this weekend (docs/BayMax/implementation/03-planning-and-audit-adapter.md). */
-export const SUPPORTED_OPS = new Set<ScenarioOp['op']>(['DROP_COURSE', 'RESTORE_VERSION'])
+export const SUPPORTED_OPS = new Set<ScenarioOp['op']>(['DROP_COURSE', 'RESTORE_VERSION', 'SET_PREFERENCE', 'SET_SPECIALIZATIONS'])
+
+/** The preferences SET_PREFERENCE may change, with the app's own bounds (src/lib/cloudSession.ts clamps). */
+export const PREFERENCE_KEYS = {
+  maxCoursesPerTerm: { kind: 'int', min: 1, max: 5 },
+  springSummer: { kind: 'bool' },
+  maxSummerCourses: { kind: 'int', min: 1, max: 3 },
+} as const
+export type PreferenceKey = keyof typeof PREFERENCE_KEYS
 
 /** Ops that can never be committed over voice (I2) — need an in-app tap (spec 06). */
 export const PROGRAM_OPS = new Set<ScenarioOp['op']>(['SET_MAJOR', 'SET_MINOR', 'SET_SPECIALIZATIONS'])

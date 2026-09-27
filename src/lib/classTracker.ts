@@ -44,6 +44,13 @@ export interface Section extends SeatState {
   meetings: MeetingPattern[]
   scheduleType: string | null
   isSectionLinked: boolean
+  /** "USask - Main Saskatoon Campus", "St. Peter's College". Absent from answers of older deployments. */
+  campus?: string | null
+  /**
+   * Banner's link group: a lecture "M1" goes with the "L1" labs and "T1" tutorials (same trailing
+   * group). Null on an unlinked section; absent from answers of older deployments.
+   */
+  linkIdentifier?: string | null
   status: SectionStatus
 }
 

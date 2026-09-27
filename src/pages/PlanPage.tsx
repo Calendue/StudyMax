@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useModel } from '../model.ts'
 import { courseCode } from '../format.ts'
 import { Icon } from '../ui/Icon.tsx'
-import { AddTargetSheet, HiddenPrereqsNotice, PlanControls, PlanCopy, PlanEmpty, PlanLead, PlanTargets } from '../screens/PlanTab.tsx'
+import { AddTargetSheet, HiddenPrereqsNotice, PlanControls, PlanCopy, PlanEmpty, PlanLead, PlanTargets, RegisterEntry } from '../screens/PlanTab.tsx'
 import { CourseDetail, PlanRoadmap, type RoadmapSelection } from '../screens/PlanRoadmap.tsx'
 import { Card } from './Card.tsx'
 import { useLayoutMode } from '../ui/layout.ts'
@@ -10,6 +10,7 @@ import { SkillTree } from '../skilltree/SkillTree.tsx'
 import { PlanViewSwitch } from '../skilltree/PlanViewSwitch.tsx'
 import { usePlanView } from '../skilltree/planView.ts'
 import { WhatIfSheet } from '../screens/WhatIfSheet.tsx'
+import { MaxLiveBar, TalkToMax } from '../maxLive/MaxLiveBar.tsx'
 import { ShareSheet } from '../screens/ShareSheet.tsx'
 
 // The desktop's Plan: Ayo's roadmap across the width, and beside it a panel for the course you pick,
@@ -33,11 +34,15 @@ export function PlanPage() {
                 <PlanLead />
               </p>
             )}
+            <MaxLiveBar />
+            <TalkToMax />
             <PlanTargets />
             <SkillTree dock={docked ? dock : undefined} contained />
           </Card>
         </div>
         <aside className="plan-page__side">
+          {/* Beside the tree, not above it: the tree's box is sized to end above the fold. */}
+          <RegisterEntry />
           {docked && (
             <Card index={1} title="On the tree" icon="plan" className="plan-page__detail">
               <div ref={setDock} />
@@ -79,6 +84,7 @@ export function PlanPage() {
             <PlanLead />
           </p>
           <PlanTargets />
+          <RegisterEntry />
           <HiddenPrereqsNotice />
           <PlanRoadmap selected={selection?.code ?? null} onSelect={setSelection} />
         </Card>
