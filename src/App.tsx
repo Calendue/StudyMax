@@ -10,7 +10,17 @@ import type { School } from './data/schools/types.ts'
 import { computerScience } from './data/programs/computerScience.ts'
 import type { Program } from './data/programs/types.ts'
 import { buildCallScript, type CallContext } from './lib/callScript.ts'
-import { buildStudentPlan, DEFAULT_SUMMER_COURSES, isElective, termsFrom, upcomingTerm, type Season, type TermStart } from './lib/plan.ts'
+import {
+  buildStudentPlan,
+  DEFAULT_COURSES_PER_TERM,
+  DEFAULT_SUMMER_COURSES,
+  isElective,
+  nextFall,
+  termsFrom,
+  upcomingTerm,
+  type Season,
+  type TermStart,
+} from './lib/plan.ts'
 import { computeCredentials } from './lib/credentials.ts'
 import { bookedByTerm, seasonNow, withCurrentCourses } from './lib/currentTerms.ts'
 import { searchCourses, catalogueTitle } from './lib/courseSearch.ts'
@@ -159,6 +169,8 @@ interface SavedState {
   springSummer?: boolean
   /** The most courses the plan puts in a Fall/Winter term, and in a Spring/Summer term. */
   coursesPerTerm?: number
+  /** Whether the student picked coursesPerTerm; older saves hold the old default of 2 without it. */
+  coursesPerTermChosen?: boolean
   summerPerTerm?: number
   /** The term each in-progress course is in, from the transcript or set by the student. */
   courseTerms?: Record<string, Season>
@@ -166,6 +178,11 @@ interface SavedState {
 
 
 const CATALOGUE_CODES = new Set(catalogueCourses.map((c) => c.code))
+
+/** The courses-per-term a saved session's student picked themselves, or null for the default. */
+function chosenLoad(state: Partial<SavedState>): number | null {
+  return state.coursesPerTermChosen && state.coursesPerTerm ? state.coursesPerTerm : null
+}
 
 /** Saved registered courses, keeping only real catalogue codes (older saves held typed text). */
 function registeredFrom(saved?: string[]): string[] {
@@ -230,8 +247,9 @@ function useStudyMax() {
   const [gradYear, setGradYear] = useState<number | null>(saved.gradYear ?? null)
   const [registered, setRegistered] = useState<string[]>(() => registeredFrom(saved.registered))
   const [springSummer, setSpringSummer] = useState(saved.springSummer ?? false)
-  // The plan's load limits: the most courses per Fall/Winter term, and per Spring/Summer term.
-  const [coursesPerTerm, setCoursesPerTerm] = useState(saved.coursesPerTerm ?? 2)
+  // The plan's load limits: the most courses per Fall/Winter term, and per Spring/Summer term. Only a
+  // load the student picked is kept; otherwise it's the program's (see coursesPerTerm below).
+  const [chosenPerTerm, setCoursesPerTerm] = useState<number | null>(() => chosenLoad(saved))
   const [summerPerTerm, setSummerPerTerm] = useState(saved.summerPerTerm ?? DEFAULT_SUMMER_COURSES)
 
   const selectedSchool = universityId === 'usask' ? usask : null
@@ -252,6 +270,8 @@ function useStudyMax() {
       : universityId === 'other'
         ? OTHER_PROGRAM
         : null
+  // A full load (15 credit units, five courses) unless the student chose otherwise.
+  const coursesPerTerm = chosenPerTerm ?? selectedProgram?.coursesPerTerm ?? DEFAULT_COURSES_PER_TERM
 
   const programOptions = useMemo<ProgramOption[]>(() => {
     const fromSchool = availablePrograms
@@ -364,6 +384,7 @@ function useStudyMax() {
     springSummer,
     courseTerms,
     coursesPerTerm,
+    coursesPerTermChosen: chosenPerTerm !== null,
     summerPerTerm,
   }
   const snapshotJson = JSON.stringify(snapshot)
@@ -836,9 +857,11 @@ function useStudyMax() {
       (m) => m.remaining > 0,
     )
   }, [hero, matches, credentials, extraTargetIds])
-  // The plan starts in a term the student picks; in-progress courses count as passed by then.
+  // The plan starts in a term the student picks; in-progress courses count as passed by then. Until
+  // they pick, it's the upcoming term, or the next Fall for someone with nothing taken or under way.
   const startChoices = useMemo(() => termsFrom(upcomingTerm(today), 6), [today])
-  const [startTerm, setStartTerm] = useState<TermStart>(startChoices[0])
+  const [chosenStart, setStartTerm] = useState<TermStart | null>(null)
+  const startTerm = chosenStart ?? (completed.size === 0 && inProgressCourses.length === 0 ? nextFall(today) : startChoices[0])
   // What the student is already taking, by term: it fills part of each term's courses-per-term.
   const booked = useMemo(() => bookedByTerm(currentByTerm, today), [currentByTerm, today])
   const plan = useMemo(
@@ -1062,7 +1085,7 @@ function useStudyMax() {
     setGradYear(state.gradYear ?? null)
     setRegistered(registeredFrom(state.registered))
     setSpringSummer(state.springSummer ?? false)
-    setCoursesPerTerm(state.coursesPerTerm ?? 2)
+    setCoursesPerTerm(chosenLoad(state))
     setSummerPerTerm(state.summerPerTerm ?? DEFAULT_SUMMER_COURSES)
     setUploadStatus('idle')
     seedTargets(seedOf(state))
@@ -1338,7 +1361,8 @@ function useStudyMax() {
     setRegistered([])
     setRegisteredQuery('')
     setSpringSummer(false)
-    setCoursesPerTerm(2)
+    setCoursesPerTerm(null)
+    setStartTerm(null)
     setSummerPerTerm(DEFAULT_SUMMER_COURSES)
     setUniversityId('')
     setProgramId('')
