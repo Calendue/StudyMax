@@ -51,6 +51,8 @@ export interface Wood {
   key: string
   beat: number
   d: string
+  /** Its leaves, in two tones, so the tree reads as foliage rather than a bare stalk. */
+  leaves: [string, string]
   /** Where it leaves the trunk: it grows out from here. */
   ox: number
   oy: number
@@ -84,6 +86,8 @@ export interface ClimbGeometry {
   roots: { d: string; glow: boolean }[]
   branches: Wood[]
   crown: Wood[]
+  /** Short leafy sprigs off the trunk in the open stretches between cards. */
+  sprigs: Wood[]
   links: Link[]
   /** Sap: a signal rising up the trunk out of the roots, from the soil to the first beat. */
   sap: { d: string; len: number; box: Box }
@@ -243,9 +247,31 @@ export function growClimb(input: ClimbInput): ClimbGeometry {
   const sapStart = { x: base.x, y: base.y + (compact ? 30 : 70) }
   const sap = { d: line([sapStart, ...sapPoints]), len: Math.round(lengthOf([sapStart, ...sapPoints])), box: boundsOf([sapStart, ...sapPoints], 24) }
 
-  const grownAt = input.beatTops.map((y, i) =>
-    i === input.beatTops.length - 1 ? 1 : Math.min(1, fractionAt(y - (compact ? 40 : 90))),
-  )
+  // Each beat grows the trunk on past the NEXT beat's cards, so the trunk always runs off the top of
+  // the screen: the tree reads as one continuous climb, never a stalk that stops mid-air.
+  const grownAt = input.beatTops.map((_, i) => {
+    const next = input.beatTops[i + 1]
+    return next === undefined ? 1 : Math.min(1, fractionAt(next - (compact ? 60 : 120)))
+  })
+  /** The first beat whose growth reaches height `y`: a sprig there appears with it. */
+  const beatAt = (y: number) => {
+    const f = fractionAt(y)
+    const i = grownAt.findIndex((g) => g >= f)
+    return i < 0 ? grownAt.length - 1 : i
+  }
+  /** Leaves along a stem at the given fractions, alternating sides, split into the two tones. */
+  const leavesAlong = (points: Stop[], at: { f: number; size: number }[], seed: number): [string, string] => {
+    const tones: [string[], string[]] = [[], []]
+    at.forEach(({ f, size }, k) => {
+      const i = Math.min(points.length - 2, Math.round(f * (points.length - 1)))
+      const p = points[i]
+      const q = points[i + 1]
+      const along = Math.atan2(q.y - p.y, q.x - p.x)
+      const side = (k + seed) % 2 === 0 ? -1 : 1
+      tones[(k + seed) % 2].push(leaf(p, along + side * (0.6 + 0.14 * (k % 2)), size, size * 0.58))
+    })
+    return [tones[0].join(''), tones[1].join('')]
+  }
 
   // ── a branch out to each card: it leaves the trunk a little below the card and rises to its near edge ──
   const branches: Wood[] = input.twigs.map((t, n) => {
@@ -259,17 +285,46 @@ export function growClimb(input: ClimbInput): ClimbGeometry {
     const ox = trunkXAt(stops, oy)
     const points = cubic({ x: ox, y: oy }, { x: ox + dir * gap * 0.3, y: oy - 2 }, { x: ex - dir * gap * 0.5, y: cy + 2 }, { x: ex, y: cy })
     const w0 = Math.max(compact ? 3 : 6, widthAt(oy) * (compact ? 0.45 : 0.4))
-    // A few leaves along the branch, alternating sides.
-    const leaves = (compact ? [0.62] : [0.42, 0.7]).map((f, k) => {
-      const i = Math.round(f * (points.length - 1))
-      const p = points[i]
-      const q = points[Math.min(points.length - 1, i + 1)]
-      const along = Math.atan2(q.y - p.y, q.x - p.x)
-      const side = (k + n) % 2 === 0 ? -1 : 1
-      return leaf(p, along + side * 0.75, compact ? 10 : 17, compact ? 4 : 6.5)
-    })
-    return { key: t.key, beat: t.beat, d: taper(points, w0, compact ? 1.6 : 2.2, 0.8) + leaves.join(''), ox: r(ox), oy: r(oy) }
+    const leaves = leavesAlong(
+      points,
+      compact
+        ? [{ f: 0.45, size: 13 }, { f: 0.8, size: 12 }]
+        : [{ f: 0.28, size: 22 }, { f: 0.5, size: 27 }, { f: 0.72, size: 23 }, { f: 0.9, size: 18 }],
+      n,
+    )
+    return { key: t.key, beat: t.beat, d: taper(points, w0, compact ? 1.6 : 2.2, 0.8), leaves, ox: r(ox), oy: r(oy) }
   })
+
+  // ── sprigs: short leafy twigs off the trunk wherever it would otherwise run bare ──
+  const sprigs: Wood[] = []
+  const pitch = compact ? 130 : 170
+  let flip = 1
+  for (let y = ground - (compact ? 150 : 230); y > top.y + (compact ? 90 : 180); y -= pitch) {
+    if (branches.some((b) => Math.abs(b.oy - y) < (compact ? 40 : 64))) continue
+    flip = -flip
+    const vary = ((Math.round(y) * 7919) % 97) / 97 // a steady variety, the same on every visit
+    const w = widthAt(y)
+    const tx = trunkXAt(stops, y)
+    // On a phone the trunk hugs the right edge, so its sprigs mostly reach into the page.
+    const dir = compact && flip > 0 && vary > 0.35 ? -1 : flip
+    const len = compact ? (dir > 0 ? 12 : 22) + vary * 8 : 42 + vary * 34
+    const start = { x: tx + dir * w * 0.3, y }
+    const end = { x: tx + dir * (w / 2 + len), y: y - len * (0.45 + vary * 0.3) }
+    const points = cubic(start, { x: start.x + dir * len * 0.4, y: y + 2 }, { x: end.x - dir * len * 0.3, y: end.y + len * 0.2 }, end, 16)
+    const leaves = leavesAlong(
+      points,
+      compact ? [{ f: 0.6, size: 12 }, { f: 0.95, size: 13 }] : [{ f: 0.4, size: 20 }, { f: 0.72, size: 25 }, { f: 0.97, size: 22 }],
+      sprigs.length,
+    )
+    sprigs.push({
+      key: `sprig-${Math.round(y)}`,
+      beat: beatAt(y),
+      d: taper(points, Math.max(compact ? 2.4 : 4, w * 0.2), 1.2, 0.8),
+      leaves,
+      ox: r(start.x),
+      oy: r(y),
+    })
+  }
 
   // ── the crown: a branch from the top of the trunk up to each blossom ──
   const crown: Wood[] = input.blossoms.map((b) => {
@@ -277,7 +332,8 @@ export function growClimb(input: ClimbInput): ClimbGeometry {
     const ey = b.box.y + b.box.h - 6
     const rise = Math.max(20, top.y - ey)
     const points = cubic(top, { x: top.x, y: top.y - rise * 0.55 }, { x: ex, y: ey + rise * 0.5 }, { x: ex, y: ey })
-    return { key: b.key, beat: b.beat, d: taper(points, topW * 0.9, compact ? 1.6 : 2.4, 0.9), ox: r(top.x), oy: r(top.y) }
+    const leaves = leavesAlong(points, compact ? [{ f: 0.55, size: 13 }] : [{ f: 0.4, size: 20 }, { f: 0.68, size: 23 }], b.box.x > top.x ? 1 : 0)
+    return { key: b.key, beat: b.beat, d: taper(points, topW * 0.9, compact ? 1.6 : 2.4, 0.9), leaves, ox: r(top.x), oy: r(top.y) }
   })
 
   // ── the roots: spreading through the soil, the long ones reaching across the stage ──
@@ -349,6 +405,7 @@ export function growClimb(input: ClimbInput): ClimbGeometry {
     roots,
     branches,
     crown,
+    sprigs,
     links,
     sap,
     cards: [...[...input.twigs, ...input.chain, ...input.blossoms].map((t) => t.box), ...input.masks],

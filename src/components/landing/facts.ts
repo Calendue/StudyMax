@@ -10,21 +10,24 @@ const count = (n: number) => n.toLocaleString('en-CA')
 
 export const FACTS = {
   courses: count(catalogueCourses.length),
-  csSpecializations: count(computerScience.specializations.length),
-  certificatesAndMinors: count(programs.filter((p) => p.kind === 'certificate' || p.kind === 'minor').length),
-  /** Majors besides Computer Science that get a plan (the empty stubs don't count). */
-  plannedMajors: count(programs.filter((p) => (p.kind ?? 'major') === 'major' && p.id !== computerScience.id && p.specializations.length > 0).length),
+  /** Courses whose catalogue prerequisites StudyMax has, so it can put them in order. */
+  prerequisites: count(Object.values(courseInfo).filter((c) => c.prerequisiteText.length > 0).length),
+  /** Requirement sets StudyMax plans against: specializations, majors' degree paths, certificates and minors. */
+  paths: count(programs.reduce((n, p) => n + p.specializations.length, 0)),
   awards: count(usask.resources.length),
-  /** Awards whose deadline is listed, rather than "Not listed". */
-  awardDeadlines: count(usask.resources.filter((r) => !/^not listed/i.test(r.deadline)).length),
 }
 
-/** A credential's name as the app has it, by program id (certificates and minors) or CS specialization id. */
-export function credentialName(id: string): { name: string; kind: string } {
-  const program = programs.find((p) => p.id === id)
-  if (program) return { name: program.name.replace(/^Certificate in /, '').replace(/ Minor$/, ''), kind: program.kind === 'minor' ? 'Minor' : 'Certificate' }
-  const spec = computerScience.specializations.find((s) => s.id === id)
-  return { name: spec?.name ?? id, kind: 'Specialization' }
+/**
+ * A credential's name as the app has it: a certificate or minor by its program id, or a
+ * specialization or degree path by its program and its own id, labelled with the program.
+ */
+export function credentialName(programId: string, specId?: string): { name: string; kind: string } {
+  const program = programs.find((p) => p.id === programId)
+  if (!program) return { name: specId ?? programId, kind: '' }
+  if (program.kind === 'certificate' || program.kind === 'minor')
+    return { name: program.name.replace(/^Certificate in /, '').replace(/ Minor$/, ''), kind: program.kind === 'minor' ? 'Minor' : 'Certificate' }
+  const spec = program.specializations.find((x) => x.id === specId)
+  return { name: spec?.name ?? program.name, kind: program.name.replace(/ and Bioresources$/, '') }
 }
 
 export function courseTitle(code: string): string {

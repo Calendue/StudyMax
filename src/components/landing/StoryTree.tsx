@@ -60,20 +60,20 @@ export function Wood({ g, grown, reduce }: { g: ClimbGeometry; grown: number; re
         ))}
       </g>
 
+      {/* Branches first, so the trunk covers where they join it. */}
+      {[...g.sprigs, ...g.branches, ...g.crown].map((b) => (
+        <g key={b.key} className={`climb__branch${b.beat <= grown ? ' is-grown' : ''}`} style={{ transformOrigin: `${b.ox}px ${b.oy}px` }}>
+          <path d={b.d} />
+          <path d={b.leaves[0]} className="climb__leaf" />
+          <path d={b.leaves[1]} className="climb__leaf climb__leaf--light" />
+        </g>
+      ))}
+
       <g mask="url(#climb-grow)">
         <path d={g.trunk} className="climb__trunk" />
         <path d={g.trunkShade} className="climb__trunk-shade" />
         <path d={g.trunkLight} className="climb__trunk-light" />
       </g>
-
-      {[...g.branches, ...g.crown].map((b) => (
-        <path
-          key={b.key}
-          d={b.d}
-          className={`climb__branch${b.beat <= grown ? ' is-grown' : ''}`}
-          style={{ transformOrigin: `${b.ox}px ${b.oy}px` }}
-        />
-      ))}
     </svg>
   )
 }

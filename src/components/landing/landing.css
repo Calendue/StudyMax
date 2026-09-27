@@ -11,10 +11,13 @@
   --gutter: clamp(24px, 6.4vw, 120px);
   --card-max: 560px;
 
-  --wood: color-mix(in srgb, var(--taupe) 84%, transparent);
+  --wood: color-mix(in srgb, var(--taupe) 84%, var(--bg)); /* opaque, so it covers where branches join */
   --wood-branch: color-mix(in srgb, var(--taupe) 78%, transparent);
   --wood-light: color-mix(in srgb, var(--old-lace) 30%, transparent);
   --wood-shade: color-mix(in srgb, var(--cherry) 12%, transparent);
+  /* Leaves in two tones of the wood: one leaning rose, one lighter. */
+  --leaf: color-mix(in srgb, color-mix(in srgb, var(--taupe) 70%, var(--cherry)) 80%, transparent);
+  --leaf-light: color-mix(in srgb, color-mix(in srgb, var(--taupe) 72%, var(--old-lace)) 92%, transparent);
   --signal: var(--accent);
   --signal-core: color-mix(in srgb, var(--accent) 30%, var(--old-lace));
   --bead: 26px;
@@ -32,10 +35,12 @@
 }
 
 :root[data-theme='dark'] .landing {
-  --wood: color-mix(in srgb, var(--taupe) 62%, transparent);
+  --wood: color-mix(in srgb, var(--taupe) 62%, var(--bg));
   --wood-branch: color-mix(in srgb, var(--taupe) 55%, transparent);
   --wood-light: color-mix(in srgb, var(--old-lace) 12%, transparent);
   --wood-shade: color-mix(in srgb, var(--bg) 30%, transparent);
+  --leaf: color-mix(in srgb, color-mix(in srgb, var(--taupe) 70%, var(--cherry)) 72%, transparent);
+  --leaf-light: color-mix(in srgb, var(--taupe) 58%, transparent);
 }
 
 /* ── the bar: a wordmark, the theme switch and Get started, docked at the top of the climb ── */
@@ -221,6 +226,14 @@
 
 .climb__branch.is-grown {
   transform: none;
+}
+
+.climb__leaf {
+  fill: var(--leaf);
+}
+
+.climb__leaf--light {
+  fill: var(--leaf-light);
 }
 
 .climb__roots {
@@ -464,10 +477,19 @@
   width: min(680px, calc(var(--trunk) * 100% - var(--reach) * 1.4 - var(--gutter)));
 }
 
+/* The brand, big: the paper-hop symbol beside the wordmark, both in the accent. */
+.roots__lockup {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin: 0 0 var(--s6) -14px;
+  color: var(--accent);
+}
+
+.roots__mark,
 .roots__wordmark {
   display: block;
-  margin-bottom: var(--s6);
-  color: var(--accent);
+  flex: none;
 }
 
 .roots__promise {
@@ -1031,8 +1053,18 @@
     width: 100%;
   }
 
+  .roots__lockup {
+    margin: 0 0 var(--s5) -8px;
+  }
+
+  .roots__mark {
+    width: 64px;
+    height: 64px;
+  }
+
   .roots__wordmark {
-    margin-bottom: var(--s5);
+    width: auto;
+    height: 48px;
   }
 
   .roots__cue {

@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react'
-import { Wordmark } from '../../ui/Brand.tsx'
+import { Mark, Wordmark } from '../../ui/Brand.tsx'
 import { Icon } from '../../ui/Icon.tsx'
 import { Button } from '../../ui/primitives.tsx'
 import { BEATS, beatIndex, CANOPY, GUIDE, MORE, PROBLEM, ROOTS, SCATTERED, SHOWCASE, STEPS, TEAM, type BeatId } from './beats.ts'
@@ -39,7 +39,10 @@ export function RootsBeat({ grown, onGetStarted, onSkip }: BeatProps & { onGetSt
     <Beat id="roots" grown={grown}>
       <div className="roots__air" data-ground>
         <div className="roots__copy" data-anchor data-mask>
-          <Wordmark height={44} className="roots__wordmark" />
+          <div className="roots__lockup">
+            <Mark size={96} className="roots__mark" />
+            <Wordmark height={72} className="roots__wordmark" />
+          </div>
           <h1 id="beat-roots" className="climb-display">
             {ROOTS.headline}
           </h1>
