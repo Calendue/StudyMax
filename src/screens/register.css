@@ -1,7 +1,6 @@
 /* The Register screen's two views.
    - Max's plan (.reg-max, .reg-course, ...): the app's own design, tokens only, light and dark.
-   - The practice run (.reg-page): imitates another system's look, so it gets its own palette (never
-     used elsewhere), stays light even in dark mode, and never uses the shared Button/tokens.css. */
+   - The practice run (.reg-page): a simulated registration layout, using the app's theme tokens. */
 
 /* ══════════════════════════════════════════════════════════════ Max's plan */
 
@@ -194,20 +193,6 @@
 /* ══════════════════════════════════════════════════════════════ the practice run */
 
 .reg-page {
-  --reg-brand: #1b5e3b;
-  --reg-brand-dark: #154a2e;
-  --reg-link: #1a5fb4;
-  --reg-tab: #1a6fcf;
-  --reg-bg: #f4f4f4;
-  --reg-ink: #24292c;
-  --reg-ink-2: #5b6367;
-  --reg-border: #d7d7d7;
-  --reg-c0: #7cc47f;
-  --reg-c1: #f0a24a;
-  --reg-c2: #e56a8f;
-  --reg-c3: #6aa8e0;
-  --reg-c4: #a98ad8;
-  --reg-booked: #d5d9db;
 
   position: relative;
   isolation: isolate;
@@ -215,7 +200,7 @@
   background: var(--reg-bg);
   color: var(--reg-ink);
   font-size: 14px;
-  color-scheme: light;
+  padding-top: var(--sat);
 }
 
 /* ── top bar ───────────────────────────────────────────────────────────── */
@@ -227,7 +212,7 @@
   height: 56px;
   padding: 0 16px;
   background: var(--reg-brand);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 .reg-top__left {
@@ -241,7 +226,7 @@
   margin-left: 8px;
   padding: 2px 8px;
   border-radius: 999px;
-  background: rgb(255 255 255 / 0.18);
+  background: var(--sidebar-hover);
   font-size: 11px;
   font-weight: 600;
 }
@@ -262,7 +247,7 @@
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  background: rgb(255 255 255 / 0.2);
+  background: var(--sidebar-hover);
 }
 
 .reg-top__name {
@@ -311,7 +296,7 @@
   margin: 0;
   padding: 4px 16px 14px;
   border-bottom: 1px solid var(--reg-border);
-  background: #fff;
+  background: var(--raised);
   font-size: 22px;
   font-weight: 600;
   color: var(--reg-ink);
@@ -321,7 +306,7 @@
   display: flex;
   gap: 2px;
   padding: 0 16px;
-  background: #fff;
+  background: var(--raised);
   overflow-x: auto;
 }
 
@@ -335,7 +320,7 @@
 
 .reg-tab--active {
   background: var(--reg-tab);
-  color: #fff;
+  color: var(--on-accent);
   border-radius: 4px 4px 0 0;
 }
 
@@ -344,7 +329,7 @@
 .reg-search {
   margin: 12px 16px;
   padding: 14px 16px;
-  background: #fff;
+  background: var(--raised);
   border: 1px solid var(--reg-border);
   border-radius: 4px;
 }
@@ -401,7 +386,7 @@
   border-radius: 3px;
   font: inherit;
   color: var(--reg-ink);
-  background: #fff;
+  background: var(--raised);
 }
 
 .reg-search__actions {
@@ -414,7 +399,7 @@
   padding: 7px 18px;
   border: 1px solid var(--reg-border);
   border-radius: 3px;
-  background: #e8e8e8;
+  background: var(--surface-2);
   color: var(--reg-ink);
   font: inherit;
   font-weight: 600;
@@ -422,12 +407,12 @@
 }
 
 .reg-btn--search {
-  background: #e0e0e0;
+  background: var(--surface-2);
 }
 
 .reg-btn--submit {
-  background: #9a9a9a;
-  color: #fff;
+  background: var(--inactive);
+  color: var(--on-accent);
   border-color: transparent;
 }
 
@@ -477,7 +462,7 @@
 }
 
 .reg-full {
-  color: #c62828;
+  color: var(--accent);
   font-weight: 700;
   font-size: 11px;
 }
@@ -515,7 +500,7 @@
   justify-content: center;
   gap: 4px;
   padding: 3px;
-  background: #e4e4e4;
+  background: var(--surface-2);
   color: var(--reg-ink-2);
   font-size: 9px;
 }
@@ -531,7 +516,7 @@
 
 .reg-schedule {
   flex: 1.4;
-  background: #fff;
+  background: var(--raised);
   border: 1px solid var(--reg-border);
   border-radius: 4px;
   padding: 12px;
@@ -557,7 +542,7 @@
 
 .reg-pane-tab--active {
   background: var(--reg-tab);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 .reg-caption {
@@ -596,7 +581,7 @@
 .reg-week__track {
   position: relative;
   min-height: 260px;
-  background: #fafafa;
+  background: var(--surface);
   border-radius: 3px;
 }
 
@@ -611,7 +596,7 @@
   border-radius: 3px;
   font-size: 10px;
   font-weight: 700;
-  color: #fff;
+  color: var(--on-accent);
   overflow: hidden;
 }
 
@@ -672,7 +657,7 @@
 
 .reg-summary {
   flex: 1;
-  background: #fff;
+  background: var(--raised);
   border: 1px solid var(--reg-border);
   border-radius: 4px;
   padding: 12px;
@@ -720,19 +705,19 @@
 }
 
 .reg-pill--pending {
-  background: #e6e6e6;
+  background: var(--surface-2);
   color: var(--reg-ink-2);
 }
 
 .reg-pill--registered {
-  background: #dff3d8;
-  color: #2e6b1f;
+  background: var(--selected);
+  color: var(--ink);
   font-style: italic;
 }
 
 .reg-pill--error {
-  background: #fbe0dd;
-  color: #b3261e;
+  background: var(--accent-tint);
+  color: var(--accent);
 }
 
 .reg-select {
@@ -758,7 +743,7 @@
   justify-content: space-between;
   gap: 12px;
   padding: 10px 16px;
-  background: #ececec;
+  background: var(--surface);
   border-top: 1px solid var(--reg-border);
 }
 
@@ -790,7 +775,7 @@
   color: var(--accent);
   pointer-events: none;
   transition: left 0.4s ease-out, top 0.4s ease-out;
-  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.35));
+  filter: drop-shadow(var(--shadow-knob));
 }
 
 .reg-cursor--click::after {
@@ -816,18 +801,17 @@
 /* ── Max's narration bubble: the one StudyMax-branded element on the page ── */
 
 .reg-bubble {
-  position: fixed;
-  right: 20px;
-  bottom: 20px;
+  position: relative;
+  margin: 0 var(--s3);
   z-index: 30;
   display: flex;
   gap: 10px;
-  max-width: 320px;
+  max-width: none;
   padding: 12px 14px;
   border-radius: var(--r3, 12px);
-  background: var(--card, #fff);
-  color: var(--ink, #12262b);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: var(--shadow-float);
 }
 
 .reg-bubble__avatar {
@@ -837,8 +821,8 @@
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: var(--accent-fill, #982649);
-  color: var(--on-accent, #fff8eb);
+  background: var(--accent-fill);
+  color: var(--on-accent);
 }
 
 .reg-bubble__body {
@@ -855,14 +839,14 @@
   margin: 0;
   font-size: 13px;
   font-weight: 500;
-  color: var(--accent, #982649);
+  color: var(--accent);
 }
 
 .reg-bubble__skip {
   align-self: flex-end;
   background: none;
   border: none;
-  color: var(--ink-2, #5b6367);
+  color: var(--ink-2);
   font: inherit;
   font-size: 12px;
   cursor: pointer;
@@ -877,7 +861,7 @@
 .reg-bubble__link {
   background: none;
   border: none;
-  color: var(--accent, #982649);
+  color: var(--accent);
   font: inherit;
   font-size: 12.5px;
   font-weight: 600;
@@ -907,9 +891,8 @@
     display: none;
   }
 
-  .reg-tabs {
-    flex-wrap: nowrap;
-  }
+  .reg-tabs { flex-wrap: wrap; overflow: visible; }
+  .reg-tab { padding: var(--s3); white-space: normal; }
 
   .reg-search__form {
     flex-direction: column;
@@ -928,7 +911,7 @@
   .reg-panes {
     flex-direction: column;
     align-items: stretch;
-    margin-bottom: 104px;
+    margin-bottom: var(--s4);
   }
 
   .reg-summary {
@@ -943,7 +926,7 @@
   }
 
   .reg-summary__table thead,
-  .reg-sum__action {
+  .reg-summary__table .reg-sum__action {
     display: none;
   }
 
@@ -988,8 +971,10 @@
   }
 
   .reg-week {
-    grid-template-columns: repeat(5, minmax(56px, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
+
+  .reg-week__col { min-width: 0; }
 
   .reg-week__col:first-child,
   .reg-week__col:last-child {
@@ -1015,9 +1000,25 @@
   }
 
   .reg-bubble {
-    left: 12px;
-    right: 12px;
-    bottom: calc(60px + var(--sab));
+    margin: 0 var(--s3);
     max-width: none;
   }
+}
+
+/* Keep the narration and Submit together: neither can cover the other at any text size. */
+.reg-dock { position: sticky; bottom: 0; z-index: 30; display: grid; gap: var(--s2); padding-top: var(--s2); background: var(--reg-bg); }
+.reg-dock .reg-bottom { position: static; }
+.reg-bubble__actions { flex-wrap: wrap; }
+.reg-max__avatar, .reg-bubble__avatar { background: transparent; width: 40px; height: 40px; }
+@media (max-width: 767px) {
+  .reg-back, .reg-btn, .reg-bubble__link, .reg-bubble__skip { min-height: var(--touch-target); }
+  .reg-results, .reg-results tbody { display: block; }
+  .reg-results thead { display: none; }
+  .reg-results tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2); padding: var(--s3) 0; border-bottom: 1px solid var(--divider); }
+  .reg-results td { display: block; padding: 0; border: none; overflow-wrap: anywhere; }
+  .reg-results td::before { content: attr(data-label); display: block; font-size: var(--fs-caption); color: var(--ink-2); }
+  .reg-results-wrap, .reg-summary, .reg-week { overflow-x: clip; }
+  .reg-summary__table td { min-width: 0; overflow-wrap: anywhere; }
+  .reg-search__head { flex-wrap: wrap; }
+  .reg-search__term { margin-left: 0; }
 }

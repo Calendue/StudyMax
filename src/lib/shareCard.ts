@@ -1,4 +1,5 @@
 import type { PlannedTerm } from './plan.ts'
+import { courseCode } from '../format.ts'
 
 // The share card: a student's result as one branded 1080×1350 image (a 4:5 post), drawn on a plain
 // canvas so no screenshot library is needed. It's an export of the brand, not app UI, so it uses the
@@ -194,7 +195,7 @@ export async function drawShareCard(data: ShareCardData): Promise<HTMLCanvasElem
     let x = pillsX
     let hidden = 0
     for (const course of term.courses) {
-      const label = course.code.replace(/([A-Z]+)(\d+)/, '$1 $2')
+      const label = courseCode(course.code)
       const w = ctx.measureText(label).width + 32
       if (x + w > W - PAD - 20) {
         hidden++

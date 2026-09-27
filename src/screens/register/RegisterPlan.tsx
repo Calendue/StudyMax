@@ -6,7 +6,7 @@ import { slotPickLabel, type RegPick, type RegPlan, type RegRequest, type Unplac
 import { canFillOnPaws, openPawsAgent, REG_URL, type AgentMsg } from '../../lib/pawsAgent.ts'
 import { PAWS_COPY } from '../../lib/pawsAgentScript.ts'
 import { haptic } from '../../platform.ts'
-import { Mark } from '../../ui/Brand.tsx'
+import { MaxOwl } from '../../ui/MaxOwl.tsx'
 import { ActionBar, ScreenBody, ScreenTitle, TopBar } from '../../ui/chrome.tsx'
 import { Icon, type IconName } from '../../ui/Icon.tsx'
 import { Appear, Button, Chip, Group, IconButton, Row, RowIcon, SectionLabel, Skeleton } from '../../ui/primitives.tsx'
@@ -31,7 +31,7 @@ function MaxSays({ children, busy, tone = 'info' }: { children: ReactNode; busy?
   return (
     <div className={`reg-max${tone === 'error' ? ' reg-max--error' : ''}`} role="status" aria-live="polite">
       <span className="reg-max__avatar" aria-hidden>
-        <Mark size={18} />
+        <MaxOwl size={40} pose={busy ? 'thinking' : 'idle'} />
       </span>
       <div className="reg-max__body">{children}</div>
       {busy && <span className="spinner reg-max__spinner" aria-hidden />}
@@ -306,7 +306,7 @@ function SourceLine({ plan, loading, failed, termLabel, retry }: { plan: RegPlan
       Try again
     </button>
   )
-  if (loading) return <MaxSays busy>Max is checking {termLabel}&rsquo;s sections&hellip;</MaxSays>
+  if (loading) return <MaxSays busy><p>Max is checking {termLabel}&rsquo;s sections&hellip;</p><p className="reg-max__quiet">Finding open lectures and linked labs, then checking for clashes. This can take a minute.</p></MaxSays>
   if (failed || !plan) {
     return (
       <MaxSays tone="error">

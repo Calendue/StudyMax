@@ -9,6 +9,7 @@ import { haptic } from '../platform.ts'
 import { laneSeason, layoutSkillTree, pathThrough, type SkillTreeLayout, type TreeMilestone, type TreeNode } from '../lib/skillTree.ts'
 import { Icon } from '../ui/Icon.tsx'
 import { Sheet } from '../ui/Sheet.tsx'
+import { useBackLayer } from '../ui/useBackLayer.ts'
 import { useTreeSource, type TreeSelection } from './planView.ts'
 import { useTreeTransition } from './useTreeTransition.ts'
 import { movable, useCourseDrag, type DropResult } from './useCourseDrag.ts'
@@ -106,6 +107,10 @@ export function SkillTree({
   // Phones fold the key away: the cards already say Done, Now, Next, Needs and Elective.
   const [keyOpen, setKeyOpen] = useState(false)
   const [credFilter, setCredFilter] = useState<number | null>(null)
+  useBackLayer(!sheetOpen && (selection !== null || keyOpen), () => {
+    if (keyOpen) setKeyOpen(false)
+    else setSelection(null)
+  })
   // Dragging a planned course to another term (useCourseDrag): only on the student's own plan, never a Max frame.
   const [notice, setNotice] = useState<{ text: string; ok: boolean } | null>(null)
   useEffect(() => {

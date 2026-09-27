@@ -22,6 +22,8 @@ import { CourseChanges, CourseWarnings, PlanIssues } from '../ui/WhatChanged.tsx
 import { termOrd } from '../lib/overrides.ts'
 import { useElectivePicks } from '../lib/electivePicks.ts'
 import { ElectiveChoice } from './ElectivePicker.tsx'
+import { useLayoutMode } from '../ui/layout.ts'
+import { PhoneRoadmap } from './PhoneRoadmap.tsx'
 
 /**
  * The visual node/edge view of the term-by-term plan: terms stacked top to bottom, each term's
@@ -39,6 +41,7 @@ export interface RoadmapSelection {
  */
 export function PlanRoadmap({ selected, onSelect }: { selected?: string | null; onSelect?: (sel: RoadmapSelection | null) => void } = {}) {
   const m = useModel()
+  const phone = useLayoutMode() === 'tabs'
 
   // Completed courses that count toward what's being planned, listed above the graph so it reads
   // as a whole journey rather than only what's left.
@@ -109,7 +112,7 @@ export function PlanRoadmap({ selected, onSelect }: { selected?: string | null; 
     const observer = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width))
     observer.observe(el)
     return () => observer.disconnect()
-  }, [hasRows])
+  }, [hasRows, phone])
 
   if (!hasRows) return null
 
@@ -119,6 +122,13 @@ export function PlanRoadmap({ selected, onSelect }: { selected?: string | null; 
   }
 
   const height = graphHeight(rows.length)
+  const renderCourse = (code: string) => {
+    const node = nodesByCode.get(code)
+    if (!node) return null
+    return <RoadmapNodeView key={code} node={node} title={m.courseTitle(code)} active={activeCode === code}
+      dimmed={connectedCodes !== null && !connectedCodes.has(code)} onSelect={() => selectCourse(code)}
+      onRemove={isElective(code) ? () => hideElective(code) : undefined} />
+  }
 
   return (
     <Appear index={3} className="roadmap">
@@ -158,7 +168,7 @@ export function PlanRoadmap({ selected, onSelect }: { selected?: string | null; 
         </p>
       )}
 
-      <div className="roadmap__graph" ref={graphRef} style={{ height }}>
+      {phone ? <PhoneRoadmap rows={rows} renderCourse={renderCourse} /> : <div className="roadmap__graph" ref={graphRef} style={{ height }}>
         {width > 0 && (
           <svg className="roadmap__edges" width={width} height={height} aria-hidden>
             {edges.map((edge) => {
@@ -218,7 +228,7 @@ export function PlanRoadmap({ selected, onSelect }: { selected?: string | null; 
             )}
           </div>
         ))}
-      </div>
+      </div>}
 
       {!controlled && (
         <Sheet open={activeNode !== undefined} onClose={() => setActiveCode(null)} title={activeCode ? courseCode(activeCode) : ''}>
