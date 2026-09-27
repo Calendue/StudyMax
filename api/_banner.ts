@@ -119,7 +119,25 @@ function instructors(raw: Record<string, unknown>): string[] {
   return [...names]
 }
 
-function normalizeSection(raw: Record<string, unknown>): Section {
+const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' }
+
+/** Banner HTML-escapes some text fields ("St. Peter&#39;s College"). */
+function decodeEntities(text: string): string {
+  return text.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (whole, name: string) => {
+    if (name[0] !== '#') return ENTITIES[name.toLowerCase()] ?? whole
+    const code = name[1] === 'x' || name[1] === 'X' ? Number.parseInt(name.slice(2), 16) : Number.parseInt(name.slice(1), 10)
+    return Number.isFinite(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : whole
+  })
+}
+
+/** " USask - Main Saskatoon Campus" arrives with a leading space; null when Banner leaves it out. */
+function campus(raw: Record<string, unknown>): string | null {
+  const value = typeof raw.campusDescription === 'string' ? decodeEntities(raw.campusDescription).trim() : ''
+  return value || null
+}
+
+/** One searchResults row as a Section. Exported for scripts/check-registration.ts, which runs saved rows through it. */
+export function normalizeSection(raw: Record<string, unknown>): Section {
   const seats = normalizeSeatState(raw)
   return {
     ...seats,
@@ -129,12 +147,15 @@ function normalizeSection(raw: Record<string, unknown>): Section {
     subject: String(raw.subject ?? ''),
     courseNumber: String(raw.courseNumber ?? ''),
     sectionNumber: String(raw.sequenceNumber ?? ''),
-    courseTitle: String(raw.courseTitle ?? ''),
+    courseTitle: decodeEntities(String(raw.courseTitle ?? '')),
     creditHours: creditHours(raw),
     instructors: instructors(raw),
     meetings: meetings(raw),
     scheduleType: (raw.scheduleTypeDescription as string | null) ?? null,
     isSectionLinked: raw.isSectionLinked === true,
+    campus: campus(raw),
+    // "M1" on a lecture pairs with the "L1" labs and "T1" tutorials of the same group.
+    linkIdentifier: typeof raw.linkIdentifier === 'string' && raw.linkIdentifier.trim() ? raw.linkIdentifier.trim() : null,
     status: deriveStatus(seats),
   }
 }

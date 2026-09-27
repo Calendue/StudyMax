@@ -1,0 +1,325 @@
+[
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "30463",
+  "subject": "CMPT",
+  "courseNumber": "353",
+  "sequenceNumber": "02",
+  "courseTitle": "Full Stack Web Programming",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Lecture",
+  "creditHours": 3,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 220,
+  "enrollment": 171,
+  "seatsAvailable": 49,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "M1",
+  "isSectionLinked": true,
+  "reservedSeatSummary": {
+   "maximumEnrollmentReserved": 145,
+   "seatsAvailableUnreserved": 47
+  },
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": true,
+     "tuesday": false,
+     "wednesday": true,
+     "thursday": false,
+     "friday": true,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "1330",
+     "endTime": "1420",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "30485",
+  "subject": "CMPT",
+  "courseNumber": "353",
+  "sequenceNumber": "L02",
+  "courseTitle": "Full Stack Web Programming",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Laboratory",
+  "creditHours": 0,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 32,
+  "enrollment": 32,
+  "seatsAvailable": 0,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "L1",
+  "isSectionLinked": true,
+  "reservedSeatSummary": null,
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": true,
+     "tuesday": false,
+     "wednesday": false,
+     "thursday": false,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "1530",
+     "endTime": "1620",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "30486",
+  "subject": "CMPT",
+  "courseNumber": "353",
+  "sequenceNumber": "L04",
+  "courseTitle": "Full Stack Web Programming",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Laboratory",
+  "creditHours": 0,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 32,
+  "enrollment": 27,
+  "seatsAvailable": 5,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "L1",
+  "isSectionLinked": true,
+  "reservedSeatSummary": null,
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": false,
+     "tuesday": true,
+     "wednesday": false,
+     "thursday": false,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "0900",
+     "endTime": "0950",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "30487",
+  "subject": "CMPT",
+  "courseNumber": "353",
+  "sequenceNumber": "L06",
+  "courseTitle": "Full Stack Web Programming",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Laboratory",
+  "creditHours": 0,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 32,
+  "enrollment": 18,
+  "seatsAvailable": 14,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "L1",
+  "isSectionLinked": true,
+  "reservedSeatSummary": null,
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": false,
+     "tuesday": false,
+     "wednesday": true,
+     "thursday": false,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "0830",
+     "endTime": "0920",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "30488",
+  "subject": "CMPT",
+  "courseNumber": "353",
+  "sequenceNumber": "L08",
+  "courseTitle": "Full Stack Web Programming",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Laboratory",
+  "creditHours": 0,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 32,
+  "enrollment": 10,
+  "seatsAvailable": 22,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "L1",
+  "isSectionLinked": true,
+  "reservedSeatSummary": null,
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": false,
+     "tuesday": false,
+     "wednesday": false,
+     "thursday": false,
+     "friday": true,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "0830",
+     "endTime": "0920",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "30990",
+  "subject": "CMPT",
+  "courseNumber": "353",
+  "sequenceNumber": "L10",
+  "courseTitle": "Full Stack Web Programming",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Laboratory",
+  "creditHours": 0,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 32,
+  "enrollment": 30,
+  "seatsAvailable": 2,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "L1",
+  "isSectionLinked": true,
+  "reservedSeatSummary": null,
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": false,
+     "tuesday": false,
+     "wednesday": true,
+     "thursday": false,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "0930",
+     "endTime": "1020",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "31894",
+  "subject": "CMPT",
+  "courseNumber": "353",
+  "sequenceNumber": "L12",
+  "courseTitle": "Full Stack Web Programming",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Laboratory",
+  "creditHours": 0,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 32,
+  "enrollment": 31,
+  "seatsAvailable": 1,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "L1",
+  "isSectionLinked": true,
+  "reservedSeatSummary": null,
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": false,
+     "tuesday": false,
+     "wednesday": false,
+     "thursday": true,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "1130",
+     "endTime": "1220",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "31902",
+  "subject": "CMPT",
+  "courseNumber": "353",
+  "sequenceNumber": "L14",
+  "courseTitle": "Full Stack Web Programming",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Laboratory",
+  "creditHours": 0,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 32,
+  "enrollment": 23,
+  "seatsAvailable": 9,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "L1",
+  "isSectionLinked": true,
+  "reservedSeatSummary": null,
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": true,
+     "tuesday": false,
+     "wednesday": false,
+     "thursday": false,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "0930",
+     "endTime": "1020",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ }
+]

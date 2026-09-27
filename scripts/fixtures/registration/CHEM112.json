@@ -1,0 +1,580 @@
+[
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "20022",
+  "subject": "CHEM",
+  "courseNumber": "112",
+  "sequenceNumber": "02",
+  "courseTitle": "General Chemistry I Structure Bonding and Properties of Materials",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Lecture",
+  "creditHours": 3,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 238,
+  "enrollment": 213,
+  "seatsAvailable": 25,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "M1",
+  "isSectionLinked": true,
+  "reservedSeatSummary": {
+   "maximumEnrollmentReserved": 171,
+   "seatsAvailableUnreserved": 0
+  },
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": true,
+     "tuesday": false,
+     "wednesday": true,
+     "thursday": false,
+     "friday": true,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "0930",
+     "endTime": "1020",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "23718",
+  "subject": "CHEM",
+  "courseNumber": "112",
+  "sequenceNumber": "04",
+  "courseTitle": "General Chemistry I Structure Bonding and Properties of Materials",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Lecture",
+  "creditHours": 3,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 242,
+  "enrollment": 215,
+  "seatsAvailable": 27,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "M1",
+  "isSectionLinked": true,
+  "reservedSeatSummary": {
+   "maximumEnrollmentReserved": 101,
+   "seatsAvailableUnreserved": 27
+  },
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": false,
+     "tuesday": true,
+     "wednesday": false,
+     "thursday": true,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "1000",
+     "endTime": "1120",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "23828",
+  "subject": "CHEM",
+  "courseNumber": "112",
+  "sequenceNumber": "LC4",
+  "courseTitle": "General Chemistry I Structure Bonding and Properties of Materials",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Laboratory",
+  "creditHours": 0,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 48,
+  "enrollment": 47,
+  "seatsAvailable": 1,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "L1",
+  "isSectionLinked": true,
+  "reservedSeatSummary": null,
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": true,
+     "tuesday": false,
+     "wednesday": false,
+     "thursday": false,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "1330",
+     "endTime": "1650",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "20054",
+  "subject": "CHEM",
+  "courseNumber": "112",
+  "sequenceNumber": "LD4",
+  "courseTitle": "General Chemistry I Structure Bonding and Properties of Materials",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Laboratory",
+  "creditHours": 0,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 48,
+  "enrollment": 48,
+  "seatsAvailable": 0,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "L1",
+  "isSectionLinked": true,
+  "reservedSeatSummary": {
+   "maximumEnrollmentReserved": 30,
+   "seatsAvailableUnreserved": 0
+  },
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": true,
+     "tuesday": false,
+     "wednesday": false,
+     "thursday": false,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "1330",
+     "endTime": "1650",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "23829",
+  "subject": "CHEM",
+  "courseNumber": "112",
+  "sequenceNumber": "LG4",
+  "courseTitle": "General Chemistry I Structure Bonding and Properties of Materials",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Laboratory",
+  "creditHours": 0,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 48,
+  "enrollment": 39,
+  "seatsAvailable": 9,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "L1",
+  "isSectionLinked": true,
+  "reservedSeatSummary": {
+   "maximumEnrollmentReserved": 10,
+   "seatsAvailableUnreserved": 0
+  },
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": false,
+     "tuesday": true,
+     "wednesday": false,
+     "thursday": false,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "1330",
+     "endTime": "1650",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "24845",
+  "subject": "CHEM",
+  "courseNumber": "112",
+  "sequenceNumber": "LG6",
+  "courseTitle": "General Chemistry I Structure Bonding and Properties of Materials",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Laboratory",
+  "creditHours": 0,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 48,
+  "enrollment": 48,
+  "seatsAvailable": 0,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "L1",
+  "isSectionLinked": true,
+  "reservedSeatSummary": null,
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": false,
+     "tuesday": true,
+     "wednesday": false,
+     "thursday": false,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "1730",
+     "endTime": "2050",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "20055",
+  "subject": "CHEM",
+  "courseNumber": "112",
+  "sequenceNumber": "LH4",
+  "courseTitle": "General Chemistry I Structure Bonding and Properties of Materials",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Laboratory",
+  "creditHours": 0,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 24,
+  "enrollment": 24,
+  "seatsAvailable": 0,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "L1",
+  "isSectionLinked": true,
+  "reservedSeatSummary": null,
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": false,
+     "tuesday": true,
+     "wednesday": false,
+     "thursday": false,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "1330",
+     "endTime": "1650",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "24410",
+  "subject": "CHEM",
+  "courseNumber": "112",
+  "sequenceNumber": "LH6",
+  "courseTitle": "General Chemistry I Structure Bonding and Properties of Materials",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Laboratory",
+  "creditHours": 0,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 48,
+  "enrollment": 46,
+  "seatsAvailable": 2,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "L1",
+  "isSectionLinked": true,
+  "reservedSeatSummary": null,
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": false,
+     "tuesday": true,
+     "wednesday": false,
+     "thursday": false,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "1730",
+     "endTime": "2050",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "23830",
+  "subject": "CHEM",
+  "courseNumber": "112",
+  "sequenceNumber": "LK4",
+  "courseTitle": "General Chemistry I Structure Bonding and Properties of Materials",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Laboratory",
+  "creditHours": 0,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 48,
+  "enrollment": 48,
+  "seatsAvailable": 0,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "L1",
+  "isSectionLinked": true,
+  "reservedSeatSummary": null,
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": false,
+     "tuesday": false,
+     "wednesday": true,
+     "thursday": false,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "1330",
+     "endTime": "1650",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "20056",
+  "subject": "CHEM",
+  "courseNumber": "112",
+  "sequenceNumber": "LL4",
+  "courseTitle": "General Chemistry I Structure Bonding and Properties of Materials",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Laboratory",
+  "creditHours": 0,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 48,
+  "enrollment": 33,
+  "seatsAvailable": 15,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "L1",
+  "isSectionLinked": true,
+  "reservedSeatSummary": {
+   "maximumEnrollmentReserved": 20,
+   "seatsAvailableUnreserved": 0
+  },
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": false,
+     "tuesday": false,
+     "wednesday": true,
+     "thursday": false,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "1330",
+     "endTime": "1650",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "25855",
+  "subject": "CHEM",
+  "courseNumber": "112",
+  "sequenceNumber": "LL6",
+  "courseTitle": "General Chemistry I Structure Bonding and Properties of Materials",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Laboratory",
+  "creditHours": 0,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 24,
+  "enrollment": 23,
+  "seatsAvailable": 1,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "L1",
+  "isSectionLinked": true,
+  "reservedSeatSummary": null,
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": false,
+     "tuesday": false,
+     "wednesday": true,
+     "thursday": false,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "1730",
+     "endTime": "2050",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "23655",
+  "subject": "CHEM",
+  "courseNumber": "112",
+  "sequenceNumber": "LQ4",
+  "courseTitle": "General Chemistry I Structure Bonding and Properties of Materials",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Laboratory",
+  "creditHours": 0,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 24,
+  "enrollment": 24,
+  "seatsAvailable": 0,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "L1",
+  "isSectionLinked": true,
+  "reservedSeatSummary": null,
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": false,
+     "tuesday": false,
+     "wednesday": false,
+     "thursday": true,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "1330",
+     "endTime": "1650",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "20057",
+  "subject": "CHEM",
+  "courseNumber": "112",
+  "sequenceNumber": "LR4",
+  "courseTitle": "General Chemistry I Structure Bonding and Properties of Materials",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Laboratory",
+  "creditHours": 0,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 48,
+  "enrollment": 48,
+  "seatsAvailable": 0,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "L1",
+  "isSectionLinked": true,
+  "reservedSeatSummary": null,
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": false,
+     "tuesday": false,
+     "wednesday": false,
+     "thursday": true,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "1330",
+     "endTime": "1650",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "25680",
+  "subject": "CHEM",
+  "courseNumber": "112",
+  "sequenceNumber": "T92",
+  "courseTitle": "General Chemistry I Structure Bonding and Properties of Materials",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Tutorial",
+  "creditHours": 0,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 30,
+  "enrollment": 5,
+  "seatsAvailable": 25,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": null,
+  "isSectionLinked": false,
+  "reservedSeatSummary": {
+   "maximumEnrollmentReserved": 30,
+   "seatsAvailableUnreserved": 0
+  },
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": true,
+     "tuesday": false,
+     "wednesday": false,
+     "thursday": false,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "1230",
+     "endTime": "1320",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ }
+]
