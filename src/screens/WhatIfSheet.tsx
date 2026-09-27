@@ -35,10 +35,10 @@ export function WhatIfSheet() {
   )
   const other = choices.find((x) => x.spec.id === otherId) ?? null
 
-  const { planningSpecs, completed, inProgressCourses, startTerm, springSummer, summerPerTerm, booked, hero } = m
+  const { planningSpecs, completed, inProgressCourses, startTerm, springSummer, summerPerTerm, booked, internshipAY, hero } = m
   const input: WhatIfInputs = useMemo(
-    () => ({ planningSpecs, completed, inProgress: inProgressCourses, coursesPerTerm: perTerm, start: startTerm, springSummer, summerPerTerm, booked }),
-    [planningSpecs, completed, inProgressCourses, perTerm, startTerm, springSummer, summerPerTerm, booked],
+    () => ({ planningSpecs, completed, inProgress: inProgressCourses, coursesPerTerm: perTerm, start: startTerm, springSummer, summerPerTerm, booked, away: internshipAY }),
+    [planningSpecs, completed, inProgressCourses, perTerm, startTerm, springSummer, summerPerTerm, booked, internshipAY],
   )
   // Only worked out while the sheet is open: it plans every alternative.
   const ranked = useMemo(() => (open && !other ? { hero: outlook(hero, input), list: rankAlternatives(choices, input) } : null), [open, other, hero, choices, input])

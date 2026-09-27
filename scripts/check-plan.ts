@@ -1,7 +1,7 @@
 // Sanity check for the term planner. Run: node --experimental-strip-types --experimental-loader ./scripts/_resolve-ts-loader.mjs scripts/check-plan.ts
 import assert from 'node:assert/strict'
 import { computeMatches } from '../src/lib/match.ts'
-import { buildPlan, selectCourses, withPrerequisites, courseLevel, upcomingTerm, buildStudentPlan, termsFrom, isElective } from '../src/lib/plan.ts'
+import { buildPlan, selectCourses, withPrerequisites, courseLevel, upcomingTerm, buildStudentPlan, termsFrom, isElective, academicYearOf } from '../src/lib/plan.ts'
 import { computerScienceBsc4 } from '../src/data/degrees/computerScience.ts'
 import { auditDegree } from '../src/lib/degree.ts'
 import { courseInfo } from '../src/data/prereqs.ts'
@@ -271,6 +271,19 @@ assert.deepEqual(upcomingTerm(new Date('2026-10-01')), { season: 'Winter', year:
   // A done course counts once, even when two slots list it (ENG 111: writing and breadth).
   const once = auditDegree(degree, ['ENG111'])
   assert.equal(once.groups.reduce((n, g) => n + g.courses.length, 0), 1, 'one course fills one slot')
+}
+
+// --- internship: the academic year away holds nothing, and the plan picks up after it ---
+{
+  const target = computeMatches(specializations, new Set()).reduce((a, b) => (b.remaining > a.remaining ? b : a))
+  const start = { season: 'Fall' as const, year: 2026 }
+  const plain = buildStudentPlan([target.spec], specializations, new Set(), [], 2, start, { springSummer: true })
+  const away = buildStudentPlan([target.spec], specializations, new Set(), [], 2, start, { springSummer: true, away: 2027 })
+  const termOf = (label: string) => ({ season: label.slice(0, label.lastIndexOf(' ')) as 'Fall', year: Number(label.slice(label.lastIndexOf(' ') + 1)) })
+  assert.ok(plain.some((t) => academicYearOf(termOf(t.label)) === 2027), 'without an internship the plan uses 2027–28')
+  assert.ok(!away.some((t) => academicYearOf(termOf(t.label)) === 2027), 'nothing is planned in the internship year')
+  const count = (p: typeof plain) => p.reduce((n, t) => n + t.courses.length, 0)
+  assert.equal(count(away), count(plain), 'the internship moves courses later, never drops them')
 }
 
 console.log('check-plan.ts: all assertions passed')

@@ -87,10 +87,11 @@ export function SkillTree({
             inProgress: m.inProgressCourses,
             plan: m.plan,
             ...inputs,
+            internshipYear: m.internshipYear,
             width,
           })
         : null,
-    [m.completed, m.inProgressCourses, m.plan, inputs, width],
+    [m.completed, m.inProgressCourses, m.plan, m.internshipYear, inputs, width],
   )
 
   const [selection, setSelection] = useState<TreeSelection | null>(null)
@@ -382,10 +383,18 @@ export function SkillTree({
             {layout.bands
               .filter((b) => b.kind === 'year')
               .map((b) => (
-                <div key={b.key} className={`tree__band${b.current ? ' tree__band--now' : ''}`} style={{ top: b.y, height: b.h }} data-band={b.key} aria-hidden>
+                <div
+                  key={b.key}
+                  className={`tree__band${b.current ? ' tree__band--now' : ''}${b.internship ? ' tree__band--internship' : ''}`}
+                  style={{ top: b.y, height: b.h }}
+                  data-band={b.key}
+                  aria-hidden
+                >
                   <span className="tree__year-label">
                     {b.label}
                     {b.current && <span className="tree__now"> · now</span>}
+                    {/* Only when the year has courses: an empty one has its card, and a one-card band is too short for the longer label. */}
+                    {b.internship && layout.nodes.some((n) => n.year === b.year) && <span className="tree__internship-tag"> · internship</span>}
                   </span>
                   {b.heads.map((h) => (
                     <span
@@ -406,6 +415,15 @@ export function SkillTree({
             {layout.milestones.map((ms) => (
               <Milestone key={ms.id} milestone={ms} x={layout.trunkX} />
             ))}
+            {/* The internship year, when the plan left it empty: a card on the trunk says why it's bare. */}
+            {layout.bands
+              .filter((b) => b.internship && !layout.nodes.some((n) => n.year === b.year))
+              .map((b) => (
+                <div key={`${b.key}-internship`} className="tree__internship" role="note" style={{ top: b.y + b.h / 2 + 10, left: layout.trunkX }}>
+                  <strong>Internship year</strong>
+                  <span>No courses this year</span>
+                </div>
+              ))}
             <div className="tree__band-sentinel" style={{ top: 0, height: layout.trunkTop }} data-band="canopy" aria-hidden />
             <div className="tree__band-sentinel" style={{ top: layout.trunkBase, height: layout.height - layout.trunkBase }} data-band="roots" aria-hidden />
 

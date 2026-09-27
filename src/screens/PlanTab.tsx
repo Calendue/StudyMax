@@ -151,6 +151,25 @@ export function PlanControls() {
       </Appear>
 
       <Appear index={1} className="per-term">
+        <span id="internship-label">Internship year</span>
+        <div className="segmented" role="radiogroup" aria-labelledby="internship-label">
+          {([null, 3, 4] as const).map((year) => (
+            <button
+              key={year ?? 'off'}
+              type="button"
+              role="radio"
+              aria-checked={m.internshipYear === year}
+              aria-label={year === null ? 'No internship year' : `Internship in year ${year}`}
+              className={`segmented__option${m.internshipYear === year ? ' segmented__option--on' : ''}`}
+              onClick={() => m.chooseInternship(year ?? 'no')}
+            >
+              {year ?? 'Off'}
+            </button>
+          ))}
+        </div>
+      </Appear>
+
+      <Appear index={1} className="per-term">
         <label htmlFor="start-term">Starting</label>
         {/* ponytail: native select, not a segmented control; six term labels don't fit one row on a phone */}
         <select

@@ -15,6 +15,8 @@ export interface WhatIfInputs {
   summerPerTerm?: number
   /** In-progress courses by term label, as the real plan uses them. */
   booked?: Record<string, string[]>
+  /** The academic year away on an internship, which the real plan leaves empty too. */
+  away?: number | null
 }
 
 export interface TargetOutlook {
@@ -54,7 +56,7 @@ export function outlook(match: SpecializationMatch, input: WhatIfInputs): Target
     input.start,
     // No degree: a what-if weighs one credential against another, and the whole degree would pad
     // both to the same finish.
-    { springSummer: input.springSummer, summerPerTerm: input.summerPerTerm, booked: input.booked },
+    { springSummer: input.springSummer, summerPerTerm: input.summerPerTerm, booked: input.booked, away: input.away ?? null },
   )
   const courses = plan.flatMap((t) => t.courses)
   return {
