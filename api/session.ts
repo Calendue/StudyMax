@@ -66,7 +66,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 }
 
-async function load(uid: string): Promise<CloudSession | null> {
+export async function load(uid: string): Promise<CloudSession | null> {
   const row = await db().userInfo.findUnique({
     where: { authUid: uid },
     include: { profile: { include: { institution: true } }, courses: true },
@@ -93,10 +93,11 @@ async function load(uid: string): Promise<CloudSession | null> {
     coursesPerTerm: profile?.maxCoursesPerTerm ?? 5,
     summerPerTerm: profile?.maxSummerCourses ?? 2,
     internship: internshipFrom(profile?.internship),
+    courseTerms: Object.fromEntries(courses.flatMap((c) => (c.term ? [[c.courseCode, c.term]] : []))),
   }
 }
 
-async function save(user: VerifiedUser, session: CloudSession) {
+export async function save(user: VerifiedUser, session: CloudSession) {
   const prisma = db()
   const [firstName, ...rest] = (user.name ?? '').trim().split(/\s+/)
   // The account's first name only seeds it: once there's one (or the student picked another, in
@@ -137,10 +138,19 @@ async function save(user: VerifiedUser, session: CloudSession) {
     ...(session.internshipAY !== undefined ? { internshipAcademicYear: session.internshipAY } : {}),
   }
 
+  // When each course is: the term this device knows, else the one already on record (a device that
+  // doesn't know never erases it), else none. It's the record Max and every other device read.
+  const known = await prisma.studentCourse.findMany({ where: { userId, term: { not: null } }, select: { courseCode: true, status: true, term: true } })
+  const stored = new Map(known.map((r) => [`${r.courseCode}:${r.status}`, r.term]))
+  // A course that moved from taking to passed keeps the term it was being taken in.
+  const storedAny = new Map(known.map((r) => [r.courseCode, r.term]))
+  const termOf = (courseCode: string, status: string) =>
+    session.courseTerms?.[courseCode] ?? stored.get(`${courseCode}:${status}`) ?? storedAny.get(courseCode) ?? null
+  const row = (status: string) => (courseCode: string) => ({ userId, courseCode, status, term: termOf(courseCode, status) })
   const rows = [
-    ...session.completed.map((courseCode) => ({ userId, courseCode, status: 'completed' })),
-    ...session.inProgress.map((courseCode) => ({ userId, courseCode, status: 'in_progress' })),
-    ...session.registered.map((courseCode) => ({ userId, courseCode, status: 'registered' })),
+    ...session.completed.map(row('completed')),
+    ...session.inProgress.map(row('in_progress')),
+    ...session.registered.map(row('registered')),
   ]
 
   // A real GeneratedPlan for this account, kept current on every save — the single write path

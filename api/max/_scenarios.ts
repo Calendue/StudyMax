@@ -587,6 +587,32 @@ export async function droppedAt(planId: bigint, versionNumber: number): Promise<
   return inputs?.droppedCourses ?? []
 }
 
+/**
+ * The record of when each course is (StudentCourse.term): a season for each course under way, and the
+ * term each passed course was passed in. For a signed-in student this is the ground truth over what a
+ * device sent; the shared demo student's rows are never a guest's.
+ */
+export async function storedTermsOf(userId: bigint): Promise<{ seasons: Record<string, Season>; passed: Record<string, string> }> {
+  const rows = await db().studentCourse.findMany({ where: { userId, term: { not: null } }, select: { courseCode: true, status: true, term: true } })
+  const seasons: Record<string, Season> = {}
+  const passed: Record<string, string> = {}
+  for (const r of rows) {
+    const t = r.term ? termFromLabel(r.term) : null
+    if (!t) continue
+    if (r.status === 'completed') passed[r.courseCode] = r.term!
+    else seasons[r.courseCode] = t.season
+  }
+  return { seasons, passed }
+}
+
+/** The app's plan inputs with the student's record of when each course is under way laid over them. */
+export async function withStoredSeasons(p: CallPlanInputs, userId: bigint): Promise<CallPlanInputs> {
+  const { seasons } = await storedTermsOf(userId)
+  const underWay = new Set(p.inProgress)
+  const kept = Object.fromEntries(Object.entries(seasons).filter(([code]) => underWay.has(code)))
+  return Object.keys(kept).length > 0 ? { ...p, inProgressSeasons: { ...(p.inProgressSeasons ?? {}), ...kept } } : p
+}
+
 /** The snapshot a call's inputs describe — the app's own plan. */
 export function snapshotFromCall(p: CallPlanInputs): Snapshot {
   const enrolled = p.enrolled ?? p.inProgress
@@ -650,7 +676,13 @@ export async function loadCurrentSnapshot(
       springSummer: profile?.springSummer ?? false,
       summerPerTerm: profile?.maxSummerCourses ?? DEFAULT_SUMMER_COURSES,
       start: { season: plan.startSeason as TermStart['season'], year: plan.startYear },
-      inProgressSeasons: {},
+      // When each course is under way, from its own record (a course with none goes in the term running now).
+      inProgressSeasons: Object.fromEntries(
+        courses.flatMap((c) => {
+          const t = (c.status === 'in_progress' || c.status === 'registered') && c.term ? termFromLabel(c.term) : null
+          return t ? [[c.courseCode, t.season]] : []
+        }),
+      ),
       degreeVariant: null,
       // Not a scenario op: a what-if keeps the student's internship year, so the diff never shows one.
       away: profile?.internshipAcademicYear ?? null,

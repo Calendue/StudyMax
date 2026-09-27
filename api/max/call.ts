@@ -9,7 +9,7 @@ import { Prisma } from '@prisma/client'
 import { VapiClient } from '@vapi-ai/server-sdk'
 import { db, hasDatabase } from '../_db.js'
 import { accountForPhone, resolveMaxUser } from '../_maxIdentity.js'
-import { adapterInput, snapshotFromCall } from './_scenarios.js'
+import { adapterInput, snapshotFromCall, withStoredSeasons } from './_scenarios.js'
 import { parseCallPlanInputs } from '../../src/lib/max/callInputs.js'
 import type { CallPlanInputs } from '../../src/lib/max/live.js'
 import { planHash, programName, regenerate, termLine, underWayByTerm } from '../../src/lib/max/planningAdapter.js'
@@ -169,6 +169,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const parsed = body.planInputs === undefined ? null : parseCallPlanInputs(body.planInputs)
   if (parsed && 'inputs' in parsed) {
     planInputs = parsed.inputs
+    // A signed-in student's record of when each course is beats what this device sent (it may not
+    // know: a new phone, a session from before terms were saved). Max plans from it, and the app
+    // shows Max's view of the plan when the two differ.
+    if (!isGuest) planInputs = await withStoredSeasons(planInputs, account.userId)
     const terms = regenerate(adapterInput(snapshotFromCall(planInputs))).terms
     parity = planHash(terms) === planInputs.planHash
     graduation = terms[terms.length - 1]?.label ?? null

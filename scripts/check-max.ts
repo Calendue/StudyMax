@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { adapterInput, applyPlanOps, checkAffirmative, checkDecline, cleanOps, normalizeCourseCode, resolveSpecialization, type Snapshot } from '../api/max/_scenarios.ts'
 import { parseCallPlanInputs } from '../src/lib/max/callInputs.ts'
 import { finishShift, planOptions } from '../src/lib/max/options.ts'
-import { planHash, regenerate, validate } from '../src/lib/max/planningAdapter.ts'
+import { planHash, regenerate, scheduleByTerm, validate } from '../src/lib/max/planningAdapter.ts'
 import { courseRunsIn, termFromLabel, termOrder } from '../src/lib/plan.ts'
 import { completedCourses, inProgressCourses, inProgressTerms } from '../src/data/transcript.ts'
 
@@ -138,6 +138,20 @@ assert.equal(base.coursesPerTerm, 5, 'pure: the base snapshot is untouched')
 const afterPlan = regenerate(adapterInput(after)).terms
 assert.ok(validate(afterPlan, adapterInput(after)).ok, 'the resulting plan keeps every hard constraint')
 assert.ok(afterPlan.every((t) => t.courses.length <= 4), 'at the new pace')
+// --- the schedule Max answers "what am I taking in X" from: every term, in order, under way and planned ---
+const sched = scheduleByTerm(adapterInput(base), regenerate(adapterInput(base)).terms)
+const termsInOrder = sched.map((e) => termOrder(termFromLabel(e.term)!))
+assert.deepEqual(termsInOrder, [...termsInOrder].sort((a, b) => a - b), 'terms in order')
+for (const [code, season] of Object.entries(inProgressTerms)) {
+  const entry = sched.find((e) => e.takingNow.includes(code.replace(/^([A-Z]+)(\d)/, '$1 $2')))
+  assert.ok(entry && entry.term.startsWith(season), `${code} is under way in its own ${season} term (${entry?.term})`)
+}
+const planTerms = regenerate(adapterInput(base)).terms
+for (const t of planTerms) assert.ok(sched.find((e) => e.term === t.label)!.planned.length === t.courses.length, `${t.label}'s planned courses are all there`)
+assert.ok(sched.some((e) => e.takingNow.length > 0 && e.planned.length > 0), 'a term can have both registered and planned courses (Winter 2027)')
+const afterDropSched = scheduleByTerm(adapterInput(after), regenerate(adapterInput(after)).terms)
+assert.ok(!afterDropSched.some((e) => e.takingNow.includes('CMPT 370')), 'a saved drop leaves the term it was under way in')
+
 // --- moving a course like an advisor: the next term that works, never "you're taking it now" ---
 const where = (s: Snapshot, code: string) => regenerate(adapterInput(s)).terms.find((t) => t.courses.some((c) => c.code === code))?.label ?? null
 const now = { season: 'Fall', year: 2026 } as const

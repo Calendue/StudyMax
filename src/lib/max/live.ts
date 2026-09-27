@@ -94,6 +94,8 @@ export type LiveEvent =
   | { type: 'app.action'; seq: number; action: AppAction }
   /** The student asked Max to call them something else: the app shows that name from now on. */
   | { type: 'profile.name'; seq: number; name: string }
+  /** The student told Max when a course is ("Winter 2027"): the app records it too. */
+  | { type: 'course.term'; seq: number; courseCode: string; term: string }
   /** Max checked a course's live seats: the app shows a tag ("Full", "12 seats open"). */
   | { type: 'seats.checked'; seq: number; courseCode: string; term: string; status: SeatCheckStatus; seatsOpen: number }
 

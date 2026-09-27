@@ -1743,6 +1743,18 @@
   color: var(--bg);
 }
 
+/* A provider not available here yet (Apple on the web): greyed, not the ink button. */
+.auth-btn.auth-btn--off:disabled:not([aria-busy='true']) {
+  background: var(--surface);
+  color: var(--ink-3);
+  opacity: 1;
+  cursor: not-allowed;
+}
+
+.auth-btn--off .auth-btn__logo {
+  opacity: 0.6;
+}
+
 .auth-btn--google {
   background: var(--card);
   color: var(--ink);

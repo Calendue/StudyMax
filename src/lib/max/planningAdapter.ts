@@ -24,6 +24,8 @@ import {
   isElective,
   nextFall,
   prerequisitesMet,
+  termFromLabel,
+  termOrder,
   upcomingTerm,
   type PlannedTerm,
   type Season,
@@ -133,6 +135,37 @@ function bookedNow(input: AdapterInput): Record<string, string[]> {
 /** The program's degree as the student chose it: their variant, else the default. */
 function activeDegree(program: Program, variant: string | null | undefined) {
   return program.degrees?.find((d) => d.variant === variant) ?? program.degree
+}
+
+export interface TermSchedule {
+  term: string
+  /** Under way in this term: taking now, or registered for it. */
+  takingNow: string[]
+  /** What the plan puts in this term (an open slot by its name, e.g. "Free elective"). */
+  planned: string[]
+  /** Passed in this term, where the record says when. */
+  completed: string[]
+}
+
+/** Every term with anything in it, in order: what was passed there, what's under way (in its own term), and what the plan puts there. */
+export function scheduleByTerm(input: AdapterInput, terms: PlannedTerm[], passed: Record<string, string> = {}): TermSchedule[] {
+  const say = (code: string) => (isElective(code) ? electiveLabel(code) : code.replace(/^([A-Z]+)(\d)/, '$1 $2'))
+  const byTerm = new Map<string, TermSchedule>()
+  const at = (label: string) => {
+    if (!byTerm.has(label)) byTerm.set(label, { term: label, takingNow: [], planned: [], completed: [] })
+    return byTerm.get(label)!
+  }
+  for (const [code, label] of Object.entries(passed)) if (input.completed.has(code) && termFromLabel(label)) at(label).completed.push(say(code))
+  for (const [label, codes] of Object.entries(bookedNow(input))) at(label).takingNow.push(...codes.map(say))
+  for (const t of terms) {
+    const entry = at(t.label)
+    for (const c of t.courses) {
+      const said = say(c.code)
+      if (!entry.takingNow.includes(said)) entry.planned.push(said)
+    }
+  }
+  const order = (label: string) => termOrder(termFromLabel(label) ?? { season: 'Fall', year: 9999 })
+  return [...byTerm.values()].filter((e) => e.takingNow.length + e.planned.length + e.completed.length > 0).sort((a, b) => order(a.term) - order(b.term))
 }
 
 /** What they're taking now, by term label ("Fall 2026": [...], "Winter 2027": [...]), for Max to say term by term. */

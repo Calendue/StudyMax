@@ -35,6 +35,12 @@ export interface CloudSession {
    */
   internshipAY?: number | null
   /**
+   * When each course was passed, is being taken or is registered for ("Winter 2027"), as far as this
+   * device knows (a transcript's dates, a term the student picked). Only known terms: a course left out
+   * keeps the term already stored. Omitted by app builds from before it.
+   */
+  courseTerms?: Record<string, string>
+  /**
    * The name the student goes by (UserInfo.firstName): their account's first name until they pick
    * another, in Settings or by telling Max. Sent by the server on load only; a save never changes it.
    */
@@ -79,17 +85,33 @@ const codes = (value: unknown) =>
 
 const slug = (value: unknown) => (typeof value === 'string' && SLUG_RE.test(value) ? value : null)
 
+/** "Fall 2026", "Winter 2027", "Spring/Summer 2027": the plan's own term labels. */
+export const TERM_LABEL_RE = /^(Fall|Winter|Spring\/Summer) (20\d\d)$/
+
+/** A course → term map, keeping only real codes the session lists and real term labels. */
+function courseTerms(value: unknown, known: Set<string>): Record<string, string> {
+  if (!value || typeof value !== 'object') return {}
+  const out: Record<string, string> = {}
+  for (const [code, term] of Object.entries(value as Record<string, unknown>)) {
+    if (known.has(code) && typeof term === 'string' && TERM_LABEL_RE.test(term)) out[code] = term
+  }
+  return out
+}
+
 /** Keeps only the shapes the app itself sends; anything else is dropped rather than stored. */
 export function cleanCloudSession(raw: unknown): CloudSession | null {
   const s = raw as Partial<Record<keyof CloudSession, unknown>> | null | undefined
   if (!s || typeof s !== 'object') return null
   const universityId = s.universityId === 'usask' || s.universityId === 'other' ? s.universityId : ''
   const studentType = s.studentType === 'first-year' || s.studentType === 'existing' ? s.studentType : null
+  const completed = codes(s.completed)
+  const inProgress = codes(s.inProgress)
+  const registered = codes(s.registered)
   return {
     universityId,
     programId: slug(s.programId) ?? '',
-    completed: codes(s.completed),
-    inProgress: codes(s.inProgress),
+    completed,
+    inProgress,
     revealed: s.revealed === true,
     studentType,
     degree: typeof s.degree === 'string' ? s.degree.slice(0, 120) : '',
@@ -97,7 +119,7 @@ export function cleanCloudSession(raw: unknown): CloudSession | null {
     concentrationIds: Array.isArray(s.concentrationIds)
       ? s.concentrationIds.map(slug).filter((id): id is string => id !== null).slice(0, 20)
       : [],
-    registered: codes(s.registered),
+    registered,
     springSummer: s.springSummer === true,
     coursesPerTerm: clampLoad(s.coursesPerTerm, DEFAULT_PER_TERM),
     // A stored 3 (the old maximum) is 2 now, not the default; 0 is off, like springSummer false.
@@ -105,5 +127,6 @@ export function cleanCloudSession(raw: unknown): CloudSession | null {
     ...(typeof s.phone === 'string' && PHONE_RE.test(s.phone.trim()) ? { phone: s.phone.trim() } : {}),
     ...(s.internship !== undefined ? { internship: internshipFrom(s.internship) } : {}),
     ...(s.internshipAY !== undefined ? { internshipAY: academicYearFrom(s.internshipAY) } : {}),
+    ...(s.courseTerms !== undefined ? { courseTerms: courseTerms(s.courseTerms, new Set([...completed, ...inProgress, ...registered])) } : {}),
   }
 }

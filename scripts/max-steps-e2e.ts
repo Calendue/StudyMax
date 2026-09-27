@@ -71,6 +71,21 @@ async function runsInPublished(label: string, subject: string, number: string): 
   }
   return false
 }
+/** get_schedule must be the saved plan as it is now: every planned course of the live baseline, in its term. */
+async function scheduleMatches(step: string) {
+  const sched = await tool('get_schedule', {})
+  const base = await baseline()
+  const say = (c: string) => (c.startsWith('elective:') ? c.split(':').slice(2).join(':') : c.replace(/^([A-Z]+)(\d)/, '$1 $2'))
+  for (const t of base.terms) {
+    const entry = sched.schedule.find((e: any) => e.term === t.label)
+    assert.ok(entry, `${step}: ${t.label} is in the schedule`)
+    for (const c of t.courses) assert.ok(entry.planned.includes(say(c.code)) || entry.takingNow.includes(say(c.code)), `${step}: ${c.code} in ${t.label}`)
+  }
+  const under = sched.schedule.flatMap((e: any) => e.takingNow)
+  for (const c of base.inputs.inProgress) assert.ok(under.includes(say(c)), `${step}: ${c} under way`)
+  assert.equal(under.length, base.inputs.inProgress.length, `${step}: nothing extra under way`)
+  return sched
+}
 const say = (step: string, what: unknown) => console.log(`\n${step}\n  ${typeof what === 'string' ? what : JSON.stringify(what)}`)
 
 try {
@@ -83,6 +98,12 @@ try {
   say('1. summary', { grad: ov.roadmap.projectedGraduation, taking: ov.currentCourses, next: ov.roadmap.nextTerms[0] })
   assert.deepEqual(ov.currentCourses, inProgressCourses, 'the courses under way are the student\'s own')
   assert.equal(ov.roadmap.projectedGraduation, start.terms.at(-1).label, 'the summary is the plan on screen')
+  await scheduleMatches('1')
+  const w27 = await tool('get_schedule', { term: 'Winter 2027' })
+  say('1b. what am I taking in Winter 2027', w27)
+  assert.ok(w27.takingNow.length + w27.planned.length > 0 && !w27.nothingThen, 'Winter 2027 is not empty')
+  const late = await tool('get_schedule', { term: 'Fall 2035' })
+  assert.match(late.nothingThen ?? '', /after you finish/, 'a term after graduation says so')
 
   // 2. "What if I dropped CMPT 370?" — shown, not saved
   const whatIf = await tool('run_scenario', { ops: [{ op: 'DROP_COURSE', courseCode: 'CMPT 370' }] })
@@ -96,6 +117,9 @@ try {
   say('3. drop it', { ok: saved.ok, inProgress: afterDrop.inputs.inProgress })
   assert.equal(saved.ok, true)
   assert.ok(!afterDrop.inputs.inProgress.includes('CMPT370') && afterDrop.inputs.droppedCourses.includes('CMPT370'), 'CMPT 370 is dropped in the saved plan')
+  const fallAfterDrop = await tool('get_schedule', { term: 'current' })
+  assert.ok(!fallAfterDrop.takingNow.includes('CMPT 370'), 'the schedule follows the save: CMPT 370 no longer this term')
+  await scheduleMatches('3')
 
   // 4. "Don't drop it — leave it as it was" — back to the plan before the save, saved on a yes
   // (passing the id of the change just saved, as the model sometimes does: a new proposal, not a dead end)
@@ -107,6 +131,8 @@ try {
   assert.equal(restored.ok, true)
   assert.ok(afterUndo.inputs.inProgress.includes('CMPT370'), 'CMPT 370 is back under way')
   assert.equal(planHash(afterUndo.terms), startHash, 'the plan is exactly as it was')
+  assert.ok((await tool('get_schedule', { term: 'current' })).takingNow.includes('CMPT 370'), 'and the schedule has it back')
+  await scheduleMatches('4')
 
   // 5. "Move CMPT 370" — one they're taking now goes to the next term that works, never refused
   const move = await tool('run_scenario', { ops: [{ op: 'MOVE_COURSE', courseCode: 'CMPT 370' }] })
@@ -134,6 +160,7 @@ try {
   say('6. specialize in Cybersecurity', { headline: spec.headline, ok: specSaved.ok, targets: afterSpec.inputs.targetIds })
   assert.equal(specSaved.ok, true)
   assert.equal(afterSpec.inputs.targetIds[0], 'cybersecurity', 'the plan now leads with Cybersecurity')
+  await scheduleMatches('6')
 
   // 7. "Check seats for CMPT 370 next term" — live from USask, checked against a separate search
   const seats = await tool('check_seats', { courseCode: 'CMPT 370', term: 'next' })
