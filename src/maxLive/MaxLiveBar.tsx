@@ -65,10 +65,25 @@ export function MaxLiveBar({ compact = false }: { compact?: boolean }) {
     >
       <div className="max-live__row">
         <MaxOwl pose={ended ? 'idle' : livePose(live)} size={compact ? 30 : 40} className="max-live__owl" />
+        {!ended && (
+          <span className="max-live__live" aria-hidden>
+            <span className="max-live__dot is-on" /> Live
+          </span>
+        )}
         <span className="max-live__state" aria-live="polite">
           {s?.status === 'committed' && !open && <Icon name="check" size={16} />} {state}
         </span>
-        {open && !compact && <span className="max-live__tag">Max's proposal · not saved</span>}
+        {status === 'in_progress' && (
+          <span className={`max-live__wave${live.working || live.frame ? ' is-speaking' : ''}`} aria-hidden>
+            <i />
+            <i />
+            <i />
+            <i />
+            <i />
+          </span>
+        )}
+        {live.demo && <span className="max-live__tag">Rehearsal · nothing is saved</span>}
+        {open && !compact && !live.demo && <span className="max-live__tag">Max's proposal · not saved</span>}
         {ended && (
           <button type="button" className="max-live__close" onClick={live.stop} aria-label="Close">
             <Icon name="close" size={16} />
@@ -77,7 +92,7 @@ export function MaxLiveBar({ compact = false }: { compact?: boolean }) {
       </div>
 
       {caption && !unreached && (
-        <p className="max-live__caption" aria-live="polite">
+        <p key={caption} className="max-live__caption is-new" aria-live="polite">
           {caption}
         </p>
       )}
@@ -88,7 +103,18 @@ export function MaxLiveBar({ compact = false }: { compact?: boolean }) {
         </p>
       )}
 
-      {!compact && open && s && s.headline.length > 1 && (
+      {live.log.length > 1 && (
+        <details className="max-live__log">
+          <summary>What Max changed ({live.log.length})</summary>
+          <ol>
+            {live.log.map((line, i) => (
+              <li key={`${i}-${line}`}>{line}</li>
+            ))}
+          </ol>
+        </details>
+      )}
+
+      {!compact && open && !live.demo && s && s.headline.length > 1 && (
         <ul className="max-live__lines">
           {s.headline.slice(gradChanged ? 1 : 0).map((line) => (
             <li key={line}>{line}</li>
@@ -112,7 +138,7 @@ export function MaxLiveBar({ compact = false }: { compact?: boolean }) {
       {open && s && s.errors.length > 0 && <p className="max-live__error">{s.errors[0]}</p>}
       {live.error && <p className="max-live__error">{live.error}</p>}
 
-      {open && (
+      {open && !live.demo && (
         <div className="max-live__actions">
           <Button icon="check" disabled={live.busy || s!.errors.length > 0} onClick={() => void live.keep()} className={s!.requiresAppConfirmation ? 'max-live__keep is-asked' : 'max-live__keep'}>
             Keep this plan

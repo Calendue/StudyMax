@@ -196,6 +196,19 @@
   padding: var(--s2) var(--s3);
 }
 
+/* On a phone the camera scrolls the tree under Max's changes, so the call floats over the tab bar
+   like a broadcast lower third: the caption stays in view with the card it describes. */
+.max-live--compact:not(.max-live--ended) {
+  position: fixed;
+  right: var(--s3);
+  bottom: calc(var(--tabbar-height) + env(safe-area-inset-bottom, 0px) + var(--s5));
+  left: var(--s3);
+  z-index: 30;
+  margin: 0;
+  background: var(--raised);
+  box-shadow: var(--shadow-float), inset 0 0 0 1px var(--accent-edge);
+}
+
 .max-live--compact .max-live__caption {
   font-size: var(--fs-body);
 }
@@ -223,36 +236,105 @@
   margin: 0 0 var(--s4);
 }
 
-/* A course Max just took out of the plan: it flashes rose where it was, shrinks and fades
-   (useTreeTransition keeps it for 800 ms). Never interactive, never announced. */
+/* A course Max just took out of the plan: it flashes rose where it was, is struck through with a
+   "Dropped by Max" label, then shrinks back into the trunk (useTreeTransition keeps it 1.6 s).
+   Never interactive, never announced (the live caption says it). */
 .tree-node.tree-node--ghost {
+  z-index: 2;
   pointer-events: none;
   border-color: var(--accent);
+  border-style: dashed;
   background: var(--accent-tint);
-  animation: max-live-prune 800ms var(--settle) forwards;
+  animation: max-live-prune 1600ms var(--settle) forwards;
+}
+
+.tree-node--ghost .tree-node__code {
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+  text-decoration-color: var(--accent);
+  color: var(--ink-2);
+}
+
+.tree-node__dropped {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
 }
 
 @keyframes max-live-prune {
   0% {
     opacity: 1;
-    transform: scale(1);
-    box-shadow: 0 0 0 4px var(--accent-edge);
+    transform: translate(0, 0) scale(1);
+    box-shadow: 0 0 0 5px var(--accent-edge);
   }
-  35% {
+  15% {
     opacity: 1;
-    transform: scale(1.04);
+    transform: translate(0, 0) scale(1.05);
+  }
+  60% {
+    opacity: 0.85;
+    transform: translate(0, 0) scale(0.97);
+    box-shadow: 0 0 0 0 transparent;
   }
   100% {
     opacity: 0;
-    transform: scale(0.7) translateY(12px);
-    box-shadow: 0 0 0 0 transparent;
+    transform: translate(var(--to-trunk, 0), 10px) scale(0.2);
+  }
+}
+
+/* What Max just did, on the card itself for 3 s: "+ Added by Max", "Moved by Max". */
+.tree-node[data-max-fx]::after {
+  position: absolute;
+  top: -11px;
+  right: 8px;
+  z-index: 2;
+  padding: 1px 7px;
+  border-radius: var(--r-pill);
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 16px;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: max-live-tag 3000ms var(--settle) forwards;
+}
+
+.tree-node[data-max-fx='added']::after {
+  content: '+ Added by Max';
+}
+
+.tree-node[data-max-fx='moved']::after {
+  content: 'Moved by Max';
+}
+
+.tree-node[data-max-fx] {
+  border-color: var(--accent);
+}
+
+@keyframes max-live-tag {
+  0% {
+    opacity: 0;
+    transform: translateY(4px) scale(0.8);
+  }
+  12%,
+  85% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .tree-node.tree-node--ghost {
     animation: none;
-    opacity: 0;
+    opacity: 0.8;
+  }
+
+  .tree-node[data-max-fx]::after {
+    animation: none;
   }
 }
 
@@ -263,4 +345,138 @@
 
 .max-live--ended .max-live__owl {
   opacity: 0.6;
+}
+
+/* On the call: a LIVE pill with a pulsing dot, and Max's voice as a small waveform. */
+.max-live__live {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 8px 1px 6px;
+  border-radius: var(--r-pill);
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.max-live__live .max-live__dot {
+  width: 7px;
+  height: 7px;
+  background: var(--on-accent);
+}
+
+.max-live__wave {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 16px;
+}
+
+.max-live__wave i {
+  width: 3px;
+  height: 4px;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  opacity: 0.5;
+}
+
+.max-live__wave.is-speaking i {
+  opacity: 1;
+  animation: max-live-wave 900ms var(--settle) infinite alternate;
+}
+
+.max-live__wave.is-speaking i:nth-child(2) {
+  animation-delay: -200ms;
+}
+
+.max-live__wave.is-speaking i:nth-child(3) {
+  animation-delay: -450ms;
+}
+
+.max-live__wave.is-speaking i:nth-child(4) {
+  animation-delay: -100ms;
+}
+
+.max-live__wave.is-speaking i:nth-child(5) {
+  animation-delay: -650ms;
+}
+
+@keyframes max-live-wave {
+  from {
+    height: 4px;
+  }
+  to {
+    height: 16px;
+  }
+}
+
+/* Each change's caption arrives like a broadcast lower third. */
+.max-live__caption.is-new {
+  animation: max-live-caption 420ms var(--settle) both;
+}
+
+@keyframes max-live-caption {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.max-live__log summary {
+  cursor: pointer;
+  font-size: var(--fs-label);
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.max-live__log ol {
+  margin: var(--s1) 0 0;
+  padding-left: var(--s5);
+  font-size: var(--fs-label);
+  color: var(--ink-2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .max-live__wave.is-speaking i,
+  .max-live__caption.is-new {
+    animation: none;
+  }
+
+  .max-live__wave.is-speaking i {
+    height: 10px;
+  }
+}
+
+/* Wide screens: the page scrolls with the camera too, so the call floats as a lower third over the
+   tree, never scrolled away. */
+.max-live:not(.max-live--compact):not(.max-live--ended) {
+  position: fixed;
+  bottom: var(--s5);
+  left: 50%;
+  z-index: 30;
+  width: min(560px, calc(100vw - 2 * var(--s5)));
+  max-height: 50vh;
+  margin: 0;
+  overflow-y: auto;
+  background: var(--raised);
+  box-shadow: var(--shadow-float), inset 0 0 0 1px var(--accent-edge);
+  transform: translateX(-50%);
+}
+
+.max-live--compact .max-live__tag {
+  display: none;
+}
+
+.max-live__state {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }

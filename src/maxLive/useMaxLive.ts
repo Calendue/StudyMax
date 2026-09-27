@@ -9,7 +9,10 @@ import { openLiveChannel, type LiveChannel } from './realtime.ts'
 
 const POLL_MS = 1500
 const HEARTBEAT_MS = 10_000
-const FRAME_GAP_MS = 1200
+/** One change at a time: the camera moves, the card animates, then the next (useTreeTransition). */
+const FRAME_GAP_MS = 1500
+/** Catching up after a reconnect: the missed changes play quickly, still one by one. */
+const CATCHUP_GAP_MS = 650
 const JOIN_TIMEOUT_MS = 4000
 const LINGER_AFTER_END_MS = 60_000
 const STORAGE_KEY = 'studymax.maxLive'
@@ -38,6 +41,12 @@ export interface MaxLive {
   savedCount: number
   busy: boolean
   error: string | null
+  /** What Max changed on screen this call, in the order it played. */
+  log: string[]
+  /** The scripted rehearsal call (demo.ts) is playing: nothing reaches the server. */
+  demo: boolean
+  /** Plays a scripted call's events through the same handler a real call uses. */
+  runDemo(events: LiveEvent[]): void
   start(callId: string, token: string): void
   /** Save the open proposal from the app (a spoken yes to Max saves it too). */
   keep(): Promise<void>
@@ -62,6 +71,8 @@ interface Saved {
 }
 
 const keyOf = (s: LiveScenario) => `${s.scenarioId}:${s.presentedHash ?? ''}`
+/** A frame's identity: the same plan with the same words is the same change, whichever path brought it. */
+const frameKey = (f: LiveFrame) => `${f.caption}|${f.terms.map((t) => `${t.label}:${t.courses.map((c) => c.code).join(',')}`).join('|')}`
 
 // localStorage, not sessionStorage: the call being followed survives closing the browser, so a change
 // Max saved while the app was closed (the student on the phone, app shut) is picked up on reopen.
@@ -112,9 +123,16 @@ export function useMaxLive({ onCommitted, onAction, onName, ready = true }: Opti
   const [savedCount, setSavedCount] = useState(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [demo, setDemo] = useState(false)
+  const [log, setLog] = useState<string[]>([])
+  const demoTimers = useRef<ReturnType<typeof setTimeout>[]>([])
 
   const lastSeq = useRef(0)
-  const queue = useRef<LiveFrame[]>([])
+  const queue = useRef<{ frame: LiveFrame; gap: number }[]>([])
+  /** The last frame shown or queued, so a scenario re-sent with its earlier frames only adds what's new. */
+  const lastFrame = useRef<string | null>(null)
+  /** The newest snapshot read: an older one arriving late never moves the tree backwards. */
+  const snapSeq = useRef(0)
   const lastShown = useRef(0)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const adopted = useRef(readAdopted())
@@ -132,6 +150,12 @@ export function useMaxLive({ onCommitted, onAction, onName, ready = true }: Opti
     if (timer.current) clearTimeout(timer.current)
     timer.current = null
     lastSeq.current = 0
+    lastFrame.current = null
+    snapSeq.current = 0
+    demoTimers.current.forEach(clearTimeout)
+    demoTimers.current = []
+    setDemo(false)
+    setLog([])
     setTransport(null)
     setCallStatus(null)
     setEndedReason(null)
@@ -145,23 +169,39 @@ export function useMaxLive({ onCommitted, onAction, onName, ready = true }: Opti
   /** Shows queued frames at least FRAME_GAP_MS apart, so each change reads before the next. */
   const pump = useCallback(() => {
     if (timer.current || queue.current.length === 0) return
-    const wait = Math.max(0, lastShown.current + FRAME_GAP_MS - Date.now())
+    const wait = Math.max(0, lastShown.current + queue.current[0].gap - Date.now())
     timer.current = setTimeout(() => {
       timer.current = null
       const next = queue.current.shift()
       if (next) {
-        setFrame(next)
+        setFrame(next.frame)
+        setLog((l) => [...l, next.frame.caption])
         lastShown.current = Date.now()
       }
       pump()
     }, wait)
   }, [])
 
+  /** Queues the frames after the last one shown (all of them if it isn't among them). */
+  const enqueue = useCallback(
+    (frames: LiveFrame[], gap: number) => {
+      const keys = frames.map(frameKey)
+      const from = lastFrame.current ? keys.lastIndexOf(lastFrame.current) + 1 : 0
+      const fresh = frames.slice(from)
+      if (fresh.length === 0) return
+      lastFrame.current = keys[keys.length - 1]
+      queue.current.push(...fresh.map((frame) => ({ frame, gap })))
+      pump()
+    },
+    [pump],
+  )
+
   const adopt = useCallback((scenarioId: string, inputs: LiveInputs, terms: PlannedTerm[]) => {
     if (adopted.current.has(scenarioId)) return
     adopted.current.add(scenarioId)
     writeAdopted(adopted.current)
     queue.current = []
+    lastFrame.current = null
     committedRef.current(inputs, terms)
     // The app's own plan is now the saved one, so the tree drops the override without a jump.
     setFrame(null)
@@ -188,8 +228,7 @@ export function useMaxLive({ onCommitted, onAction, onName, ready = true }: Opti
           setWorking(false)
           setScenario(event.scenario)
           shownKey.current = keyOf(event.scenario)
-          queue.current.push(...event.scenario.frames)
-          pump()
+          enqueue(event.scenario.frames, FRAME_GAP_MS)
           break
         case 'scenario.committed':
           setScenario((s) => (s && s.scenarioId === event.scenarioId ? { ...s, status: 'committed' } : s))
@@ -198,6 +237,7 @@ export function useMaxLive({ onCommitted, onAction, onName, ready = true }: Opti
         case 'scenario.discarded':
           setScenario((s) => (s && s.scenarioId === event.scenarioId ? { ...s, status: 'discarded' } : s))
           queue.current = []
+          lastFrame.current = null
           setFrame(null)
           break
         case 'app.action':
@@ -209,7 +249,7 @@ export function useMaxLive({ onCommitted, onAction, onName, ready = true }: Opti
           break
       }
     },
-    [adopt, pump],
+    [adopt, enqueue],
   )
 
   /** Catches up from the snapshot (and is the heartbeat Max's "it's on your screen" rides on). */
@@ -226,6 +266,8 @@ export function useMaxLive({ onCommitted, onAction, onName, ready = true }: Opti
         }
         if (!res.ok) return
         const snap = (await res.json()) as LiveSnapshot
+        if (snap.seq < snapSeq.current) return
+        snapSeq.current = snap.seq
         setCallStatus(snap.call.status)
         setEndedReason(snap.call.endedReason)
         // The call's last save, even if a newer proposal is on top: take it on if this device hasn't.
@@ -239,10 +281,10 @@ export function useMaxLive({ onCommitted, onAction, onName, ready = true }: Opti
           setScenario((prev) => (prev && prev.scenarioId === s.scenarioId && prev.status === s.status ? prev : s))
           if (s.status === 'committed') {
             adopt(s.scenarioId, s.frames[s.frames.length - 1].inputs, s.frames[s.frames.length - 1].terms)
-          } else if (s.status === 'presented' && shownKey.current !== keyOf(s) && queue.current.length === 0 && !timer.current) {
-            // Missed the event: jump to where Max is (the final frame), no step-by-step replay.
+          } else if (s.status === 'presented' && shownKey.current !== keyOf(s)) {
+            // Missed the event (a reconnect): play what we missed, quickly and in order.
             shownKey.current = keyOf(s)
-            setFrame(s.frames[s.frames.length - 1])
+            enqueue(s.frames, CATCHUP_GAP_MS)
           } else if (s.status === 'discarded') {
             setFrame(null)
           }
@@ -254,7 +296,7 @@ export function useMaxLive({ onCommitted, onAction, onName, ready = true }: Opti
         // offline for a moment: the next tick tries again
       }
     },
-    [adopt, clear],
+    [adopt, clear, enqueue],
   )
 
   // Follow the call: Realtime if we can, polling if we can't, re-reading the snapshot throughout.
@@ -361,6 +403,7 @@ export function useMaxLive({ onCommitted, onAction, onName, ready = true }: Opti
         } else if (action === 'discard') {
           setScenario((s) => (s ? { ...s, status: 'discarded' } : s))
           queue.current = []
+          lastFrame.current = null
           setFrame(null)
         }
       } catch {
@@ -372,8 +415,23 @@ export function useMaxLive({ onCommitted, onAction, onName, ready = true }: Opti
     [saved, scenario, adopt, catchUp],
   )
 
+  const runDemo = useCallback(
+    (events: LiveEvent[]) => {
+      clear()
+      setDemo(true)
+      // A change every ~1.1 s: faster than the tree plays them, so later ones queue mid-animation.
+      demoTimers.current = events.map((e, i) => setTimeout(() => apply(e), i === 0 ? 0 : 400 + i * 1100))
+      const end = 400 + events.length * 1100 + FRAME_GAP_MS * 2
+      demoTimers.current.push(setTimeout(() => apply({ type: 'call.status', seq: 1000, status: 'ended', endedReason: null }), end))
+    },
+    [clear, apply],
+  )
+
   return {
-    active: saved !== null,
+    active: saved !== null || demo,
+    demo,
+    log,
+    runDemo,
     callId: saved?.callId ?? null,
     transport,
     callStatus,
