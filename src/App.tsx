@@ -22,6 +22,8 @@ import { currentDeadlineWatch, startDeadlineWatch, stopDeadlineWatch, syncWidget
 import { useClassTracker } from './useClassTracker.ts'
 import { currentAccount, isAuthConfigured, signIn, signInErrorMessage, signOut, type Account, type Provider } from './auth.ts'
 import { ModelContext } from './model.ts'
+import { useTheme } from './theme.ts'
+import type { Destination } from './ui/layout.ts'
 import { courseCode, registeredCode, type TargetKind } from './format.ts'
 import { DUR, INSTANT, SETTLE } from './ui/motion.ts'
 import { Intro } from './screens/Intro.tsx'
@@ -45,6 +47,8 @@ import { ReadingScreen } from './screens/ReadingScreen.tsx'
 import { RevealScreen } from './screens/RevealScreen.tsx'
 import { ResultsScreen } from './screens/ResultsScreen.tsx'
 import { CallScreen } from './screens/CallScreen.tsx'
+import { AppShell, CoursesFocus, Wizard } from './shell/AppShell.tsx'
+import { useLayoutMode } from './ui/layout.ts'
 import './App.css'
 
 function fileToBase64(file: File): Promise<string> {
@@ -196,6 +200,9 @@ function resumeScreen(state: Partial<SavedState>): Screen {
 }
 
 function useStudyMax() {
+  // --- light, dark or the system's; set before first paint by index.html, kept here from then on ---
+  const { themePref, theme, setThemePref } = useTheme()
+
   // --- what this deployment can do: features whose server key is missing are left out entirely ---
   const [features, setFeatures] = useState(cachedFeatures)
   useEffect(() => {
@@ -1005,6 +1012,24 @@ function useStudyMax() {
     setTabState(next)
   }
 
+  /**
+   * The navigation's one entry point once there are results: the tab bar, the rail, the sidebar and
+   * the search all come through here. A tab is a tab of the results screen; Courses is its own screen.
+   */
+  function navigate(dest: Destination) {
+    setSheet(null)
+    if (dest === 'courses') {
+      if (screen !== 'courses') {
+        haptic.selection()
+        go('courses', -1)
+      }
+      return
+    }
+    if (dest !== tab) haptic.selection()
+    setTabState(dest)
+    if (screen !== 'results') go('results', 1)
+  }
+
   function openSheet(id: string) {
     haptic.selection()
     setSheet(id)
@@ -1240,6 +1265,10 @@ function useStudyMax() {
   return {
     features,
     classes,
+    // appearance
+    themePref,
+    theme,
+    setThemePref,
     // account
     account,
     authBusy,
@@ -1344,6 +1373,8 @@ function useStudyMax() {
     watchDeadline,
     unwatchDeadline,
     // navigation
+    revealed,
+    navigate,
     screen,
     direction,
     go,
@@ -1408,6 +1439,7 @@ const instantVariants = {
 function App() {
   const model = useStudyMax()
   const reduce = useReducedMotion()
+  const layout = useLayoutMode()
   const backRef = useRef(model.back)
   backRef.current = model.back
   useEffect(() => onBackButton(() => backRef.current()), [])
@@ -1424,31 +1456,48 @@ function App() {
             <LandingPage onGetStarted={() => model.setShowLanding(false)} onSkip={() => model.setShowLanding(false)} />
           </main>
         </div>
+        <AccountSheet />
       </ModelContext.Provider>
     )
   }
 
+  // Wider than a phone, the results (and the courses and the call, once there are results) live in
+  // the dashboard shell; before that, courses get the desktop page and every other step the wizard.
+  const wide = layout !== 'tabs'
+  const inShell = wide && model.revealed && (model.screen === 'results' || model.screen === 'courses' || model.screen === 'call')
+  const coursesFocus = wide && !inShell && model.screen === 'courses'
+  const frame = inShell ? 'shell' : coursesFocus ? 'courses-focus' : model.screen
   const Current = SCREENS[model.screen]
+  const content = inShell ? (
+    <AppShell mode={layout === 'sidebar' ? 'sidebar' : 'rail'} />
+  ) : coursesFocus ? (
+    <CoursesFocus />
+  ) : (
+    <Current />
+  )
+  const wizard = wide && !inShell && !coursesFocus && model.screen !== 'landing'
+  const screens = (
+    <AnimatePresence mode="wait" initial={false} custom={model.direction}>
+      <motion.div
+        key={frame}
+        className="screen"
+        custom={model.direction}
+        variants={reduce ? instantVariants : screenVariants}
+        initial="enter"
+        animate="shown"
+        exit="leave"
+      >
+        {content}
+      </motion.div>
+    </AnimatePresence>
+  )
   return (
     <ModelContext.Provider value={model}>
-      <div className={`app${model.screen === 'landing' ? ' app--wide' : ''}`}>
-        {launched && (
-        <AnimatePresence mode="wait" initial={false} custom={model.direction}>
-          <motion.div
-            key={model.screen}
-            className="screen"
-            custom={model.direction}
-            variants={reduce ? instantVariants : screenVariants}
-            initial="enter"
-            animate="shown"
-            exit="leave"
-          >
-            <Current />
-          </motion.div>
-        </AnimatePresence>
-        )}
+      <div className={`app${model.screen === 'landing' || inShell || coursesFocus || wizard ? ' app--wide' : ''}`}>
+        {/* The wizard's art stays put while its questions change beside it. */}
+        {launched && (wizard ? <Wizard>{screens}</Wizard> : screens)}
       </div>
-      {model.account && <AccountSheet />}
+      <AccountSheet />
       <Intro onReveal={() => setLaunched(true)} />
     </ModelContext.Provider>
   )
