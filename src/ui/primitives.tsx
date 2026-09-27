@@ -228,7 +228,7 @@ export function CountUp({ value, from = 0, duration = 0.8, delay = 0 }: { value:
 }
 
 /** A deadline as a chip: filled Cherry Rose when it's closing soon, a quiet tint otherwise. */
-export function Chip({ children, tone = 'quiet', icon }: { children: ReactNode; tone?: 'quiet' | 'urgent'; icon?: IconName }) {
+export function Chip({ children, tone = 'quiet', icon }: { children: ReactNode; tone?: 'quiet' | 'accent' | 'urgent'; icon?: IconName }) {
   return (
     <span className={`chip chip--${tone}`}>
       {icon && <Icon name={icon} size={14} />}

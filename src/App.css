@@ -826,6 +826,34 @@
   background: var(--surface);
 }
 
+/* One of a set (a term, a filter): quiet until it's the one picked, then the accent's tint and edge. */
+.chip--choice {
+  min-height: 36px;
+  padding: 6px var(--s3);
+  font-size: 0.875rem;
+  background: var(--surface);
+  color: var(--ink-2);
+  transition:
+    background-color var(--d-fast) var(--settle),
+    color var(--d-fast) var(--settle);
+}
+
+.card .chip--choice {
+  background: var(--card-surface);
+}
+
+.chip--choice[aria-checked='true'] {
+  background: var(--accent-tint);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
+@media (hover: hover) {
+  .chip--choice:hover:not([aria-checked='true']) {
+    color: var(--ink);
+  }
+}
+
 .per-term {
   display: flex;
   align-items: center;
