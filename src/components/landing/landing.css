@@ -1204,6 +1204,47 @@
   }
 }
 
+/* ── phones: quicker, lighter. Cards arrive as you reach them (not half a second after), the wood
+   grows faster, and nothing keeps a page-tall layer busy: no camera layer (it never pans here), no
+   breathing root glow. ── */
+.landing--compact .climb__world {
+  will-change: auto;
+}
+
+.landing--compact.is-ready .beat :is([data-twig], [data-blossom], .roots__copy, .roots__cue, .canopy) {
+  --from: 16px;
+  transition:
+    opacity 0.35s var(--settle) calc(0.05s + var(--i, 0) * 0.05s),
+    transform 0.45s var(--settle) calc(0.05s + var(--i, 0) * 0.05s);
+}
+
+.landing--compact.is-ready .beat :is(.beat--scattered .beat-card, .showcase, .beat-card--label, .leaf--right, .step--right) {
+  --from: -16px;
+}
+
+.landing--compact .climb__branch {
+  transition-duration: 0.55s;
+  transition-delay: 0.05s;
+}
+
+.landing--compact .climb__grow-line {
+  transition-duration: 0.9s;
+}
+
+.landing--compact .climb-link__line {
+  transition-duration: 0.6s;
+  transition-delay: 0.15s;
+}
+
+.landing--compact .climb-link__arrow {
+  transition-delay: 0.6s;
+}
+
+.landing--compact .climb__root-glow {
+  animation: none;
+  opacity: 0.6;
+}
+
 /* ── reduced motion: no pan, no growth, no pulses; the whole tree drawn, every card in place ── */
 @media (prefers-reduced-motion: reduce) {
   .climb__branch,

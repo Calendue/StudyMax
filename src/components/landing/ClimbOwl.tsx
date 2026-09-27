@@ -30,18 +30,19 @@ interface ClimbOwlProps {
 }
 
 export function ClimbOwl({ g, grown, stageRef, scrollerRef, scrollY, reduce }: ClimbOwlProps) {
-  const size = g.compact ? 44 : 72
+  const size = g.compact ? 52 : 86
   const [at, setAt] = useState(-1)
   // The perch he's flying from, while he's in the air.
   const [from, setFrom] = useState<Perch | null>(null)
   const atRef = useRef(-1)
+  // The stage's top in the scroller's content, measured with the geometry, so a scroll reads no layout.
+  const stageTop = useRef(0)
+  const view = useRef(0)
 
   const pick = () => {
-    const stage = stageRef.current
     const scroller = scrollerRef.current
-    if (!stage || !scroller) return
-    const top = scroller === document.scrollingElement ? 0 : scroller.getBoundingClientRect().top
-    const y = top + scroller.clientHeight * EYE - stage.getBoundingClientRect().top
+    if (!scroller) return
+    const y = scroller.scrollTop + view.current * EYE - stageTop.current
     const next = nearest(g.perches, grown, y)
     const prev = atRef.current
     if (next === prev) return
@@ -51,12 +52,25 @@ export function ClimbOwl({ g, grown, stageRef, scrollerRef, scrollY, reduce }: C
   }
   useMotionValueEvent(scrollY, 'change', pick)
   // A new geometry (a resize) or more wood grown can change which perch is nearest.
-  useEffect(pick, [g, grown]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const stage = stageRef.current
+    const scroller = scrollerRef.current
+    if (!stage || !scroller) return
+    const measure = () => {
+      const top = scroller === document.scrollingElement ? 0 : scroller.getBoundingClientRect().top
+      stageTop.current = stage.getBoundingClientRect().top - top + scroller.scrollTop
+      view.current = scroller.clientHeight
+    }
+    measure()
+    pick()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
+  }, [g, grown]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const perch = g.perches[at]
   const distance = from && perch ? Math.hypot(from.x - perch.x, from.y - perch.y) : 0
   // Quick hops between neighbours; a fast scroll still sends him on a big, high super jump.
-  const duration = Math.min(0.8, 0.28 + distance / 2600)
+  const duration = Math.min(0.5, 0.18 + distance / 3600)
   useEffect(() => {
     if (!from) return
     const landed = setTimeout(() => setFrom(null), duration * 1000 + 50)
