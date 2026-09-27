@@ -83,15 +83,16 @@ export function SkillTree({
     () =>
       width > 0
         ? layoutSkillTree({
-            completed: m.completed,
-            inProgress: m.inProgressCourses,
+            // After the student's overrides: a failed course isn't done, a dropped one isn't under way.
+            completed: m.planCompleted,
+            inProgress: m.planInProgress,
             plan: m.plan,
             ...inputs,
             internshipYear: m.internshipYear,
             width,
           })
         : null,
-    [m.completed, m.inProgressCourses, m.plan, m.internshipYear, inputs, width],
+    [m.planCompleted, m.planInProgress, m.plan, m.internshipYear, inputs, width],
   )
 
   const [selection, setSelection] = useState<TreeSelection | null>(null)
