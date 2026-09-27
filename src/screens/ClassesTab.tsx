@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { isElective } from '../lib/plan.ts'
 import { useModel } from '../model.ts'
 import { courseCode } from '../format.ts'
 import { bannerTermCode, formatMeeting, openSeats, PAWS_URL, statusLabel, type Section, type Term, type Watch } from '../lib/classTracker.ts'
@@ -61,7 +62,7 @@ export function ClassFinder() {
   // The plan's first term, if Banner has it open: its courses are the ones worth grabbing a seat in.
   const nextTerm = m.plan[0]
   const nextTermCode = nextTerm ? bannerTermCode(nextTerm.label) : null
-  const planCourses = nextTerm && terms.some((t) => t.code === nextTermCode) ? nextTerm.courses.map((p) => p.code) : []
+  const planCourses = nextTerm && terms.some((t) => t.code === nextTermCode) ? nextTerm.courses.map((p) => p.code).filter((code) => !isElective(code)) : []
   const offeredBy = c.offered?.byTerm.state === 'done' ? c.offered.byTerm.value : null
 
   function find(code: string) {

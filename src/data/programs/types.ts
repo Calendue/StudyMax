@@ -1,5 +1,15 @@
 import type { Specialization } from '../specializations.ts'
 
+/**
+ * A program's own degree requirements, planned alongside the specialization the student targets, so
+ * the plan is a whole degree and a specialization pick also has to fit it. Never shown as something
+ * the student is "closest to".
+ */
+export interface Degree extends Specialization {
+  /** Courses in the whole degree (credit units ÷ 3). What the requirements don't name is free electives. */
+  totalCourses: number
+}
+
 export interface Program {
   id: string
   name: string
@@ -18,6 +28,8 @@ export interface Program {
   coursesPerTerm?: number
   /** Its specializations are whole majors or degree paths (Commerce's Accounting), not add-on concentrations. */
   specializationsAreMajors?: boolean
+  /** The degree itself, where it's mapped: named requirements, open choices, and the credit total. */
+  degree?: Degree
   /** Only populated where a real sample transcript exists. */
   sampleTranscript?: string[]
   /** Courses the sample student is registered in but has not finished. */

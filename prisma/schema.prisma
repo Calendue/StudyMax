@@ -44,6 +44,11 @@ model StudentProfile {
   startingTermSeason String?  @db.VarChar // "Fall" | "Winter"
   startingTermYear   Int?
   goals              String?  @db.Text
+  // Plan generation's load limits (lib/plan.ts): whether Spring/Summer terms are used, and the most
+  // courses the plan puts in a Fall/Winter term and in a Spring/Summer term.
+  springSummer       Boolean  @default(false)
+  maxCoursesPerTerm  Int      @default(2)
+  maxSummerCourses   Int      @default(2)
   createdAt          DateTime @default(now()) @db.Timestamp(6)
   updatedAt          DateTime @updatedAt @db.Timestamp(6)
 

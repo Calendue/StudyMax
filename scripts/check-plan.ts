@@ -1,7 +1,8 @@
 // Sanity check for the term planner. Run: node --experimental-strip-types scripts/check-plan.ts
 import assert from 'node:assert/strict'
 import { computeMatches } from '../src/lib/match.ts'
-import { buildPlan, selectCourses, withPrerequisites, courseLevel, upcomingTerm, buildStudentPlan, termsFrom } from '../src/lib/plan.ts'
+import { buildPlan, selectCourses, withPrerequisites, courseLevel, upcomingTerm, buildStudentPlan, termsFrom, isElective } from '../src/lib/plan.ts'
+import { computerScienceDegree } from '../src/data/programs/computerScienceDegree.ts'
 import { courseInfo } from '../src/data/prereqs.ts'
 import { completedCourses } from '../src/data/transcript.ts'
 import { specializations } from '../src/data/specializations.ts'
@@ -182,7 +183,48 @@ assert.ok(buildPlan(matches[0], specializations, completed, 0, { season: 'Fall',
   assert.deepEqual(buildStudentPlan([target.spec], specializations, completed, everything, 2, start), [], 'finished by in-progress = no plan')
 }
 
+// --- load limits: Fall/Winter take up to coursesPerTerm, Spring/Summer up to its own cap ---
+{
+  const big = matches.reduce((a, b) => (b.remaining > a.remaining ? b : a))
+  const loaded = buildStudentPlan([big.spec], specializations, new Set(), [], 3, { season: 'Fall', year: 2026 }, true, 1)
+  assert.ok(loaded.some((t) => t.label.startsWith('Spring/Summer')), 'Spring/Summer terms appear when on')
+  for (const term of loaded) {
+    const cap = term.label.startsWith('Spring/Summer') ? 1 : 3
+    assert.ok(term.courses.length <= cap, `${term.label} holds at most ${cap}`)
+  }
+  const off = buildStudentPlan([big.spec], specializations, new Set(), [], 3, { season: 'Fall', year: 2026 }, false, 1)
+  assert.ok(!off.some((t) => t.label.startsWith('Spring/Summer')), 'no Spring/Summer terms when off')
+}
+
 assert.deepEqual(upcomingTerm(new Date('2026-03-01')), { season: 'Fall', year: 2026 })
 assert.deepEqual(upcomingTerm(new Date('2026-10-01')), { season: 'Winter', year: 2027 })
+
+// --- degree: a CS plan is the whole B.Sc., its open slots unnamed, and every pick fits the degree ---
+{
+  const degree = computerScienceDegree
+  const start = { season: 'Fall', year: 2026 } as const
+  for (const spec of specializations) {
+    const plan = buildStudentPlan([spec], specializations, new Set(), [], 5, start, false, 2, degree)
+    const courses = plan.flatMap((t) => t.courses)
+    const named = courses.filter((c) => !isElective(c.code)).map((c) => c.code)
+    // First-year: the plan is exactly the degree's 40 courses (120 cu). Courses no slot uses (a
+    // prerequisite the degree doesn't list) take free-elective room first, and only go over it once
+    // that room is full.
+    const everything = new Set(named)
+    const unused = everything.size - computeMatches([degree], everything)[0].doneCount
+    const freeRoom = degree.totalCourses - degree.requirements.reduce((n, g) => n + g.need, 0)
+    assert.equal(courses.length, degree.totalCourses + Math.max(0, unused - freeRoom), `${spec.id}: a whole degree`)
+    // The specialization is finished and every named degree slot is filled, by a course or a slot.
+    assert.equal(computeMatches([spec], everything)[0].remaining, 0, `${spec.id}: specialization complete`)
+    const degreeLeft = computeMatches([degree], everything)[0].unsatisfied
+    assert.ok(degreeLeft.every((g) => g.label), `${spec.id}: only open-choice slots are left for unnamed electives`)
+    const unnamed = courses.filter((c) => isElective(c.code)).length
+    assert.ok(unnamed >= degreeLeft.reduce((n, g) => n + g.need, 0), `${spec.id}: every open slot has an unnamed elective`)
+    assert.equal(new Set(courses.map((c) => c.code)).size, courses.length, `${spec.id}: no course twice`)
+  }
+  // A done course counts once, even when two slots list it (ENG 111: writing and breadth).
+  const once = computeMatches([degree], new Set(['ENG111']))[0]
+  assert.equal(once.doneCount, 1, 'one course fills one slot')
+}
 
 console.log('check-plan.ts: all assertions passed')

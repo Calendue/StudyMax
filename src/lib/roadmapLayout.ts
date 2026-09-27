@@ -48,7 +48,7 @@ export function buildRoadmapLayout(terms: PlannedTerm[]): RoadmapLayout {
     term.courses.forEach((c, col) => {
       nodes.push({
         code: c.code,
-        state: c.reason,
+        state: c.reason === 'elective' ? 'requirement' : c.reason,
         neededBy: c.neededBy,
         prerequisiteText: c.prerequisiteText,
         alsoAdvances: c.alsoAdvances,

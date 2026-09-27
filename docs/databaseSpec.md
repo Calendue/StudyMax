@@ -44,6 +44,9 @@ The onboarding wizard's answers (`src/components/onboarding/`), one per student.
 | `concentrationIds` | `String[]` | `Specialization.id` slugs the student is targeting alongside their major (multi-select, optional) — matches `OnboardingProfile.concentrationIds`. Empty when the major has no specialization data or the step was skipped |
 | `startingTermSeason`, `startingTermYear` | `String?`, `Int?` | only set when `studentType = "first-year"`; mirrors `lib/plan.ts`'s `TermStart` shape |
 | `goals` | `String?` (text) | |
+| `springSummer` | `Boolean`, default `false` | whether the plan may use Spring/Summer terms (onboarding's toggle, the Plan tab's Spring/Summer control) |
+| `maxCoursesPerTerm` | `Int`, default `2` | the most courses `lib/plan.ts` puts in a Fall/Winter term (1–6; the app's `coursesPerTerm`) |
+| `maxSummerCourses` | `Int`, default `2` | the most courses in a Spring/Summer term (1–3; the app's `summerPerTerm`) |
 
 ### `StudentCourse`
 Transcript entries — one row per (student, course code, status).

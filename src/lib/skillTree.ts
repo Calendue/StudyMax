@@ -1,7 +1,7 @@
 import { courseInfo } from '../data/prereqs.ts'
 import type { RequirementGroup } from '../data/specializations.ts'
 import type { SpecializationMatch } from './match.ts'
-import { courseLevel, upcomingTerm, type PlannedTerm, type Season, type TermStart } from './plan.ts'
+import { courseLevel, isElective, upcomingTerm, type PlannedTerm, type Season, type TermStart } from './plan.ts'
 
 // The Academic Skill Tree: the student's degree drawn as a tree that grows UP. Roots at the bottom,
 // Year 1 above them, the years rising to a canopy of the credentials they're working toward. Fall
@@ -201,6 +201,9 @@ interface Draft {
   col: number
 }
 
+/** A full-time term's load: completed courses have no dates, so this is what a term on the tree holds. */
+const TERM_LOAD = 5
+
 export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
   const g = geometry(Math.max(300, input.width))
   const width = Math.max(300, Math.round(input.width))
@@ -234,10 +237,16 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
     drafts.set(code, { code, ...d, creds: credsOf(code), elective: null, order: order++, tier: 0, row: 0, col: 0 })
   }
 
-  for (const code of [...completed].sort()) {
+  // By course level, but a year holds two full terms at most: a student who took many 100-level
+  // courses took some of them later, so the rest move up a year (never past the last finished one).
+  const perYear = new Map<number, number>()
+  for (const code of [...completed].sort((a, b) => courseLevel(a) - courseLevel(b) || a.localeCompare(b))) {
+    let year = Math.min(lastDoneYear, Math.max(1, courseLevel(code)))
+    while (year < lastDoneYear && (perYear.get(year) ?? 0) >= 2 * TERM_LOAD) year++
+    perYear.set(year, (perYear.get(year) ?? 0) + 1)
     add(code, {
       status: 'completed',
-      year: Math.min(lastDoneYear, Math.max(1, courseLevel(code))),
+      year,
       lane: null,
       term: '',
       termKnown: false,
@@ -296,7 +305,10 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
     )
     if (unmet) d.status = 'locked'
   }
-  const firstPlanned = input.plan[0]?.courses.map((c) => c.code).find((c) => drafts.get(c)?.status === 'planned')
+  // An unnamed elective is never the one course to take next: there's nothing specific to take.
+  const firstPlanned = input.plan[0]?.courses
+    .map((c) => c.code)
+    .find((c) => !isElective(c) && drafts.get(c)?.status === 'planned')
   const beacon =
     input.bestNext && drafts.get(input.bestNext)?.status === 'planned' ? input.bestNext : (firstPlanned ?? null)
   if (beacon) drafts.get(beacon)!.status = 'next'
@@ -312,6 +324,8 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
     const need = Math.max(1, grp.need - grp.courses.filter((c) => doneOrNow.has(c)).length)
     if (open.length > need) d.elective = { need, of: open.length, options: open }
   }
+  // An unnamed slot ("Breadth elective") is an elective too, with no list to choose from here.
+  for (const d of drafts.values()) if (isElective(d.code)) d.elective = { need: 1, of: 0, options: [] }
 
   // ── lanes for completed courses ──
   // No term dates, so: a course whose prerequisite sits in the same year went in Winter; one that
@@ -328,9 +342,11 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
       const seq = links.filter((l) => l.sequencing && drafts.get(l.from)!.status === 'completed' && drafts.get(l.to)!.status === 'completed')
       const hasPrereq = seq.some((l) => l.to === d.code && sameYear(l.from, d.code))
       const unlocks = seq.some((l) => l.from === d.code && sameYear(l.to, d.code))
+      // A side that already holds a full term's load passes the course to the other side.
+      const room = (lane: 'fall' | 'winter') => count[lane] < TERM_LOAD
       if (year === currentYear && current.season !== 'Fall') d.lane = 'fall'
-      else if (hasPrereq) d.lane = 'winter'
-      else if (unlocks) d.lane = 'fall'
+      else if (hasPrereq && room('winter')) d.lane = 'winter'
+      else if (unlocks && room('fall')) d.lane = 'fall'
       if (d.lane) count[d.lane]++
       else free.push(d)
     }
