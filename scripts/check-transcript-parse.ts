@@ -7,6 +7,8 @@ import {
   parseTranscriptResponse,
   parseTranscriptTimeline,
 } from '../src/lib/transcriptParse.ts'
+import { takingNow, termLabels, termsAfterUpload } from '../src/lib/currentTerms.ts'
+import { inProgressCourses as sampleInProgress, inProgressTerms as sampleTerms } from '../src/data/transcript.ts'
 
 // A small fixture catalogue spanning several subjects — proves extraction isn't narrowed to one
 // program's course list, without needing to import the real 3000+-course catalogue here.
@@ -138,5 +140,27 @@ assert.deepEqual(parseTranscriptTimeline('not json', { completed: [], inProgress
   completedTerms: {},
   documentDate: null,
 })
+
+// --- what the app does with an answer: Taking now, and the terms it keeps ---
+// A course is never both completed and in progress, whether a transcript or the student listed it.
+assert.deepEqual(
+  takingNow(['CMPT332', 'CMPT360', 'MATH110'], ['CMPT360', 'CMPT370'], new Set(['MATH110'])),
+  ['CMPT332', 'CMPT360', 'CMPT370'],
+  'Taking now is the union of uploaded and registered courses, once each, minus completed ones',
+)
+// A re-upload replaces the last transcript's terms; a course added by hand keeps the term it was given.
+assert.deepEqual(
+  termsAfterUpload({ CMPT332: 'Fall', CMPT340: 'Winter', CMPT381: 'Winter' }, { CMPT370: 'Fall' }, ['CMPT381']),
+  { CMPT381: 'Winter', CMPT370: 'Fall' },
+  'a re-upload replaces in-progress terms instead of merging them',
+)
+// The sample's seven, placed in their own terms on 2026-09-26: 4 in Fall 2026, 3 in Winter 2027.
+const sampleByTerm = (['Fall', 'Winter', 'Spring/Summer'] as const)
+  .map((season) => ({ season, courses: sampleInProgress.filter((c) => sampleTerms[c] === season) }))
+  .filter((g) => g.courses.length > 0)
+const sampleLabels = termLabels(sampleByTerm, new Date(2026, 8, 26))
+assert.equal(Object.keys(sampleLabels).length, 7, 'the sample takes seven courses')
+for (const code of ['CMPT332', 'CMPT360', 'CMPT370', 'MATH266']) assert.equal(sampleLabels[code], 'Fall 2026', `${code} runs in Fall 2026`)
+for (const code of ['CMPT340', 'CMPT353', 'CMPT434']) assert.equal(sampleLabels[code], 'Winter 2027', `${code} runs in Winter 2027`)
 
 console.log('check-transcript-parse.ts: all assertions passed')

@@ -12,7 +12,7 @@ import type { Program } from './data/programs/types.ts'
 import { buildCallScript, type CallContext } from './lib/callScript.ts'
 import { buildStudentPlan, DEFAULT_SUMMER_COURSES, isElective, termsFrom, upcomingTerm, type Season, type TermStart } from './lib/plan.ts'
 import { computeCredentials } from './lib/credentials.ts'
-import { bookedByTerm, seasonNow, withCurrentCourses } from './lib/currentTerms.ts'
+import { bookedByTerm, seasonNow, takingNow, termLabels, termsAfterUpload, withCurrentCourses } from './lib/currentTerms.ts'
 import { searchCourses, catalogueTitle } from './lib/courseSearch.ts'
 import { courseInfo } from './data/prereqs.ts'
 import { artsAndScienceSubjects, catalogueCourses } from './data/courses.ts'
@@ -162,6 +162,8 @@ interface SavedState {
   summerPerTerm?: number
   /** The term each in-progress course is in, from the transcript or set by the student. */
   courseTerms?: Record<string, Season>
+  /** The term ("Fall 2024") each completed course was passed in, where the transcript dates it. Device-only. */
+  completedTerms?: Record<string, string>
 }
 
 
@@ -340,6 +342,9 @@ function useStudyMax() {
   const [uploadInProgress, setUploadInProgress] = useState<string[]>(saved.inProgress ?? [])
   // Which term each in-progress course is in. A course without one is taken to be in the current term.
   const [courseTerms, setCourseTerms] = useState<Record<string, Season>>(saved.courseTerms ?? {})
+  // When each completed course was passed ("Fall 2024"), where the last transcript said; the tree places
+  // an undated one by its level.
+  const [completedTerms, setCompletedTerms] = useState<Record<string, string>>(saved.completedTerms ?? {})
   const completedRef = useRef(completed)
   completedRef.current = completed
 
@@ -363,6 +368,7 @@ function useStudyMax() {
     registered,
     springSummer,
     courseTerms,
+    completedTerms,
     coursesPerTerm,
     summerPerTerm,
   }
@@ -565,10 +571,11 @@ function useStudyMax() {
   }
 
   // Courses the student said they're registered in count exactly like a transcript's in-progress
-  // ones: not done yet, but never planned again, and already unlocking what they lead to.
+  // ones: not done yet, but never planned again, and already unlocking what they lead to. A course
+  // that's also completed is completed, never both.
   const inProgressCourses = useMemo(
-    () => [...new Set([...uploadInProgress, ...registered])],
-    [uploadInProgress, registered],
+    () => takingNow(uploadInProgress, registered, completed),
+    [uploadInProgress, registered, completed],
   )
 
   function chooseMinor(id: string | null) {
@@ -654,6 +661,10 @@ function useStudyMax() {
     setCompleted(new Set(computerScience.sampleTranscript ?? []))
     setUploadInProgress(computerScience.sampleInProgress ?? [])
     setCourseTerms(computerScience.sampleInProgressTerms ?? {})
+    setCompletedTerms({})
+    // The sample's own seven are the whole of what it's taking: onboarding's picks don't join them.
+    setRegistered([])
+    setRegisteredQuery('')
     // A sample student is an existing one. Targets picked in onboarding still lead the plan.
     setStudentType('existing')
     if (programId !== computerScience.id) setConcentrationIds([])
@@ -697,8 +708,8 @@ function useStudyMax() {
 
     const token = ++uploadToken.current
     const live = () => uploadToken.current === token
-    // A transcript adds to courses entered by hand (transfer credit, outside the program), but
-    // replaces the sample student, whose courses aren't the student's own.
+    // A transcript's completed courses add to those entered by hand (transfer credit, outside the
+    // program), but replace the sample student, whose courses aren't the student's own.
     const replacing = uploadStatus === 'sample'
     setUploadStatus('uploading')
     setUploadError(null)
@@ -744,9 +755,11 @@ function useStudyMax() {
       }
 
       setCompleted((prev) => new Set(replacing ? codes : [...prev, ...codes]))
-      setUploadInProgress((prev) => (replacing ? inProgressCodes : [...new Set([...prev, ...inProgressCodes])]))
+      // What it's taking, and when, is the newest transcript's word: a re-upload replaces the last one's.
+      setUploadInProgress(inProgressCodes)
       const terms: Record<string, Season> = data.inProgressTerms ?? {}
-      setCourseTerms((prev) => (replacing ? terms : { ...prev, ...terms }))
+      setCourseTerms((prev) => termsAfterUpload(prev, terms, registered))
+      setCompletedTerms(data.completedTerms ?? {})
       setFoundCount(codes.length)
       setStatedProgram({ major: data.major ?? null, minor: data.minor ?? null })
       if (!early) seedTargets(targetSeed)
@@ -808,6 +821,9 @@ function useStudyMax() {
     haptic.selection()
     setCourseTerms((prev) => ({ ...prev, [code]: season }))
   }
+
+  // Each course under way with its term as the tree and the plan write it ("Winter 2027").
+  const inProgressTerms = useMemo(() => termLabels(currentByTerm, today), [currentByTerm, today])
 
   // Whether the courses changed since the results were last worked out. Only then is "Update my
   // results" worth offering; otherwise the results already reflect every course on the list.
@@ -1057,6 +1073,8 @@ function useStudyMax() {
     setProgramId(state.programId ?? '')
     setCompleted(new Set(state.completed ?? []))
     setUploadInProgress(state.inProgress ?? [])
+    setCourseTerms(state.courseTerms ?? {})
+    setCompletedTerms(state.completedTerms ?? {})
     setRevealed(state.revealed ?? false)
     setStudentType(state.studentType ?? null)
     setDegree(state.degree ?? '')
@@ -1347,6 +1365,7 @@ function useStudyMax() {
     setProgramId('')
     setCompleted(new Set())
     setUploadInProgress([])
+    setCompletedTerms({})
     setUploadStatus('idle')
     setHeroId(null)
     setExtraTargetIds([])
@@ -1563,6 +1582,8 @@ function useStudyMax() {
     // results
     currentByTerm,
     setCourseTerm,
+    inProgressTerms,
+    completedTerms,
     roadmap,
     resultsStale,
     matches,
