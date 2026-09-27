@@ -76,6 +76,16 @@ const ordKey = (label: string | undefined) => {
   const t = label === undefined ? Number.NaN : termOrd(label)
   return Number.isNaN(t) ? 1e9 : t
 }
+/** Every term label from `from` to `to`, inclusive, in calendar order (Winter, Spring/Summer, Fall). */
+function termsBetween(from: string, to: string): string[] {
+  const a = termOrd(from)
+  const b = termOrd(to)
+  if (Number.isNaN(a) || Number.isNaN(b)) return [to]
+  const out: string[] = []
+  for (let o = Math.max(a, 0); o <= b; o++) out.push(`${['Winter', 'Spring/Summer', 'Fall'][o % 3]} ${Math.floor(o / 3)}`)
+  return out
+}
+
 /** "CMPT332" → "CMPT 332". */
 const spaced = (code: string) => code.replace(/^([A-Z]+)(\d)/, '$1 $2')
 const list = (codes: readonly string[]) =>
@@ -221,7 +231,9 @@ export function applyOverrides(
       }
     } else {
       const terms = (blocked[o.code] ??= [])
-      if (!terms.includes(o.term)) terms.push(o.term)
+      // "Take it later than T": not in T or any term before it, from the current term on.
+      const upTo = o.kind === 'later' ? termsBetween(currentTerm, o.term) : [o.term]
+      for (const label of upTo) if (!terms.includes(label)) terms.push(label)
       let hit = unbook(o.code, o.term)
       // An in-progress course with no booked term sits in the current term.
       const at = inProgress.indexOf(o.code)

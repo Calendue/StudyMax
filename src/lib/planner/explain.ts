@@ -123,7 +123,13 @@ export function diffPlans(before: PlannedTerm[], after: PlannedTerm[], overrides
     for (let i = n; i < y.length; i++) added.push({ course: label, to: y[i], why: 'elective', cause: fallback })
   }
 
-  const last = (p: PlannedTerm[]) => p.filter((t) => t.courses.length > 0).at(-1)?.label ?? null
+  // A full-year course in the last Fall runs on into the Winter after it (CMPT 400).
+  const last = (p: PlannedTerm[]) => {
+    const t = p.filter((x) => x.courses.length > 0).at(-1)
+    if (!t) return null
+    const m = /^Fall (\d{4})$/.exec(t.label)
+    return m && t.courses.some((c) => c.fullYear) ? `Winter ${Number(m[1]) + 1}` : t.label
+  }
   const from = last(before)
   const to = last(after)
   const sf = step(from)

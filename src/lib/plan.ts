@@ -10,7 +10,7 @@ import type { Catalog, Diagnostic, BindingKind } from './planner/types.js'
 import { clampLoad, clampSummer } from './planner/loads.js'
 import { defaultCatalog } from './catalog.js'
 import { buildModel, spaced, type ModelCourse } from './planner/model.js'
-import { coreLowerBound, scheduleCore } from './planner/schedule.js'
+import { coreLowerBound, coreUnreachable, scheduleCore } from './planner/schedule.js'
 import { forcedRanker, jointSelect, type Attempt, type Choice } from './planner/select.js'
 import { bindingText } from './planner/explain.js'
 export { bindingText }
@@ -277,11 +277,16 @@ export function selectCourses(
     // Never a course the 2026-27 catalogue doesn't list (BINF 451): a slot with no live option stays
     // unplanned, and the specialization says why it can't be finished (Specialization.unavailable).
     const ranked = rank(
-      slot.options.filter((code) => !pickedCodes.has(code) && courseInfo[code] !== undefined && !barred(code, completed)),
+      slot.options.filter((code) => !pickedCodes.has(code) && courseInfo[code] !== undefined && !barred(code, completed) && !barred(code, pickedCodes)),
       slot.specId,
     )
 
-    for (const code of ranked.slice(0, need)) {
+    let left = need
+    for (const code of ranked) {
+      if (left === 0) break
+      // Within one slot too: a pick rules out its own antirequisites (MATH 110 bars MATH 176).
+      if (barred(code, pickedCodes)) continue
+      left--
       mine.add(code)
       pickedCodes.add(code)
       picked.push({
@@ -318,7 +323,12 @@ export function withPrerequisites(
 
   while (queue.length > 0) {
     const code = queue.shift()!
-    for (const options of unmetPrerequisites(code, satisfied)) {
+    // Antirequisite credit stands in for a prerequisite only when it's already earned: a planned
+    // CMPT 270 (an antirequisite of CMPT 145) doesn't excuse the CMPT 145 it needs.
+    const unmet = prerequisiteGroups(code)
+      .map((g) => g.options)
+      .filter((options) => !options.some((o) => satisfied.has(o) || barred(o, completed)))
+    for (const options of unmet) {
       // An option the student's credit rules out isn't planned; with none left, it's the
       // department's call (CME 331 standing in for CMPT 215), not a course to add.
       const allowed = options.filter((o) => !barred(o, completed))
@@ -553,9 +563,33 @@ function runPlan(
       if (audit.remainingCu > 0 || audit.remainingSeniorCu > 0) return null
     }
     // An alternative selection gets a small search: it only matters if its lists already beat S0.
-    const result = scheduleCore(force.size > 0 ? { ...built.core, nodeBudget: Math.min(built.core.nodeBudget ?? 3000, 300) } : built.core)
+    let core = force.size > 0 ? { ...built.core, nodeBudget: Math.min(built.core.nodeBudget ?? 3000, 300) } : built.core
+    let result = scheduleCore(core)
     const byCode = new Map(courses.map((c) => [c.code, c]))
     const diagnostics = [...built.diagnostics]
+    // One course no schedule can ever place never takes the rest of the plan down with it: it (and
+    // what waits on it) is left out with the reason, and the rest is planned exactly.
+    if (!result.at && force.size === 0) {
+      const out = new Set(coreUnreachable(core))
+      if (out.size > 0 && out.size < core.items.length) {
+        for (const item of core.items) {
+          if (!out.has(item.id)) continue
+          const name = isElective(item.id) ? electiveLabel(item.id) : spaced(item.id)
+          const needs = item.pre.flatMap((g) => g.opts).filter((o) => out.has(o))
+          const [code, why] =
+            item.allowed.length === 0
+              ? (['NO_OFFERING', "it doesn't run in any term open to you"] as const)
+              : needs.length > 0
+                ? (['PREREQ_UNREACHABLE', `it needs ${[...new Set(needs)].sort().map(spaced).join(' or ')}, which can't be placed`] as const)
+                : item.credit.length > 0
+                  ? (['PREREQ_UNREACHABLE', "its credit-unit prerequisite can't be met in time"] as const)
+                  : (['PREREQ_UNREACHABLE', "a prerequisite it needs can't be taken"] as const)
+          diagnostics.push({ level: 'error', code, course: item.id, message: `${name} can't be planned: ${why}. Check with an advisor.` })
+        }
+        core = { ...core, items: core.items.filter((it) => !out.has(it.id)).map((it) => ({ ...it, pre: it.pre.map((g) => ({ ...g, opts: g.opts.filter((o) => !out.has(o)) })) })) }
+        result = scheduleCore(core)
+      }
+    }
     // A requirement with no course left in the 2026-27 catalogue (BINF 451) can't be planned: said, never dropped silently.
     for (const t of targets) {
       for (const slot of t.unsatisfied) {
@@ -563,16 +597,23 @@ function runPlan(
         const first = [...slot.options].sort()[0]
         if (first) diagnostics.push({ level: 'error', code: 'NO_OFFERING', course: first, message: `${t.spec.name} needs ${slot.options.map(spaced).join(' or ')}, which the 2026-27 catalogue no longer lists.` })
       }
+      for (const slot of t.unsatisfied) {
+        if (slot.label) continue
+        const live = slot.options.filter((o) => courseInfo[o] !== undefined)
+        if (live.length === 0 || live.some((o) => !barred(o, completed))) continue
+        const by = [...new Set(live.flatMap((o) => (courseInfo[o]?.antirequisites ?? []).filter((a) => completed.has(a))))].sort()
+        diagnostics.push({ level: 'error', code: 'PREREQ_UNREACHABLE', course: [...live].sort()[0], message: `${t.spec.name} needs ${live.map(spaced).join(' or ')}, but your credit for ${by.map(spaced).join(' and ')} rules ${live.length > 1 ? 'them' : 'it'} out. Check with the department how this requirement is met.` })
+      }
     }
     const placed = new Map<number, PlannedCourse[]>()
     if (result.at) {
-      built.core.items.forEach((item, i) => {
+      core.items.forEach((item, i) => {
         const t = result.at![i]
         const course = byCode.get(item.id)!
         placed.set(t, [...(placed.get(t) ?? []), item.fullYear ? { ...course, fullYear: true as const } : course])
       })
-    } else if (built.core.items.length > 0) {
-      for (const item of built.core.items) diagnostics.push({ level: 'error', code: 'HORIZON', course: item.id, message: `${isElective(item.id) ? electiveLabel(item.id) : spaced(item.id)} can't be scheduled within ${built.labels.length} terms.` })
+    } else if (core.items.length > 0) {
+      for (const item of core.items) diagnostics.push({ level: 'error', code: 'HORIZON', course: item.id, message: `${isElective(item.id) ? electiveLabel(item.id) : spaced(item.id)} can't be scheduled within ${built.labels.length} terms.` })
     }
     const terms: PlannedTerm[] = [...placed.keys()].sort((a, b) => a - b).map((t) => ({ label: built.labels[t], courses: placed.get(t)! }))
 

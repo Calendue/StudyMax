@@ -642,6 +642,43 @@ function solveAt(c: Ctx, H: number, earliest: number[], budget: { left: number }
 }
 
 /** The lower bound on the graduation term index alone (-1 with nothing to place; a huge number when unreachable). */
+/**
+ * The items no schedule can ever place, however long: no term they may go in, a prerequisite or
+ * credit rule that can't be met in the horizon, or a cycle. Closed under dependants (a course
+ * waiting on one of these is one too). Empty when every item is placeable on its own.
+ */
+export function coreUnreachable(input: CoreInput): string[] {
+  const out = new Set<string>()
+  const matches = (r: CoreItem['credit'][number], x: { subject: string; level: number }) =>
+    (!r.subjects || r.subjects.includes(x.subject)) && (!r.level || x.level * 100 === r.level)
+  for (let changed = true; changed; ) {
+    changed = false
+    const live = input.items.filter((it) => !out.has(it.id))
+    // A credit rule limited to a subject or level (6 cu of 100-level CMPT for PHIL 232) can only be
+    // met by the credit that could ever exist: done, booked, and the other courses still in the plan.
+    for (const it of live) {
+      for (const r of it.credit) {
+        if (!r.subjects && !r.level) continue
+        let have = 0
+        for (const d of input.done) if (matches(r, d)) have += d.cu
+        for (const b of input.booked) if (matches(r, b)) have += b.cu
+        for (const o of live) if (o !== it && o.named && matches(r, o)) have += o.cu
+        if (have < r.cu) { out.add(it.id); changed = true; break }
+      }
+    }
+    for (const it of live) {
+      if (out.has(it.id)) continue
+      if (it.pre.some((g) => g.opts.length > 0 && g.opts.every((o) => out.has(o)))) { out.add(it.id); changed = true }
+    }
+    const rest = input.items.filter((it) => !out.has(it.id)).map((it) => ({ ...it, pre: it.pre.map((g) => ({ ...g, opts: g.opts.filter((o) => !out.has(o)) })) }))
+    const c = makeCtx({ ...input, items: rest })
+    if (c.n === 0) break
+    const { earliest } = lowerBound(c)
+    c.items.forEach((it, i) => { if (earliest[i] >= INF && !out.has(it.id)) { out.add(it.id); changed = true } })
+  }
+  return input.items.map((it) => it.id).filter((id) => out.has(id))
+}
+
 export function coreLowerBound(input: CoreInput): number {
   const c = makeCtx(input)
   return c.n === 0 ? -1 : lowerBound(c).lb
