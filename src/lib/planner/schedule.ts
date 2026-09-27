@@ -487,8 +487,14 @@ function exact(c: Ctx, H: number, dl: number[], budget: number): Dfs {
   const sig = (i: number) => {
     const it = c.items[i]
     if (it.named || c.deps[i].length > 0) return 'N' + i
-    return `E${it.level}|${it.seniorCmpt}|${it.cu}|${dl[i]}|${c.due[i]}|${it.credit.length}|${Array.from(c.allowed[i]).join('')}`
+    // Interchangeable for feasibility: the same shape and terms (advising year only orders them).
+    return `E${it.level}|${it.seniorCmpt}|${it.cu}|${dl[i]}|${it.credit.length}|${Array.from(c.allowed[i]).join('')}`
   }
+  // Failed states are keyed by which named courses are placed and how many of each kind of
+  // interchangeable slot, so two states that differ only by which identical slot went where are one.
+  const sigs = c.items.map((_, i) => sig(i))
+  const kinds = [...new Set(sigs.filter((x) => x[0] === 'E'))].sort()
+  const kindOf = sigs.map((x) => (x[0] === 'E' ? kinds.indexOf(x) : -1))
   const rec = (t: number): boolean => {
     if (s.placed === c.n) return true
     if (t > H || t >= c.T) return false
@@ -498,7 +504,12 @@ function exact(c: Ctx, H: number, dl: number[], budget: number): Dfs {
     let fy = ''
     for (let i = 0; i < c.n; i++) if (s.at[i] === t - 1 && c.items[i].fullYear) fy += i + ','
     let bits = ''
-    for (let i = 0; i < c.n; i++) bits += s.at[i] >= 0 ? '1' : '0'
+    const counts = new Array<number>(kinds.length).fill(0)
+    for (let i = 0; i < c.n; i++) {
+      if (kindOf[i] >= 0) { if (s.at[i] >= 0) counts[kindOf[i]]++ }
+      else bits += s.at[i] >= 0 ? '1' : '0'
+    }
+    bits += '|' + counts.join(',')
     const key = `${t}|${g}|${fy}|${bits}`
     if (failed.has(key)) return false
     let left = 0
