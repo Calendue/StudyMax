@@ -259,6 +259,7 @@ header,
 
 .btn {
   display: inline-flex;
+  text-decoration: none;
   align-items: center;
   justify-content: center;
   gap: var(--s2);
@@ -284,7 +285,7 @@ header,
 }
 
 .btn--primary {
-  background: var(--accent);
+  background: var(--accent-fill);
   color: var(--on-accent);
 }
 
@@ -529,7 +530,7 @@ header,
 }
 
 .chip--urgent {
-  background: var(--accent);
+  background: var(--accent-fill);
   color: var(--on-accent);
 }
 

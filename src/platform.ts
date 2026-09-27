@@ -50,8 +50,10 @@ export function initNative() {
     .querySelector('meta[name=viewport]')
     ?.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover')
 
-  // Style.Light is "dark text for light backgrounds": dark status-bar icons over Old Lace.
-  void StatusBar.setStyle({ style: Style.Light }).catch(() => {})
+  // Style.Light is "dark text for light backgrounds": dark icons over Old Lace, light ones in dark
+  // mode (index.html has already set the theme; src/theme.ts keeps it in step from here).
+  const dark = document.documentElement.dataset.theme === 'dark'
+  void StatusBar.setStyle({ style: dark ? Style.Dark : Style.Light }).catch(() => {})
 
   // The field being typed into is never left under the keyboard. The web view is resized natively,
   // so once the keyboard is up the focused field only needs scrolling back into the smaller view.
