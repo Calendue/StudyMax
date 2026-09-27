@@ -50,7 +50,7 @@ export function isClassRegistration(url: string): boolean {
   return u.pathname === CLASS_REGISTRATION || u.pathname.startsWith(CLASS_REGISTRATION + '/')
 }
 
-/** Banner's term chooser, between signing in and the registration page. Never scripted. */
+/** Banner's term chooser, between signing in and the registration page. Only termHintScript runs here: text, no clicks. */
 export function isTermSelection(url: string): boolean {
   const u = parse(url)
   return !!u && isBanner(url) && u.pathname.startsWith(SSB + 'term/termSelection')
@@ -111,6 +111,8 @@ export interface AgentSession {
  */
 export function agentSession(opts: {
   code: string
+  /** Shown on Banner's term chooser (termHintScript): the one script that page ever gets. */
+  hint?: string
   termLabel: string
   emit: (m: AgentMsg) => void
   execute: (id: string, code: string) => Promise<unknown>
@@ -122,6 +124,7 @@ export function agentSession(opts: {
   let signedIn = false
   let choosing = false
   let injected = false
+  let hinted = false // the term hint went into this term chooser load
   let settled = false // the script reported ready or error
   let done = false
   const { emit } = opts
@@ -139,17 +142,29 @@ export function agentSession(opts: {
     })
   }
 
+  // On the term chooser, Max's instruction goes onto Banner's page itself: the app's own line sits
+  // underneath the PAWS view where the student can't see it. Text only; it never picks or presses.
+  const hint = () => {
+    if (done || hinted || !opts.hint || !id || !loaded || !leftBanner || !isTermSelection(url)) return
+    hinted = true
+    opts.execute(id, opts.hint).catch(() => {})
+  }
+
   return {
     ours,
     opened(viewId) {
       if (done) return
       id = viewId
       // Banner's page may have loaded before the id came back.
+      hint()
       inject()
     },
     onUrl(e) {
       if (done || !ours(e) || typeof e?.url !== 'string') return
-      if (pageOf(e.url) !== pageOf(url)) loaded = false
+      if (pageOf(e.url) !== pageOf(url)) {
+        loaded = false
+        hinted = false
+      }
       url = e.url
       if (url.startsWith('https://') && !isBanner(url)) leftBanner = true
       if (!signedIn && isBanner(url) && (leftBanner || isTermSelection(url))) {
@@ -168,6 +183,7 @@ export function agentSession(opts: {
     onLoaded(e) {
       if (done || !ours(e)) return
       loaded = true
+      hint()
       inject()
     },
     onMessage(e) {
@@ -570,6 +586,37 @@ export function agentScript(crns: string[], opts: { termLabel: string; mode: 'na
   const cfg = JSON.stringify({ crns: list, termLabel, season: season.toLowerCase(), year, mode: opts.mode })
   const extras = opts.mode === 'native' ? DIAGNOSE : LEAN
   return SCRIPT.replace('__CFG__', () => cfg).replace('__DIAGNOSE__\n', () => extras)
+}
+
+/**
+ * Max's instruction on Banner's term chooser: a bar at the top of the page naming the term to pick,
+ * and an outline on Continue. Display only: it reads no fields, picks nothing and presses nothing,
+ * and does nothing anywhere but banner.usask.ca's term chooser. Safe to run twice.
+ */
+export function termHintScript(termLabel: string): string {
+  const label = String(termLabel ?? '').replace(/\s+/g, ' ').trim().slice(0, 40)
+  const [, season = '', year = ''] = /^(\S+) (\d{4})$/.exec(label) ?? []
+  const pick = season && year ? `${year} ${season} Term` : label
+  const text = `Max: choose ${pick} in the list, then press Continue. Max fills in your CRNs on the next page.`
+  return `(function () {
+  var loc = window.location;
+  if (loc.protocol !== 'https:' || loc.hostname !== 'banner.usask.ca' || loc.pathname.indexOf('/StudentRegistrationSsb/ssb/term/termSelection') !== 0) return;
+  if (document.getElementById('studymax-term-hint')) return;
+  var show = function () {
+    if (!document.body || document.getElementById('studymax-term-hint')) return;
+    var bar = document.createElement('div');
+    bar.id = 'studymax-term-hint';
+    bar.setAttribute('role', 'status');
+    bar.textContent = ${JSON.stringify(text)};
+    bar.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:2147483647;padding:12px 16px;background:#12262B;color:#FFF8EB;font:600 15px/1.35 -apple-system,system-ui,sans-serif;border-bottom:3px solid #982649;box-shadow:0 2px 10px rgba(0,0,0,.25)';
+    document.body.appendChild(bar);
+    document.body.style.paddingTop = (bar.offsetHeight + 8) + 'px';
+    var style = document.createElement('style');
+    style.textContent = '#term-go{outline:3px solid #982649 !important;outline-offset:3px !important}';
+    document.head.appendChild(style);
+  };
+  if (document.body) show(); else document.addEventListener('DOMContentLoaded', show);
+})();`
 }
 
 /**

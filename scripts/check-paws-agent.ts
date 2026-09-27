@@ -20,6 +20,7 @@ import {
   isClassRegistration,
   isTermSelection,
   REG_URL,
+  termHintScript,
   type AgentMsg,
 } from '../src/lib/pawsAgentScript.ts'
 
@@ -105,6 +106,30 @@ const tick = () => new Promise((resolve) => setImmediate(resolve))
   assert.equal(executed.length, 1, 'exactly once per call, even when the page loads again')
   s.onUrl({ id: 'v1', url: REG_URL })
   assert.equal(emitted.filter((m) => m.type === 'signed-in').length, 1, 'signed-in only once')
+}
+{
+  // The term chooser gets Max's text hint (and only that), once per load, after the sign-in hop.
+  const executed: { id: string; code: string }[] = []
+  const s = agentSession({ code: 'CODE', hint: 'HINT', termLabel: TERM, emit: () => {}, execute: (id, code) => (executed.push({ id, code }), Promise.resolve()) })
+  s.opened('v1')
+  s.onUrl({ id: 'v1', url: TERM_SELECT })
+  s.onLoaded({ id: 'v1' })
+  assert.equal(executed.length, 0, 'no hint on a term chooser reached without signing in')
+  s.onUrl({ id: 'v1', url: CAS })
+  s.onLoaded({ id: 'v1' })
+  assert.equal(executed.length, 0, 'nothing on CAS')
+  s.onUrl({ id: 'v1', url: TERM_SELECT })
+  assert.equal(executed.length, 0, 'not before the term chooser has loaded')
+  s.onLoaded({ id: 'v1' })
+  s.onLoaded({ id: 'v1' })
+  assert.deepEqual(executed, [{ id: 'v1', code: 'HINT' }], 'the hint once on the loaded term chooser, never the CRN script')
+  s.onUrl({ id: 'v1', url: CLASS_REG })
+  s.onLoaded({ id: 'v1' })
+  assert.deepEqual(executed.map((e) => e.code), ['HINT', 'CODE'], 'then the CRN script on the registration page')
+  const hint = termHintScript('Winter 2027')
+  assert.match(hint, /choose 2027 Winter Term in the list/, "names the term the way Banner lists it")
+  assert.doesNotMatch(hint, /\.click\(|\.value\s*=|submit|saveButton|cookie|localStorage/i, 'the hint reads, picks and presses nothing')
+  assert.match(hint, /termSelection/, 'and does nothing off the term chooser')
 }
 {
   // Banner's registration page without the sign-in hop (a session that somehow survived) is never

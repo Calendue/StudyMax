@@ -8,7 +8,7 @@
 // openPawsAgent throws; the bookmarklet is the browser's way.
 
 import { Capacitor, type PluginListenerHandle } from '@capacitor/core'
-import { agentScript, agentSession, PAWS_COPY, REG_URL, type AgentMsg } from './pawsAgentScript.ts'
+import { agentScript, agentSession, PAWS_COPY, REG_URL, termHintScript, type AgentMsg } from './pawsAgentScript.ts'
 
 export { bookmarklet, isClassRegistration, PAWS_COPY, REG_URL, type AgentMsg } from './pawsAgentScript.ts'
 
@@ -49,6 +49,7 @@ export async function openPawsAgent(opts: {
   }
   const session = agentSession({
     code,
+    hint: termHintScript(termLabel),
     termLabel,
     emit,
     execute: (id, script) => InAppBrowser.executeScript({ id, code: script }),
