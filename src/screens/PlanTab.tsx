@@ -1,6 +1,8 @@
 import { useModel } from '../model.ts'
 import { MAX_COURSES_PER_TERM, MAX_SUMMER_COURSES } from '../lib/cloudSession.ts'
 import { KIND_LABEL, plural } from '../format.ts'
+import { isElective } from '../lib/plan.ts'
+import { load as loadRegistration } from '../lib/mockRegistration.ts'
 import { ScreenTitle } from '../ui/chrome.tsx'
 import { Icon } from '../ui/Icon.tsx'
 import { Appear, Button, Group, Ring, Row, SectionLabel } from '../ui/primitives.tsx'
@@ -73,7 +75,23 @@ export function PlanTargets() {
         <Icon name="compare" size={14} />
         What if…
       </button>
+      <RegisterChip />
     </Appear>
+  )
+}
+
+/** Hidden until the first term has a real course to register for (electives don't count). */
+function RegisterChip() {
+  const m = useModel()
+  const term = m.plan[0]
+  const hasCourses = !!term && term.courses.some((c) => !isElective(c.code))
+  if (!hasCourses) return null
+  const registered = !!term && loadRegistration(term.label) !== null
+  return (
+    <button type="button" className="chip chip--add" onClick={() => m.go('register')}>
+      <Icon name="table" size={14} />
+      {registered ? 'View registration' : 'Register with Max'}
+    </button>
   )
 }
 

@@ -6,6 +6,7 @@ import { DUR, INSTANT, SETTLE } from '../ui/motion.ts'
 import type { LayoutMode } from '../ui/layout.ts'
 import { TopBar } from '../ui/chrome.tsx'
 import { CallScreen } from '../screens/CallScreen.tsx'
+import { RegisterScreen } from '../screens/RegisterScreen.tsx'
 import { DashboardPage } from '../pages/DashboardPage.tsx'
 import { PlanPage } from '../pages/PlanPage.tsx'
 import { AwardsPage } from '../pages/AwardsPage.tsx'
@@ -33,6 +34,7 @@ const PAGES: Record<string, ComponentType> = {
   classes: ClassesPage,
   courses: CoursesPage,
   call: CallPage,
+  register: RegisterScreen,
 }
 
 /**
@@ -43,7 +45,7 @@ const PAGES: Record<string, ComponentType> = {
 export function AppShell({ mode }: { mode: Exclude<LayoutMode, 'tabs'> }) {
   const m = useModel()
   const reduce = useReducedMotion()
-  const page = m.screen === 'courses' ? 'courses' : m.screen === 'call' ? 'call' : m.tab
+  const page = m.screen === 'courses' ? 'courses' : m.screen === 'call' ? 'call' : m.screen === 'register' ? 'register' : m.tab
   const Page = PAGES[page] ?? DashboardPage
   return (
     <div className={`shell shell--${mode}`}>
