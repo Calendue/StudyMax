@@ -32,7 +32,7 @@ export function PlanPage() {
               </p>
             )}
             <PlanTargets />
-            <SkillTree dock={docked ? dock : undefined} />
+            <SkillTree dock={docked ? dock : undefined} contained />
           </Card>
         </div>
         <aside className="plan-page__side">

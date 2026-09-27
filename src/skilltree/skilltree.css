@@ -11,8 +11,9 @@
   --tree-wood: color-mix(in srgb, var(--taupe) 72%, transparent);
   --tree-twig: color-mix(in srgb, var(--taupe) 62%, transparent);
   --tree-root: color-mix(in srgb, var(--taupe) 55%, transparent);
-  --tree-done: var(--accent-fill);
+  --tree-done: var(--accent-fill); /* solid: Take next only */
   --tree-on-done: var(--on-accent);
+  --tree-done-tint: color-mix(in srgb, var(--accent) 11%, var(--card)); /* Done: a quiet rose tint */
   --tree-now: var(--accent);
   --tree-planned: color-mix(in srgb, var(--taupe) 72%, var(--ink));
   --tree-locked: color-mix(in srgb, var(--ink) 30%, transparent);
@@ -109,8 +110,8 @@
 
 .tree__key--completed,
 .tree-swatch--completed {
-  background: var(--tree-done);
-  border-color: var(--tree-done);
+  background: var(--tree-done-tint);
+  border-color: var(--accent);
 }
 
 .tree__key--inProgress,
@@ -143,6 +144,8 @@
   padding: 0 var(--s4);
   overflow-x: auto;
   scrollbar-width: none;
+  /* Full names, scrolled sideways; the fade says there's more. */
+  mask-image: linear-gradient(to right, var(--ink) 86%, transparent);
 }
 
 .tree__chip {
@@ -170,9 +173,6 @@
 }
 
 .tree__chip-name {
-  max-width: 170px;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -237,7 +237,7 @@
 }
 
 .tree__twig--done {
-  stroke: color-mix(in srgb, var(--tree-done) 45%, var(--tree-twig));
+  stroke: color-mix(in srgb, var(--accent) 35%, var(--tree-twig));
 }
 
 .tree__branch {
@@ -385,14 +385,14 @@
 }
 
 .tree-node--completed {
-  border-color: var(--tree-done);
-  background: var(--tree-done);
-  color: var(--tree-on-done);
+  border-color: var(--accent-edge);
+  background: var(--tree-done-tint);
+  color: var(--accent);
+  box-shadow: none;
 }
 
-.tree-node--completed .tree-node__sub,
 .tree-node--next .tree-node__sub {
-  color: color-mix(in srgb, var(--tree-on-done) 82%, transparent);
+  color: color-mix(in srgb, var(--tree-on-done) 85%, transparent);
 }
 
 /* Taking now: a rose outline that breathes, slowly. */
@@ -532,8 +532,10 @@
 .tree-leaf__name {
   display: -webkit-box;
   overflow: hidden;
-  font: 600 13px/1.2 var(--font-brand);
-  -webkit-line-clamp: 3;
+  font: 600 13.5px/1.2 var(--font-brand);
+  overflow-wrap: normal;
+  word-break: normal;
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }
 
@@ -863,12 +865,38 @@
   margin: 0;
 }
 
-/* ── the desktop page: the tree in its card at a comfortable width ── */
+/* ── the desktop page: the tree scrolls in its own box, so the switch, the lead, the key and the
+      chips above it stay put ── */
 .plan-page__tree .tree {
   max-width: 880px;
   margin: var(--s3) auto 0;
 }
 
-.plan-page__tree .tree__bar {
-  background: var(--card);
+.tree--contained .tree__bar {
+  position: static;
+  height: auto;
+  padding: var(--s2) 0 var(--s3);
+  background: none;
+  box-shadow: none;
+}
+
+.tree--contained .tree__chips {
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+  mask-image: none;
+}
+
+.tree--contained .tree__scroll {
+  height: clamp(460px, calc(100dvh - 300px), 1100px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-radius: var(--r2);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+}
+
+.tree--contained .tree__year-label {
+  top: 10px;
 }

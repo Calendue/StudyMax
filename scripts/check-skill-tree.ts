@@ -86,7 +86,7 @@ function checkLayout(name: string, s: ReturnType<typeof student>) {
 }
 
 // ── the sample student, on a phone and a desktop ──
-for (const width of [360, 390, 1000]) {
+for (const width of [360, 390, 600, 880, 1000]) {
   const s = student(completedCourses, inProgressCourses, TODAY, width)
   checkLayout(`sample@${width}`, s)
   const again = student(completedCourses, inProgressCourses, TODAY, width)

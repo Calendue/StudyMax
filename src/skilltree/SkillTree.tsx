@@ -24,7 +24,13 @@ const LEGEND: { key: string; label: string }[] = [
 
 /** The page's scrolling element: the phone's screen body, or the desktop shell's page. */
 function scrollerOf(el: HTMLElement): HTMLElement {
-  return (el.closest('.screen__body, .shell__page') as HTMLElement | null) ?? document.scrollingElement as HTMLElement
+  return (el.closest('.tree--contained .tree__scroll, .screen__body, .shell__page') as HTMLElement | null) ?? (document.scrollingElement as HTMLElement)
+}
+
+/** "Certificate in Astronomy" → "Astronomy", "Statistics Minor" → "Statistics": the kind goes on its own line. */
+function shortName(name: string): string {
+  const short = name.replace(/^(Certificate|Minor) in /i, '').replace(/ (Certificate|Minor)$/i, '')
+  return short.length > 0 ? short : name
 }
 
 function hueVar(cred: number | undefined): string {
@@ -40,7 +46,18 @@ function hueVar(cred: number | undefined): string {
  * `dock`, when given, is where the details of the selected course go (the desktop's side panel);
  * otherwise they open in a bottom sheet.
  */
-export function SkillTree({ dock, bleed = false, stickyTop = 0 }: { dock?: HTMLElement | null; bleed?: boolean; stickyTop?: number }) {
+export function SkillTree({
+  dock,
+  bleed = false,
+  stickyTop = 0,
+  contained = false,
+}: {
+  dock?: HTMLElement | null
+  bleed?: boolean
+  stickyTop?: number
+  /** Scroll the tree inside its own box (the desktop page), so the page's header stays put. */
+  contained?: boolean
+}) {
   const m = useModel()
   const reduce = useReducedMotion() ?? false
   const inputs = useTreeInputs()
@@ -230,6 +247,7 @@ export function SkillTree({ dock, bleed = false, stickyTop = 0 }: { dock?: HTMLE
   if (grow) classes.push('tree--grow')
   if (focus) classes.push('tree--focus')
   if (layout?.compact) classes.push('tree--compact')
+  if (contained) classes.push('tree--contained')
 
   return (
     <section
@@ -263,7 +281,9 @@ export function SkillTree({ dock, bleed = false, stickyTop = 0 }: { dock?: HTMLE
                 }}
               >
                 <span className="tree__chip-dot" aria-hidden />
-                <span className="tree__chip-name">{leaf.name}</span>
+                <span className="tree__chip-name" title={leaf.name}>
+                  {leaf.kind === 'specialization' ? leaf.name : `${shortName(leaf.name)} ${KIND_LABEL[leaf.kind].toLowerCase()}`}
+                </span>
                 <span className="tree__chip-count">
                   {leaf.done}/{leaf.total}
                 </span>
@@ -273,6 +293,7 @@ export function SkillTree({ dock, bleed = false, stickyTop = 0 }: { dock?: HTMLE
         )}
       </div>
 
+      <div className="tree__scroll">
       <div
         ref={boardRef}
         className="tree__board"
@@ -361,9 +382,8 @@ export function SkillTree({ dock, bleed = false, stickyTop = 0 }: { dock?: HTMLE
                     </span>
                   </span>
                   <span className="tree-leaf__text">
-                    <span className="tree-leaf__name">{leaf.name}</span>
-                    {/* "Certificate in Computing" already says what it is. */}
-                    {!leaf.name.toLowerCase().includes(leaf.kind) && <span className="tree-leaf__kind">{KIND_LABEL[leaf.kind]}</span>}
+                    <span className="tree-leaf__name">{shortName(leaf.name)}</span>
+                    <span className="tree-leaf__kind">{KIND_LABEL[leaf.kind]}</span>
                   </span>
                 </button>
               )
@@ -410,6 +430,8 @@ export function SkillTree({ dock, bleed = false, stickyTop = 0 }: { dock?: HTMLE
             </button>
           )}
         </div>
+      </div>
+
       </div>
 
       {dock

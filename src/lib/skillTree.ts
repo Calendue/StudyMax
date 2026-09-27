@@ -177,8 +177,8 @@ function geometry(width: number): Geometry {
   const compact = width < 560
   // A phone gets one card per side, wide enough for the course title; a desktop gets two.
   return compact
-    ? { compact, gutter: 24, pad: 10, nodeMinW: 112, nodeMaxW: 172, nodeH: 58, colGap: 10, rowGap: 12, innerGap: 20, bandTop: 38, bandBottom: 14, emptyBand: 64, maxCols: 1, leafH: 64, leafGap: 26, canopyTop: 12, rootsH: 170, trunkW: 14, trunkTopW: 3, sway: 2 }
-    : { compact, gutter: 36, pad: 16, nodeMinW: 150, nodeMaxW: 188, nodeH: 62, colGap: 14, rowGap: 16, innerGap: 28, bandTop: 44, bandBottom: 18, emptyBand: 80, maxCols: 2, leafH: 72, leafGap: 30, canopyTop: 16, rootsH: 190, trunkW: 18, trunkTopW: 4, sway: 3 }
+    ? { compact, gutter: 24, pad: 10, nodeMinW: 112, nodeMaxW: 172, nodeH: 58, colGap: 10, rowGap: 12, innerGap: 20, bandTop: 38, bandBottom: 14, emptyBand: 64, maxCols: 1, leafH: 64, leafGap: 26, canopyTop: 12, rootsH: 170, trunkW: 18, trunkTopW: 3, sway: 2 }
+    : { compact, gutter: 36, pad: 16, nodeMinW: 150, nodeMaxW: 188, nodeH: 62, colGap: 14, rowGap: 16, innerGap: 28, bandTop: 44, bandBottom: 18, emptyBand: 80, maxCols: 2, leafH: 72, leafGap: 30, canopyTop: 16, rootsH: 190, trunkW: 26, trunkTopW: 4, sway: 3 }
 }
 
 interface Draft {
@@ -401,8 +401,9 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
 
   // ── the canopy: the hero crowns the trunk, the rest branch off in pairs below it ──
   const leafCount = Math.min(targets.length, MAX_LEAVES)
-  const perSide = g.compact ? 1 : 2
-  const leafW = g.compact ? Math.floor(laneW) : Math.floor((laneW - g.colGap) / 2)
+  // Two badges a side only where each still has room for its name on two clean lines.
+  const perSide = !g.compact && (laneW - g.colGap) / 2 >= 176 ? 2 : 1
+  const leafW = perSide === 1 ? Math.floor(laneW) : Math.floor((laneW - g.colGap) / 2)
   const heroW = Math.min(g.compact ? 220 : 300, Math.floor(laneW * 1.3))
   interface LeafSlot { row: number; side: -1 | 0 | 1; col: number }
   const slots: LeafSlot[] = []
@@ -515,7 +516,7 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
   for (let i = 0; i <= steps; i++) {
     const t = i / steps // 0 at the roots, 1 at the crown
     const ty = base - (base - trunkTop) * t
-    const w = g.trunkTopW + (g.trunkW - g.trunkTopW) * Math.pow(1 - t, 0.85) + (t < 0.04 ? (0.04 - t) * 150 : 0)
+    const w = g.trunkTopW + (g.trunkW - g.trunkTopW) * Math.pow(1 - t, 1.7) + (t < 0.04 ? (0.04 - t) * 180 : 0)
     const cx = trunkX + Math.sin(t * Math.PI * 1.3) * g.sway
     left.push(`${(cx - w / 2).toFixed(1)} ${ty.toFixed(1)}`)
     right.unshift(`${(cx + w / 2).toFixed(1)} ${ty.toFixed(1)}`)
