@@ -4,7 +4,7 @@
 // account first is the follow-up that makes Max reflect a real tester's own data).
 import { db } from './_db.js'
 import { verifiedUser } from './_firebaseAuth.js'
-import { getDemoUser } from './max/_demoUser.js'
+import { DEMO_AUTH_UID, getDemoUser } from './max/_demoUser.js'
 
 interface RequestLike {
   headers?: Record<string, string | string[] | undefined>
@@ -28,4 +28,34 @@ export async function resolveMaxUser(req: RequestLike): Promise<MaxUser | { noPr
   }
   const demo = await getDemoUser()
   return demo ? { userId: demo.userId, isGuest: true } : null
+}
+
+/** A phone number as comparable digits: "+1 (306) 555-1234" and "3065551234" are the same number. */
+function phoneKey(phone: string): string {
+  const digits = phone.replace(/\D/g, '')
+  return digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : digits
+}
+
+/**
+ * The student account that owns this phone number (onboarding's number or Max's settings), so a
+ * guest's call to it is about that student's plan rather than the demo student every guest shares.
+ * Several accounts on one number: the most recently updated with a profile wins.
+ */
+export async function accountForPhone(phone: string): Promise<bigint | null> {
+  const key = phoneKey(phone)
+  if (key.length < 7) return null
+  // Stored numbers keep whatever formatting was typed, so compare digits here rather than in SQL.
+  const candidates = await db().userInfo.findMany({
+    where: {
+      authUid: { not: DEMO_AUTH_UID },
+      profile: { isNot: null },
+      OR: [{ phoneNumber: { not: null } }, { maxSettings: { phoneE164: { not: null } } }],
+    },
+    select: { userId: true, phoneNumber: true, updatedAt: true, maxSettings: { select: { phoneE164: true } } },
+    orderBy: { updatedAt: 'desc' },
+  })
+  const owner = candidates.find((u) =>
+    [u.phoneNumber, u.maxSettings?.phoneE164].some((p) => p && phoneKey(p) === key),
+  )
+  return owner?.userId ?? null
 }
