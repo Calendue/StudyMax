@@ -10,6 +10,7 @@ import { computeMatches } from '../src/lib/match.js'
 import { computeCredentials } from '../src/lib/credentials.js'
 import { buildStudentPlan, buildStudentPlanResult, upcomingTerm, type PlanOptions, type PlanResult, type PlannedTerm, type Season, type TermStart } from '../src/lib/plan.js'
 import { bookedByTerm, seasonNow } from '../src/lib/currentTerms.js'
+import { courseInfo } from '../src/data/prereqs.js'
 
 export const TODAY = new Date(2026, 8, 26)
 export const NEXT = upcomingTerm(TODAY)
@@ -93,3 +94,15 @@ export const graduationOrd = (plan: PlannedTerm[], booked: Record<string, string
   Math.max(0, ...plan.filter((t) => t.courses.length).map((t) => termOrd(t.label)), ...Object.entries(booked).filter(([, v]) => v.length).map(([l]) => termOrd(l)))
 
 export const planKey = (p: PlannedTerm[]) => JSON.stringify(p.map((t) => [t.label, t.courses.map((x) => x.code)]))
+
+/**
+ * The graduation term counting a full-year course's second half: a full-year course planned in a
+ * Fall holds its seat through the next Winter, so that Winter is the last term it uses. Additive:
+ * graduationOrd (what plan-baseline.json was measured with) is unchanged.
+ */
+export const graduationOrdFullYear = (plan: PlannedTerm[], booked: Record<string, string[]>) =>
+  Math.max(
+    graduationOrd(plan, booked),
+    ...plan.flatMap((t) => t.courses.filter((x) => courseInfo[x.code]?.offered === 'full-year' && parseTerm(t.label)?.season === 'Fall').map(() => termOrd(t.label) + 8)),
+  )
+

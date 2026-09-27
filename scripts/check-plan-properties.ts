@@ -2,20 +2,23 @@
 //   determinism   3 repeat builds, reversed inputs and rotated inputs give byte-identical plans (planKey)
 //   monotonicity  load k+1 never later than k; Spring/Summer s+1 never later than s; a failed,
 //                 withdrawn or not-offered override never EARLIER than the base; one more completed
-//                 course (the base plan's first planned course) never later
+//                 course (the base plan's first planned course) never later. A fail/withdraw that
+//                 frees a seat (the removed or un-booked course isn't taken again) may finish earlier.
 //   booked        booked courses never move (never planned outside their own term)
 //   prefix        a not-offered block in term X leaves every term before X identical
 //   replan        mark the plan's first planned term passed (its courses into completed, start at the
 //                 next term) and the rest reproduces, compared by (term, code or elective label); only
 //                 where that term holds no elective slot (a slot can't be marked completed)
-//   baseline      never later than scripts/plan-baseline.json (the greedy planner); counts improvements
+//   baseline      never later than scripts/plan-baseline.json (the greedy planner, which broke the full-year
+//                 seat rule in 396 Honours plans); counts improvements. Measured like the baseline (labels
+//                 only); every other graduation counts a full-year course's Winter half.
 //   runtime       each plan < 50 ms, p95 < 20 ms, the whole suite < 60 s
 // Exit 1 on any break. The overrides are check-plan-validator.ts's (fail CMPT141/MATH163, block
 // CMPT280/STAT242 in its Winter, withdraw a Fall 2026 booking), with currentTerm Fall 2026.
 //
 // Run: node --experimental-strip-types --experimental-loader ./scripts/_resolve-ts-loader.mjs scripts/check-plan-properties.ts [--verbose]
 import { readFileSync } from 'node:fs'
-import { buildCase, graduationOrd, matrixCases, parseTerm, planKey, SPECS, termOrd, type MatrixCase } from './_plan-matrix.ts'
+import { buildCase, graduationOrd, graduationOrdFullYear, matrixCases, parseTerm, planKey, SPECS, termOrd, type MatrixCase } from './_plan-matrix.ts'
 import { isElective, electiveLabel, runsIn } from './_degree-rules.ts'
 import type { CourseOverride } from '../src/lib/overrides.ts'
 import type { PlannedTerm, TermStart } from '../src/lib/plan.ts'
@@ -29,7 +32,7 @@ const brk = (prop: string, msg: string) => {
   if (!breaks.has(prop)) breaks.set(prop, [])
   breaks.get(prop)!.push(msg)
 }
-const stats = { improved: 0, same: 0, replanChecked: 0, replanSkipped: 0, prefixChecked: 0 }
+const stats = { freed: 0, improved: 0, same: 0, replanChecked: 0, replanSkipped: 0, prefixChecked: 0 }
 const times: { ms: number; key: string }[] = []
 const ordLabel = (o: number) => `${['Winter', 'Spring/Summer', 'Fall'][o % 10]} ${Math.floor(o / 10)}`
 const showOrd = (o: number) => (o > 0 ? ordLabel(o) : 'nothing')
@@ -56,7 +59,10 @@ for (const c of matrixCases()) {
   const b = buildCase(c)
   let ms = b.ms
   const key = planKey(b.plan)
-  const g = graduationOrd(b.plan, b.booked)
+  // Graduation counts a full-year course's Winter half; the baseline gate uses the baseline's own
+  // measure (graduationOrd, labels only) so the two are compared like for like.
+  const g = graduationOrdFullYear(b.plan, b.booked)
+  const gLabels = graduationOrd(b.plan, b.booked)
   grad.set(c.key, g)
 
   // determinism
@@ -74,8 +80,8 @@ for (const c of matrixCases()) {
   // baseline
   const was = baseline[c.key]
   if (was === undefined) brk('baseline', `${c.key}: not in plan-baseline.json`)
-  else if (g > was) brk('baseline', `${c.key}: ${showOrd(g)}, later than the greedy planner's ${showOrd(was)}`)
-  else if (g < was) stats.improved++
+  else if (gLabels > was) brk('baseline', `${c.key}: ${showOrd(gLabels)}, later than the greedy planner's ${showOrd(was)}`)
+  else if (gLabels < was) stats.improved++
   else stats.same++
 
   // booked never move
@@ -86,9 +92,16 @@ for (const c of matrixCases()) {
 
   // overrides: never earlier; a block leaves the prefix
   for (const [kind, o] of overridesFor(c, b.plan)) {
-    const r = buildCase(c, { extra: { currentTerm: CURRENT, overrides: [o] } })
-    const og = graduationOrd(r.plan, r.booked)
-    if (og < g) brk(`monotone-${kind}`, `${c.key} [${o.kind} ${o.code} ${o.term}]: ${showOrd(og)}, earlier than the base's ${showOrd(g)}`)
+    const r = buildCase(c, { result: true, extra: { currentTerm: CURRENT, overrides: [o] } })
+    const og = graduationOrdFullYear(r.plan, r.booked)
+    // A failed/withdrawn course (or one it un-booked) that the plan doesn't take again frees its seat
+    // and its senior-CMPT room: finishing earlier is then legitimate (sample: dropping CMPT332 un-books
+    // CMPT434, which the degree doesn't need, and CMPT364 fits the freed Winter 2027 senior slot).
+    const removed = [o.code, ...(r.result?.diagnostics ?? []).filter((d) => d.code === 'UNBOOKED' && d.course).map((d) => d.course!.replace(/\s+/g, ''))]
+    const plannedNow = new Set(r.plan.flatMap((t) => t.courses.map((x) => x.code)))
+    const freed = o.kind !== 'not-offered' && [...new Set([...c.stage.completed, ...c.stage.inProgress])].some((x) => removed.includes(x) && !plannedNow.has(x))
+    if (og < g && freed) stats.freed++
+    else if (og < g) brk(`monotone-${kind}`, `${c.key} [${o.kind} ${o.code} ${o.term}]: ${showOrd(og)}, earlier than the base's ${showOrd(g)}`)
     if (kind === 'block') {
       stats.prefixChecked++
       const x = termOrd(o.term)
@@ -101,7 +114,7 @@ for (const c of matrixCases()) {
   const extra = b.plan.flatMap((t) => t.courses).find((x) => !isElective(x.code))?.code
   if (extra) {
     const r = buildCase(c, { completed: [...c.stage.completed, extra], inProgress: c.stage.inProgress.filter((x) => x !== extra) })
-    const eg = graduationOrd(r.plan, r.booked)
+    const eg = graduationOrdFullYear(r.plan, r.booked)
     if (eg > g) brk('monotone-completed', `${c.key} (+${extra} completed): ${showOrd(eg)}, later than ${showOrd(g)}`)
   }
 
@@ -140,6 +153,7 @@ if (p(0.95) >= 20) brk('runtime', `p95 ${p(0.95).toFixed(1)} ms (budget 20)`)
 if (wall >= 60) brk('runtime', `suite ${wall.toFixed(1)} s (budget 60)`)
 
 console.log(`${times.length} cases · per plan p50 ${p(0.5).toFixed(1)} ms · p95 ${p(0.95).toFixed(1)} ms · max ${slowest.ms.toFixed(1)} ms (${slowest.key}) · suite ${wall.toFixed(1)} s`)
+console.log(`overrides: ${stats.freed} finish earlier because a removed course isn't taken again (freed seat, not a break)`)
 console.log(`baseline: ${stats.improved} earlier than the greedy planner, ${stats.same} the same`)
 console.log(`replan checked on ${stats.replanChecked} (skipped ${stats.replanSkipped}: first term holds an elective slot); prefix checked on ${stats.prefixChecked}`)
 const PROPS = ['determinism', 'monotone-load', 'monotone-summer', 'monotone-fail', 'monotone-block', 'monotone-drop', 'monotone-completed', 'booked', 'prefix', 'replan', 'baseline', 'runtime']
