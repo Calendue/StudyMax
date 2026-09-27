@@ -98,6 +98,14 @@ assert.deepEqual(
 assert.equal(validate(before).ok, true)
 assert.deepEqual(validate(before).issues, [])
 assert.equal(validate(after).ok, true)
+// A planned course with no section in three years (CMPT 440, Programming Languages) is a warning Max can say.
+const pl = regenerate({ ...baseInput, targetSpecializationIds: ['programming-languages'] }).terms
+const plCheck = validate(pl)
+assert.equal(plCheck.ok, true)
+assert.ok(
+  plCheck.issues.some((i) => i.code === 'AT_RISK' && i.severity === 'WARNING' && i.message.startsWith('CMPT 440 ')),
+  'CMPT 440 in a plan is flagged at risk',
+)
 
 // --- a no-op diff (same plan twice) has no headline and no moves ---
 const noOp = diff(before, before)

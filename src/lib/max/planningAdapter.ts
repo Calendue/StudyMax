@@ -6,10 +6,11 @@
 // PREREQ_UNMET and OVER_LOAD can't occur by construction (buildPlan never places a course before an
 // unmet prerequisite, and never exceeds coursesPerTerm), and the current catalogue has no offering
 // calendar or exclusion data to check NOT_OFFERED/EXCLUSION_CONFLICT/PROGRAM_RESTRICTED against — so
-// `validate` below is intentionally close to a no-op.
+// `validate` below only warns about courses that haven't run in three years (catalog `atRisk`).
 import { programs } from '../../data/programs/index.js'
 import { buildStudentPlan, type PlannedTerm, type TermStart } from '../plan.js'
 import { clampLoad, summerLoadOf } from '../planner/loads.js'
+import { defaultCatalog } from '../catalog.js'
 
 /** "computer-science" -> "Computer Science", for anything Max says out loud — never speak a raw
  * Program.id slug. Falls back to the id itself if it's somehow unknown, rather than throwing. */
@@ -142,11 +143,25 @@ export function regenerate(input: AdapterInput): { terms: PlannedTerm[]; inputs:
 }
 
 /**
- * v1: always ok with no issues. The planner's construction already rules out every ERROR code this
- * catalogue could produce, so there is nothing left for this adapter to detect this weekend.
+ * Always ok: the planner's construction already rules out every ERROR code this catalogue could
+ * produce. The one thing worth a WARNING is a planned course with no Banner section in the last
+ * three years (src/lib/catalog.ts `atRisk`, e.g. CMPT 440), which Max can say out loud.
  */
-export function validate(_terms: PlannedTerm[]): ValidationResult {
-  return { ok: true, issues: [] }
+export function validate(terms: PlannedTerm[]): ValidationResult {
+  const catalog = defaultCatalog()
+  const issues: ValidationIssue[] = []
+  for (const term of terms) {
+    for (const course of term.courses) {
+      if (!catalog[course.code]?.atRisk) continue
+      const name = course.code.replace(/(\d)/, ' $1')
+      issues.push({
+        code: 'AT_RISK',
+        severity: 'WARNING',
+        message: `${name} hasn't had a class section in the last three years, so it may not run in ${term.label}.`,
+      })
+    }
+  }
+  return { ok: true, issues }
 }
 
 /** Every course code in a plan, mapped to the label of the term it's planned in. */
