@@ -34,9 +34,9 @@ export function usePlanView(): [PlanView, (view: PlanView) => void] {
 export type TreeSelection = { kind: 'node'; code: string } | { kind: 'leaf'; index: number }
 
 export const STATUS_LABEL: Record<TreeStatus, string> = {
-  completed: 'Completed',
-  inProgress: 'In progress',
-  next: 'Best next course',
+  completed: 'Done',
+  inProgress: 'Taking now',
+  next: 'Take next',
   planned: 'Planned',
   locked: 'Locked',
 }

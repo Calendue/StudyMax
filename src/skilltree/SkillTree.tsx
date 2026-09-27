@@ -4,7 +4,7 @@ import { useReducedMotion } from 'motion/react'
 import { useModel } from '../model.ts'
 import { courseCode, KIND_LABEL } from '../format.ts'
 import { haptic } from '../platform.ts'
-import { layoutSkillTree, pathThrough, type SkillTreeLayout, type TreeNode, type TreeTrace } from '../lib/skillTree.ts'
+import { layoutSkillTree, pathThrough, type SkillTreeLayout, type TreeNode } from '../lib/skillTree.ts'
 import { Sheet } from '../ui/Sheet.tsx'
 import { useTreeInputs, type TreeSelection } from './planView.ts'
 import { TreeDetail } from './TreeDetail.tsx'
@@ -15,8 +15,8 @@ let grownThisSession = false
 
 const LEGEND: { key: string; label: string }[] = [
   { key: 'completed', label: 'Done' },
-  { key: 'inProgress', label: 'Now' },
-  { key: 'next', label: 'Next' },
+  { key: 'inProgress', label: 'Taking now' },
+  { key: 'next', label: 'Take next' },
   { key: 'planned', label: 'Planned' },
   { key: 'elective', label: 'Elective' },
   { key: 'locked', label: 'Locked' },
@@ -28,12 +28,12 @@ function scrollerOf(el: HTMLElement): HTMLElement {
 }
 
 function hueVar(cred: number | undefined): string {
-  return cred === undefined ? 'var(--tree-silk-3)' : `var(--tree-cred-${cred + 1})`
+  return cred === undefined ? 'var(--tree-planned)' : `var(--tree-cred-${cred + 1})`
 }
 
 /**
- * The Academic Skill Tree: the degree as a circuit board that grows up from the roots, Fall on the
- * left of the trunk and Winter on the right, into a canopy of the credentials being worked toward.
+ * The Academic Skill Tree: the degree as a tree that grows up from the roots, Fall on the left of
+ * the trunk and Winter on the right, into a canopy of the credentials being worked toward.
  * It opens at the roots and you scroll UP to grow. Layout lives in src/lib/skillTree.ts; this draws
  * it and owns the interaction.
  *
@@ -47,7 +47,6 @@ export function SkillTree({ dock, bleed = false, stickyTop = 0 }: { dock?: HTMLE
 
   const sectionRef = useRef<HTMLElement>(null)
   const boardRef = useRef<HTMLDivElement>(null)
-  const gridRef = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(0)
   useLayoutEffect(() => {
     const el = boardRef.current
@@ -129,24 +128,14 @@ export function SkillTree({ dock, bleed = false, stickyTop = 0 }: { dock?: HTMLE
     if (!board) return
     const scroller = scrollerOf(board)
     const start = scroller.scrollTop
-    let frame = 0
     const onScroll = () => {
       fromBottom.current = Math.max(0, boardBottomIn(scroller) - scroller.clientHeight + 8 - scroller.scrollTop)
       if (Math.abs(scroller.scrollTop - start) > 24) setScrolledUp(true)
       setAwayFromRoots(fromBottom.current > 260)
-      if (reduce || frame) return
-      frame = requestAnimationFrame(() => {
-        frame = 0
-        // The PCB grid drifts a little slower than the board: transform only.
-        if (gridRef.current) gridRef.current.style.transform = `translate3d(0, ${(fromBottom.current * -0.06).toFixed(1)}px, 0)`
-      })
     }
     scroller.addEventListener('scroll', onScroll, { passive: true })
-    return () => {
-      scroller.removeEventListener('scroll', onScroll)
-      cancelAnimationFrame(frame)
-    }
-  }, [reduce, ready])
+    return () => scroller.removeEventListener('scroll', onScroll)
+  }, [ready])
 
   // ── growing: the trunk draws up, then each year pops in as it scrolls into view ──
   const [grow] = useState(() => !grownThisSession && !reduce)
@@ -296,15 +285,23 @@ export function SkillTree({ dock, bleed = false, stickyTop = 0 }: { dock?: HTMLE
           }
         }}
       >
-        <div ref={gridRef} className="tree__grid" aria-hidden />
-        {layout && <Board layout={layout} focus={focus} grow={grow} />}
+        {layout && <Wood layout={layout} focus={focus} grow={grow} bloom={bandShown('canopy')} />}
         {layout && (
           <>
             {layout.bands
               .filter((b) => b.kind === 'year')
               .map((b) => (
-                <div key={b.key} className="tree__year" style={{ top: b.y, height: b.h }} data-band={b.key} aria-hidden>
-                  <span className={`tree__year-label${b.current ? ' tree__year-label--now' : ''}`}>{b.label}</span>
+                <div key={b.key} className={`tree__band${b.current ? ' tree__band--now' : ''}`} style={{ top: b.y, height: b.h }} data-band={b.key} aria-hidden>
+                  <span className="tree__year-label">
+                    {b.label}
+                    {b.current && <span className="tree__now"> · now</span>}
+                  </span>
+                  <span className="tree__lane-head tree__lane-head--fall" style={{ right: layout.width - layout.trunkX + layout.trunkWidth / 2 + 14 }}>
+                    Fall
+                  </span>
+                  <span className="tree__lane-head tree__lane-head--winter" style={{ left: layout.trunkX + layout.trunkWidth / 2 + 14 }}>
+                    Winter
+                  </span>
                 </div>
               ))}
             <div className="tree__band-sentinel" style={{ top: 0, height: layout.trunkTop }} data-band="canopy" aria-hidden />
@@ -327,6 +324,16 @@ export function SkillTree({ dock, bleed = false, stickyTop = 0 }: { dock?: HTMLE
               />
             ))}
 
+            {live?.kind === 'node' && focus && (
+              <svg className="tree__links" width={layout.width} height={layout.height} aria-hidden>
+                {layout.links
+                  .filter((l) => focus.codes.has(l.from) && focus.codes.has(l.to))
+                  .map((l) => (
+                    <path key={`${l.from}-${l.to}`} d={l.d} className={`tree__link${l.conditional ? ' tree__link--or' : ''}`} pathLength={1} />
+                  ))}
+              </svg>
+            )}
+
             {layout.leaves.map((leaf) => {
               const on = focus ? focus.creds.has(leaf.index) : null
               const pct = leaf.total > 0 ? leaf.done / leaf.total : 0
@@ -346,8 +353,8 @@ export function SkillTree({ dock, bleed = false, stickyTop = 0 }: { dock?: HTMLE
                 >
                   <span className="tree-leaf__ring" aria-hidden>
                     <svg viewBox="0 0 40 40">
-                      <circle className="tree-leaf__track" cx="20" cy="20" r="16" pathLength={1} />
-                      <circle className="tree-leaf__fill" cx="20" cy="20" r="16" pathLength={1} />
+                      <circle className="tree-leaf__track" cx="20" cy="20" r="17" pathLength={1} />
+                      <circle className="tree-leaf__fill" cx="20" cy="20" r="17" pathLength={1} />
                     </svg>
                     <span className="tree-leaf__count">
                       {leaf.done}/{leaf.total}
@@ -355,15 +362,14 @@ export function SkillTree({ dock, bleed = false, stickyTop = 0 }: { dock?: HTMLE
                   </span>
                   <span className="tree-leaf__text">
                     <span className="tree-leaf__name">{leaf.name}</span>
-                    <span className="tree-leaf__kind">
-                      {KIND_LABEL[leaf.kind]}
-                    </span>
+                    {/* "Certificate in Computing" already says what it is. */}
+                    {!leaf.name.toLowerCase().includes(leaf.kind) && <span className="tree-leaf__kind">{KIND_LABEL[leaf.kind]}</span>}
                   </span>
                 </button>
               )
             })}
 
-            <div className="tree__roots" style={{ top: layout.trunkBase + (layout.compact ? 102 : 118) }}>
+            <div className="tree__roots" style={{ top: layout.trunkBase + (layout.compact ? 88 : 104) }}>
               <p className="tree__plate">
                 {m.selectedProgram?.name ?? 'Your degree'}
                 {m.universityId === 'usask' && <span> · USask</span>}
@@ -464,7 +470,16 @@ function NodeCard({
   ]
     .filter(Boolean)
     .join(', ')
-  const compactElective = layout.compact && node.elective
+  const needs = status === 'locked' ? node.prereqs.find((p) => !layout.nodes.some((n) => n.code === p && (n.status === 'completed' || n.status === 'inProgress'))) : undefined
+  const sub =
+    status === 'locked'
+      ? needs
+        ? `Needs ${courseCode(needs)} first`
+        : 'Needs its prerequisites first'
+      : node.elective
+        ? `Elective · ${node.elective.need} of ${node.elective.of}`
+        : title
+  const filled = status === 'completed' || status === 'next'
   return (
     <button
       type="button"
@@ -476,7 +491,6 @@ function NodeCard({
           top: node.y,
           width: node.w,
           height: node.h,
-          '--hue': hueVar(node.creds[0]),
           '--i': index % 12,
         } as CSSProperties
       }
@@ -485,152 +499,88 @@ function NodeCard({
       aria-pressed={selected}
       onClick={onSelect}
     >
-      <span className="tree-node__code">{compactElective ? 'Elective' : courseCode(node.code)}</span>
-      {compactElective ? (
-        <span className="tree-node__sub">
-          {node.elective!.need} of {node.elective!.of}
+      <span className="tree-node__head">
+        <span className="tree-node__code">{courseCode(node.code)}</span>
+        {status === 'next' && <span className="tree-node__tag">Next</span>}
+        {status === 'inProgress' && <span className="tree-node__tag tree-node__tag--now">Now</span>}
+        {status === 'completed' && (
+          <svg className="tree-node__glyph" viewBox="0 0 12 12" aria-hidden>
+            <path d="M2.5 6.3 5 8.7l4.6-5" />
+          </svg>
+        )}
+        {status === 'locked' && (
+          <svg className="tree-node__glyph" viewBox="0 0 12 12" aria-hidden>
+            <rect x="2.6" y="5.4" width="6.8" height="4.8" rx="1.2" />
+            <path d="M4 5.4V4a2 2 0 0 1 4 0v1.4" />
+          </svg>
+        )}
+      </span>
+      {sub && <span className={`tree-node__sub${status === 'locked' || node.elective ? ' tree-node__sub--one' : ''}`}>{sub}</span>}
+      {!filled && node.creds.length > 0 && (
+        <span className="tree-node__dots" aria-hidden>
+          {node.creds.map((c) => (
+            <span key={c} style={{ '--hue': hueVar(c) } as CSSProperties} />
+          ))}
         </span>
-      ) : node.elective ? (
-        <span className="tree-node__sub">
-          Elective · {node.elective.need} of {node.elective.of}
-        </span>
-      ) : (
-        !layout.compact && title && <span className="tree-node__sub">{title}</span>
-      )}
-      {status === 'completed' && (
-        <svg className="tree-node__glyph" viewBox="0 0 10 10" aria-hidden>
-          <path d="M2 5.2 4.1 7.3 8 3" />
-        </svg>
-      )}
-      {status === 'locked' && (
-        <svg className="tree-node__glyph" viewBox="0 0 10 10" aria-hidden>
-          <rect x="2.2" y="4.6" width="5.6" height="4" rx="0.8" />
-          <path d="M3.4 4.6V3.4a1.6 1.6 0 0 1 3.2 0v1.2" />
-        </svg>
       )}
     </button>
   )
 }
 
-/** The copper: bands, trunk, rails, taps, prerequisite traces, vias and roots, in one SVG. */
-function Board({
+/** The wood, behind the cards: roots, a tapered trunk that grows up, a twig per course, the crown's branches. */
+function Wood({
   layout,
   focus,
   grow,
+  bloom,
 }: {
   layout: SkillTreeLayout
   focus: { codes: Set<string>; creds: Set<number> } | null
   grow: boolean
+  bloom: boolean
 }) {
-  const traceOn = (t: TreeTrace): boolean | null => {
-    if (!focus) return null
-    if (t.kind === 'prereq') return focus.codes.has(t.from!) && focus.codes.has(t.to!)
-    if (t.kind === 'tap') return focus.codes.has(t.from!) && (t.cred === undefined || focus.creds.has(t.cred))
-    if (t.kind === 'rail') return focus.creds.has(t.cred!)
-    return null
-  }
-  const { trunkX, trunkWidth, trunkBase, trunkTop, compact } = layout
-  const byKind = (kind: TreeTrace['kind']) => layout.traces.filter((t) => t.kind === kind)
-  const laneLabelX = { fall: trunkX - trunkWidth / 2 - 10, winter: trunkX + trunkWidth / 2 + 10 }
-  const pinStart = (d: string) => {
-    const [, x, y] = d.split(' ')
-    return { x: Number(x), y: Number(y) }
-  }
-
-  const trace = (t: TreeTrace) => {
-    const on = traceOn(t)
-    const cls = ['tr', `tr--${t.kind}`, `tr--${t.state}`]
-    if (t.conditional) cls.push('tr--or')
-    if (on === true) cls.push('is-on')
-    if (on === false) cls.push('is-dim')
-    const style = { '--hue': t.kind === 'tap' || t.kind === 'rail' ? hueVar(t.cred) : undefined } as CSSProperties
-    const pad = t.kind === 'prereq' ? pinStart(t.d) : null
-    return (
-      <g key={t.id} className={cls.join(' ')} style={style}>
-        <path className="tr__jacket" d={t.d} />
-        {t.state === 'lit' && <path className="tr__halo" d={t.d} />}
-        <path className="tr__core" d={t.d} markerEnd={t.kind === 'prereq' ? `url(#tree-arrow-${t.state})` : undefined} />
-        {t.conditional && !compact && <path className="tr__stripe" d={t.d} />}
-        {t.state === 'lit' && (t.kind === 'prereq' || t.kind === 'rail') && <path className="tr__pulse" d={t.d} pathLength={1} />}
-        {pad && <circle className="tr__pad" cx={pad.x} cy={pad.y} r={2.2} />}
-      </g>
-    )
-  }
-
+  const statusOf = new Map(layout.nodes.map((n) => [n.code, n.status]))
   return (
     <svg className="tree__svg" width={layout.width} height={layout.height} viewBox={`0 0 ${layout.width} ${layout.height}`} aria-hidden>
       <defs>
-        {(['lit', 'live', 'idle', 'locked'] as const).map((s) => (
-          <marker key={s} id={`tree-arrow-${s}`} viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto-start-reverse" markerUnits="strokeWidth">
-            <path d="M 0.5 1 L 9.2 5 L 0.5 9 Z" className={`tree__arrow tree__arrow--${s}`} />
-          </marker>
-        ))}
+        {/* The trunk grows by drawing this line up through a mask, so its taper survives the animation. */}
+        <mask id="tree-grow" maskUnits="userSpaceOnUse" x="0" y="0" width={layout.width} height={layout.height}>
+          <path d={layout.trunkLine} className={`tree__grow-line${grow ? ' is-drawing' : ''}`} pathLength={1} />
+        </mask>
       </defs>
 
-      {/* The dashed year lines, under everything. */}
       {layout.bands
         .filter((b) => b.kind === 'year')
         .map((b) => (
-          <line
-            key={b.key}
-            x1={compact ? 22 : 34}
-            x2={layout.width - 6}
-            y1={b.y}
-            y2={b.y}
-            className={`tree__band-line${b.current ? ' tree__band-line--now' : ''}`}
-          />
+          <line key={b.key} x1={layout.compact ? 12 : 20} x2={layout.width - 10} y1={b.y} y2={b.y} className="tree__hairline" />
         ))}
-      <line x1={compact ? 22 : 34} x2={layout.width - 6} y1={trunkBase} y2={trunkBase} className="tree__band-line tree__band-line--ground" />
 
-      {/* The trunk: a machined jacket the rails run inside. */}
-      <path className={`tree__trunk${grow ? ' is-drawing' : ''}`} d={`M ${trunkX} ${trunkBase} L ${trunkX} ${trunkTop}`} pathLength={1} style={{ strokeWidth: trunkWidth }} />
-      <path className="tree__trunk-edge" d={`M ${trunkX - trunkWidth / 2} ${trunkBase} L ${trunkX - trunkWidth / 2} ${trunkTop}`} />
-
-      <g className={`tree__layer${grow ? ' is-drawing' : ''}`}>
-        {byKind('root').map(trace)}
-        {layout.traces
-          .filter((t) => t.kind === 'root')
-          .map((t) => {
-            const parts = t.d.split(' ')
-            const x = Number(parts[parts.length - 2])
-            const y = Number(parts[parts.length - 1])
-            return <rect key={`pad-${t.id}`} className="tree__root-pad" x={x - 4} y={y} width={8} height={12} rx={2} />
-          })}
-        {byKind('rail').map(trace)}
-        {byKind('tap').map(trace)}
-        {byKind('prereq').map(trace)}
-        {/* Silkscreen over the copper, with a keep-out around the letters: the lanes, and where "now" is. */}
-        {layout.bands
-          .filter((b) => b.kind === 'year')
-          .map((b) => (
-            <g key={b.key}>
-              <text x={laneLabelX.fall} y={b.y + (compact ? 15 : 18)} textAnchor="end" className="tree__silk">
-                FALL
-              </text>
-              <text x={laneLabelX.winter} y={b.y + (compact ? 15 : 18)} className="tree__silk">
-                WINTER
-              </text>
-              {b.current && (
-                <text x={layout.width - 10} y={b.y + (compact ? 15 : 18)} textAnchor="end" className="tree__silk tree__silk--now">
-                  NOW
-                </text>
-              )}
-            </g>
-          ))}
-        {layout.vias.map((v) => {
-          const on = focus ? focus.codes.has(v.code) && focus.creds.has(v.cred) : null
-          return (
-            <circle
-              key={`via-${v.code}-${v.cred}`}
-              cx={v.x}
-              cy={v.y}
-              r={compact ? 2.4 : 2.8}
-              className={`tree__via${v.lit ? ' tree__via--lit' : ''}${on === false ? ' is-dim' : ''}`}
-              style={{ '--hue': hueVar(v.cred) } as CSSProperties}
-            />
-          )
-        })}
+      <g className={`tree__roots-wood${grow ? ' is-growing' : ''}`}>
+        {layout.roots.map((r, i) => (
+          <path key={i} d={r.d} className="tree__root" style={{ strokeWidth: r.w }} />
+        ))}
       </g>
+
+      <path d={layout.trunk} className="tree__trunk" mask="url(#tree-grow)" />
+
+      {layout.twigs.map((t) => {
+        const on = focus ? focus.codes.has(t.code) : null
+        const done = statusOf.get(t.code) === 'completed'
+        return <path key={t.code} d={t.d} className={`tree__twig${done ? ' tree__twig--done' : ''}${on === true ? ' is-on' : on === false ? ' is-dim' : ''}`} />
+      })}
+
+      {layout.branches.map((b) => {
+        const on = focus ? focus.creds.has(b.leaf) : null
+        return (
+          <path
+            key={b.leaf}
+            d={b.d}
+            pathLength={1}
+            className={`tree__branch${grow && !bloom ? ' is-folded' : ''}${on === true ? ' is-on' : on === false ? ' is-dim' : ''}`}
+            style={{ '--hue': hueVar(b.leaf) } as CSSProperties}
+          />
+        )
+      })}
     </svg>
   )
 }

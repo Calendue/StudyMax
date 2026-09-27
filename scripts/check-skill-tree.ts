@@ -52,14 +52,17 @@ function checkLayout(name: string, s: ReturnType<typeof student>) {
   }
   for (const b of boxes) assert.ok(b.x >= 0 && b.x + b.w <= layout.width && b.y >= 0 && b.y + b.h <= layout.height, `${name}: ${b.id} on the board`)
 
-  // Every prerequisite trace goes upward (or level), never down.
+  // Every prerequisite link goes upward, never down.
   const byCode = new Map(layout.nodes.map((n) => [n.code, n]))
-  for (const t of layout.traces.filter((t) => t.kind === 'prereq')) {
-    const a = byCode.get(t.from!)!
-    const b = byCode.get(t.to!)!
-    assert.ok(a.y >= b.y + b.h, `${name}: ${t.from} → ${t.to} runs down the board`)
+  for (const l of layout.links) {
+    const a = byCode.get(l.from)!
+    const b = byCode.get(l.to)!
+    assert.ok(a.y >= b.y + b.h, `${name}: ${l.from} → ${l.to} runs down the tree`)
   }
-  for (const t of layout.traces) assert.ok(t.d.startsWith('M') && !t.d.includes('NaN'), `${name}: ${t.id} is a drawable path`)
+  const paths = [layout.trunk, layout.trunkLine, ...layout.links.map((l) => l.d), ...layout.twigs.map((t) => t.d), ...layout.branches.map((b) => b.d), ...layout.roots.map((r) => r.d)]
+  for (const d of paths) assert.ok(d.startsWith('M') && !d.includes('NaN') && !d.includes('undefined'), `${name}: a drawable path`)
+  assert.equal(layout.twigs.length, layout.nodes.length, `${name}: every course hangs on a twig`)
+  assert.equal(layout.branches.length, layout.leaves.length, `${name}: every leaf has a branch`)
 
   // Fall nodes sit left of the trunk and Winter nodes right of it.
   const trunkL = layout.trunkX - layout.trunkWidth / 2
@@ -98,7 +101,7 @@ assert.ok(node('CMPT280').year > node('CMPT141').year, 'a 200-level course grows
 assert.equal(node('CMPT434').status, 'inProgress')
 assert.ok(node('CMPT434').y < node('CMPT332').y, 'CMPT 434 (needs CMPT 332) sits above it in the same term')
 assert.equal(sample.nodes.filter((n) => n.status === 'next').length, 1, 'the sample student has one best next course')
-assert.ok(sample.traces.some((t) => t.kind === 'prereq' && t.state === 'lit'), 'completed chains carry current')
+assert.ok(sample.links.some((l) => l.from === 'CMPT270' && l.to === 'CMPT280'), 'CMPT 270 links up to CMPT 280')
 const path = pathThrough(sample, 'CMPT280')
 assert.ok(path.codes.has('CMPT270') && path.codes.has('CMPT145'), 'selecting CMPT 280 lights its chain to the roots')
 
@@ -125,4 +128,4 @@ const summary = (l: SkillTreeLayout) =>
       return `Y${b.year}${b.current ? '*' : ''} ${n.filter((x) => x.lane === 'fall').length}|${n.filter((x) => x.lane === 'winter').length}`
     })
     .join('  ')
-console.log(`Skill tree OK. sample: ${sample.nodes.length} courses, ${sample.leaves.length} leaves, ${sample.traces.filter((t) => t.kind === 'prereq').length} prerequisite traces, ${sample.height}px tall. ${summary(sample)}`)
+console.log(`Skill tree OK. sample: ${sample.nodes.length} courses, ${sample.leaves.length} leaves, ${sample.links.length} prerequisite links, ${sample.height}px tall. ${summary(sample)}`)

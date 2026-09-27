@@ -3,20 +3,15 @@ import type { RequirementGroup } from '../data/specializations.ts'
 import type { SpecializationMatch } from './match.ts'
 import { courseLevel, upcomingTerm, type PlannedTerm, type Season, type TermStart } from './plan.ts'
 
-// The Academic Skill Tree: the student's degree drawn as a circuit board that grows UP. Roots at the
-// bottom, Year 1 above them, the years rising to a canopy of the credentials they're working toward.
-// Fall courses sit left of the trunk and Winter courses right of it.
+// The Academic Skill Tree: the student's degree drawn as a tree that grows UP. Roots at the bottom,
+// Year 1 above them, the years rising to a canopy of the credentials they're working toward. Fall
+// courses sit left of the trunk and Winter courses right of it, each on a short twig.
 //
 // Pure and React-free, like roadmapLayout.ts: it consumes buildStudentPlan's output and the match
-// engine's targets as they are, and only decides where things go and how the traces run. It never
-// schedules anything itself and never invents a course.
-//
-// The trunk is the board's BUS (Prospector Studio's backplane): one rail per credential, running up
-// the middle. A course TAPS into the rail of every credential it counts toward (a via on each), so
-// forty courses don't each draw a cable to the canopy; at the top the rails branch out to their
-// leaves. Prerequisite links are routed ORTHOGONALLY around the course cards, through the channels
-// between rows and the gutters between columns, by a cheapest-path search that charges for every
-// turn (Prospector's tracks.ts, in small), so a trace takes the long straight run a person would draw.
+// engine's targets as they are, and only decides where things go and the shape of the wood (a
+// tapered trunk, twigs, the crown's branches, a few roots). Prerequisite links are computed as
+// smooth curves, and the UI draws them only for the course you select. It never schedules anything
+// itself and never invents a course.
 
 export type TreeStatus = 'completed' | 'inProgress' | 'next' | 'planned' | 'locked'
 export type TreeLane = 'fall' | 'winter'
@@ -101,30 +96,13 @@ export interface TreeLeaf {
   next: string | null
 }
 
-export type TraceKind = 'trunk' | 'rail' | 'tap' | 'prereq' | 'root'
-/** lit: current flows (from a completed course). live: in progress. idle: planned. locked: can't yet. */
-export type TraceState = 'lit' | 'live' | 'idle' | 'locked'
-
-export interface TreeTrace {
-  id: string
-  kind: TraceKind
+/** A prerequisite link, prerequisite → the course it unlocks, as a smooth curve up the tree. */
+export interface TreeLink {
+  from: string
+  to: string
   d: string
-  state: TraceState
-  /** For prereq traces: prerequisite → dependent. For taps: the course. */
-  from?: string
-  to?: string
-  /** Credential (leaf index) whose hue the trace carries: rails and taps. */
-  cred?: number
-  /** An OR-option ("CMPT 260 or CMPT 263"): drawn with a dashed stripe. */
-  conditional?: boolean
-}
-
-export interface TreeVia {
-  x: number
-  y: number
-  cred: number
-  code: string
-  lit: boolean
+  /** One of several options ("CMPT 260 or CMPT 263"). */
+  conditional: boolean
 }
 
 export interface SkillTreeLayout {
@@ -134,20 +112,23 @@ export interface SkillTreeLayout {
   bands: TreeBand[]
   nodes: TreeNode[]
   leaves: TreeLeaf[]
-  traces: TreeTrace[]
-  vias: TreeVia[]
+  links: TreeLink[]
+  /** The wood: the trunk's filled outline and its centre line, a twig per course, a branch per leaf, the roots. */
+  trunk: string
+  trunkLine: string
+  twigs: { code: string; d: string }[]
+  branches: { leaf: number; d: string }[]
+  roots: { d: string; w: number }[]
   trunkX: number
   trunkWidth: number
-  /** Where the trunk meets the roots, and where it forks into the canopy. */
+  /** Where the trunk meets the roots, and where it opens into the crown. */
   trunkBase: number
   trunkTop: number
   currentYear: number
-  /** Each leaf's rail x inside the trunk, by leaf index. */
-  railX: number[]
 }
 
-/** Five credential hues (see skilltree.css); more leaves than that would stop being distinguishable. */
-export const MAX_LEAVES = 5
+/** The hero plus three restrained tints (see skilltree.css); more than that and the canopy stops reading at a glance. */
+export const MAX_LEAVES = 4
 
 const STATUS_RANK: Record<TreeStatus, number> = { completed: 0, inProgress: 1, next: 2, planned: 2, locked: 3 }
 
@@ -176,7 +157,6 @@ interface Geometry {
   colGap: number
   rowGap: number
   innerGap: number
-  railGap: number
   bandTop: number
   bandBottom: number
   emptyBand: number
@@ -185,14 +165,18 @@ interface Geometry {
   leafGap: number
   canopyTop: number
   rootsH: number
-  corner: number
+  /** The trunk's width at the roots and at the crown, and how far it sways. */
+  trunkW: number
+  trunkTopW: number
+  sway: number
 }
 
 function geometry(width: number): Geometry {
   const compact = width < 560
+  // A phone gets one card per side, wide enough for the course title; a desktop gets two.
   return compact
-    ? { compact, gutter: 22, pad: 8, nodeMinW: 58, nodeMaxW: 76, nodeH: 40, colGap: 10, rowGap: 22, innerGap: 14, railGap: 4, bandTop: 34, bandBottom: 16, emptyBand: 76, maxCols: 2, leafH: 66, leafGap: 22, canopyTop: 16, rootsH: 178, corner: 6 }
-    : { compact, gutter: 34, pad: 16, nodeMinW: 108, nodeMaxW: 136, nodeH: 50, colGap: 14, rowGap: 26, innerGap: 20, railGap: 5, bandTop: 40, bandBottom: 18, emptyBand: 88, maxCols: 3, leafH: 76, leafGap: 26, canopyTop: 20, rootsH: 200, corner: 8 }
+    ? { compact, gutter: 24, pad: 10, nodeMinW: 112, nodeMaxW: 172, nodeH: 58, colGap: 10, rowGap: 12, innerGap: 20, bandTop: 38, bandBottom: 14, emptyBand: 64, maxCols: 1, leafH: 64, leafGap: 26, canopyTop: 12, rootsH: 170, trunkW: 14, trunkTopW: 3, sway: 2 }
+    : { compact, gutter: 36, pad: 16, nodeMinW: 150, nodeMaxW: 188, nodeH: 62, colGap: 14, rowGap: 16, innerGap: 28, bandTop: 44, bandBottom: 18, emptyBand: 80, maxCols: 2, leafH: 72, leafGap: 30, canopyTop: 16, rootsH: 190, trunkW: 18, trunkTopW: 4, sway: 3 }
 }
 
 interface Draft {
@@ -358,8 +342,7 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
   const unlockCount = (code: string) => links.filter((l) => l.from === code).length
 
   // Lanes and columns. Column 0 hugs the trunk; busy years spill outward, quiet ones stay close.
-  const railCount = Math.max(1, Math.min(targets.length, MAX_LEAVES))
-  const trunkWidth = (railCount - 1) * g.railGap + 14
+  const trunkWidth = g.trunkW
   const trunkX = Math.round(g.gutter + (width - g.gutter - g.pad) / 2)
   const laneW = trunkX - trunkWidth / 2 - g.innerGap - g.gutter
   let cols = g.maxCols
@@ -520,331 +503,89 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
       next,
     }
   })
-  // The rails that branch off lowest sit outermost on their side, so no branch crosses another.
-  const railOrder = [
-    ...slots.map((s, i) => ({ ...s, leaf: i + 1 })).filter((s) => s.side < 0).sort((a, b) => a.row - b.row || b.col - a.col),
-    ...(leafCount > 0 ? [{ leaf: 0 }] : []),
-    ...slots.map((s, i) => ({ ...s, leaf: i + 1 })).filter((s) => s.side > 0).sort((a, b) => b.row - a.row || a.col - b.col),
-  ]
-  const railX: number[] = new Array(leafCount).fill(trunkX)
-  railOrder.forEach((r, i) => {
-    railX[r.leaf] = Math.round(trunkX + (i - (railOrder.length - 1) / 2) * g.railGap)
-  })
+  // ── the wood: a tapered trunk, soft twigs, the crown's branches, a few roots ──
+  const base = trunkBase + 12
+  const steps = Math.max(12, Math.round((base - trunkTop) / 20))
+  const left: string[] = []
+  const right: string[] = []
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps // 0 at the roots, 1 at the crown
+    const ty = base - (base - trunkTop) * t
+    const w = g.trunkTopW + (g.trunkW - g.trunkTopW) * Math.pow(1 - t, 0.85) + (t < 0.04 ? (0.04 - t) * 150 : 0)
+    const cx = trunkX + Math.sin(t * Math.PI * 1.3) * g.sway
+    left.push(`${(cx - w / 2).toFixed(1)} ${ty.toFixed(1)}`)
+    right.unshift(`${(cx + w / 2).toFixed(1)} ${ty.toFixed(1)}`)
+  }
+  const trunk = `M ${[...left, ...right].join(' L ')} Z`
+  const trunkLine = `M ${trunkX} ${base} L ${trunkX} ${trunkTop}`
 
-  // ── traces ──
-  const traces: TreeTrace[] = []
-  const vias: TreeVia[] = []
-  const stateOf = (status: TreeStatus): TraceState =>
-    status === 'completed' ? 'lit' : status === 'inProgress' ? 'live' : status === 'locked' ? 'locked' : 'idle'
-
-  traces.push({ id: 'trunk', kind: 'trunk', d: `M ${trunkX} ${trunkBase} L ${trunkX} ${trunkTop}`, state: 'lit' })
-
-  // Rails: up the whole trunk, then out along the canopy to their leaf.
-  leaves.forEach((leaf) => {
-    const x = railX[leaf.index]
-    const port = { x: Math.round(leaf.x + leaf.w / 2), y: leaf.y + leaf.h }
-    let d: string
-    if (leaf.index === 0 || Math.abs(port.x - x) < 1) {
-      d = `M ${x} ${trunkBase} L ${x} ${port.y}`
-    } else {
-      const slot = slots[leaf.index - 1]
-      const branchY = port.y + g.leafGap / 2 + (slot.col === 0 ? -3 : 3)
-      d = roundedPath([{ x, y: trunkBase }, { x, y: branchY }, { x: port.x, y: branchY }, port], g.corner)
+  // A twig: a short S-curve out of the trunk, rising a little to the card. A card further out reaches
+  // the trunk through the gap under its row, behind its neighbour.
+  const twigs = nodes.map((n) => {
+    const dir = n.lane === 'fall' ? -1 : 1
+    if (n.col === 0) {
+      const edge = n.lane === 'fall' ? n.x + n.w : n.x
+      const cy = Math.round(n.y + n.h / 2)
+      const gap = Math.abs(edge - trunkX)
+      return { code: n.code, d: `M ${trunkX} ${cy + 12} C ${trunkX + dir * gap * 0.6} ${cy + 12}, ${edge - dir * gap * 0.5} ${cy}, ${edge} ${cy}` }
     }
-    const lit = nodes.some((n) => n.status === 'completed' && n.creds.includes(leaf.index))
-    traces.push({ id: `rail-${leaf.index}`, kind: 'rail', d, state: lit ? 'lit' : 'idle', cred: leaf.index })
+    const anchor = n.lane === 'fall' ? n.x + n.w - 22 : n.x + 22
+    const under = Math.round(n.y + n.h + g.rowGap / 2)
+    return { code: n.code, d: `M ${trunkX} ${under + 6} C ${(trunkX + anchor) / 2} ${under + 6}, ${anchor} ${under + 4}, ${anchor} ${n.y + n.h}` }
   })
 
-  // Taps: each course into the rails it counts toward. The column next to the trunk runs straight
-  // in; an outer column climbs into the channel above its row first, so it never crosses a card.
-  const trunkEdge = (lane: TreeLane) => (lane === 'fall' ? trunkX - trunkWidth / 2 : trunkX + trunkWidth / 2)
-  for (const n of nodes) {
-    const inner = n.lane === 'fall' ? n.x + n.w : n.x
-    const railsHit = n.creds.map((c) => railX[c])
-    const end =
-      railsHit.length === 0
-        ? trunkEdge(n.lane)
-        : n.lane === 'fall'
-          ? Math.max(...railsHit)
-          : Math.min(...railsHit)
-    const tapY = n.col === 0 ? Math.round(n.y + n.h / 2) : Math.round(n.y - g.rowGap / 2 + (n.col - 1) * 3)
-    const pts =
-      n.col === 0
-        ? [{ x: inner, y: tapY }, { x: end, y: tapY }]
-        : [
-            { x: inner + (n.lane === 'fall' ? -10 : 10), y: n.y },
-            { x: inner + (n.lane === 'fall' ? -10 : 10), y: tapY },
-            { x: end, y: tapY },
-          ]
-    const primary = n.creds[0]
-    traces.push({
-      id: `tap-${n.code}`,
-      kind: 'tap',
-      d: roundedPath(pts, g.corner),
-      state: stateOf(n.status),
-      from: n.code,
-      cred: primary,
-    })
-    for (const c of n.creds) vias.push({ x: railX[c], y: tapY, cred: c, code: n.code, lit: n.status === 'completed' })
-  }
+  // The crown: a smooth branch from the top of the trunk to each leaf.
+  const crown = trunkTop + 6
+  const branches = leaves.map((leaf) => {
+    const lx = Math.round(leaf.x + leaf.w / 2)
+    const ly = leaf.y + leaf.h
+    if (leaf.index === 0) return { leaf: 0, d: `M ${trunkX} ${crown} L ${trunkX} ${ly}` }
+    const rise = crown - ly
+    return { leaf: leaf.index, d: `M ${trunkX} ${crown} C ${trunkX} ${crown - rise * 0.6}, ${lx} ${ly + rise * 0.45}, ${lx} ${ly}` }
+  })
 
-  // Prerequisite traces, routed around the cards. Several links out of one card leave from spread
-  // pins along its top edge, and arrive on spread pins along the bottom of the course they unlock.
-  const outs = new Map<string, string[]>()
-  const ins = new Map<string, string[]>()
-  for (const l of upward) {
-    outs.set(l.from, [...(outs.get(l.from) ?? []), l.to])
-    ins.set(l.to, [...(ins.get(l.to) ?? []), l.from])
-  }
-  const pin = (n: TreeNode, list: string[], code: string) => {
-    const others = [...list].sort((a, b) => byCode.get(a)!.x - byCode.get(b)!.x)
-    const i = others.indexOf(code)
-    return Math.round(n.x + (n.w * (i + 1)) / (others.length + 1))
-  }
-  const router = makeRouter(nodes, bands, g, trunkX, trunkWidth, width)
-  upward.forEach((l, i) => {
+  // Roots: a few soft lines spreading out and down from the base.
+  const depth = g.compact ? 64 : 76
+  const spread = g.compact ? 120 : 190
+  const roots = [-1, -0.5, 0, 0.5, 1].map((k, i) => {
+    const ex = Math.round(trunkX + k * spread)
+    const ey = Math.round(trunkBase + depth * (1 - Math.abs(k) * 0.3))
+    return {
+      d: `M ${trunkX + k * 4} ${trunkBase + 6} C ${trunkX + k * 10} ${trunkBase + depth * 0.5}, ${trunkX + k * spread * 0.55} ${ey - 6}, ${ex} ${ey}`,
+      w: [1.6, 2.4, 3, 2.4, 1.6][i],
+    }
+  })
+
+  // Prerequisite links, drawn only for the course you pick: out of the top of the prerequisite,
+  // into the bottom of what it unlocks.
+  const treeLinks: TreeLink[] = upward.map((l) => {
     const a = byCode.get(l.from)!
     const b = byCode.get(l.to)!
-    const from = { x: pin(a, outs.get(a.code)!, b.code), y: a.y }
-    const to = { x: pin(b, ins.get(b.code)!, a.code), y: b.y + b.h }
-    const pts = router(from, to, a, b, i)
-    traces.push({
-      id: `pre-${l.from}-${l.to}`,
-      kind: 'prereq',
-      d: roundedPath(pts, g.corner),
-      state: a.status === 'completed' && (b.status === 'completed' || b.status === 'inProgress') ? 'lit' : stateOf(b.status),
-      from: l.from,
-      to: l.to,
-      conditional: l.conditional,
-    })
+    const x1 = Math.round(a.x + a.w / 2)
+    const x2 = Math.round(b.x + b.w / 2)
+    const k = Math.max(24, Math.min(110, (a.y - b.y - b.h) / 2))
+    return { from: l.from, to: l.to, conditional: l.conditional, d: `M ${x1} ${a.y} C ${x1} ${a.y - k}, ${x2} ${b.y + b.h + k}, ${x2} ${b.y + b.h}` }
   })
 
-  // Roots: the rails run on below the trunk and fan out into a row of pads, like pins into a header.
-  const rootPads = Math.max(5, leafCount + 2)
-  const padSpan = Math.min(width - g.gutter - g.pad - 40, g.compact ? 240 : 420)
-  const padY = trunkBase + (g.compact ? 76 : 90)
-  for (let i = 0; i < rootPads; i++) {
-    const px = Math.round(trunkX - padSpan / 2 + (padSpan * i) / (rootPads - 1))
-    const sx = Math.round(trunkX + (i - (rootPads - 1) / 2) * g.railGap * 0.9)
-    const bendY = trunkBase + 14 + Math.abs(i - (rootPads - 1) / 2) * 7
-    traces.push({
-      id: `root-${i}`,
-      kind: 'root',
-      d: roundedPath([{ x: sx, y: trunkBase }, { x: sx, y: bendY }, { x: px, y: bendY }, { x: px, y: padY }], g.corner),
-      state: 'lit',
-    })
+  return {
+    width,
+    height,
+    compact: g.compact,
+    bands,
+    nodes,
+    leaves,
+    links: treeLinks,
+    trunk,
+    trunkLine,
+    twigs,
+    branches,
+    roots,
+    trunkX,
+    trunkWidth,
+    trunkBase,
+    trunkTop,
+    currentYear,
   }
-
-  return { width, height, compact: g.compact, bands, nodes, leaves, traces, vias, trunkX, trunkWidth, trunkBase, trunkTop, currentYear, railX }
-}
-
-// ─────────────────────────────────────────────────────────────── routing (tracks.ts, in small)
-
-interface Pt {
-  x: number
-  y: number
-}
-
-/** Rounded corners, the way a track on a board turns. Collinear points are dropped first. */
-export function roundedPath(raw: Pt[], radius: number): string {
-  const pts: Pt[] = []
-  for (const p of raw) {
-    const n = pts.length
-    if (n && pts[n - 1].x === p.x && pts[n - 1].y === p.y) continue
-    if (n >= 2) {
-      const a = pts[n - 2]
-      const b = pts[n - 1]
-      if ((a.x === b.x && b.x === p.x) || (a.y === b.y && b.y === p.y)) {
-        pts[n - 1] = p
-        continue
-      }
-    }
-    pts.push(p)
-  }
-  if (pts.length < 2) return ''
-  let d = `M ${pts[0].x} ${pts[0].y}`
-  for (let i = 1; i < pts.length - 1; i++) {
-    const p = pts[i]
-    const prev = pts[i - 1]
-    const next = pts[i + 1]
-    const r = Math.min(radius, Math.hypot(p.x - prev.x, p.y - prev.y) / 2, Math.hypot(next.x - p.x, next.y - p.y) / 2)
-    if (r < 1) {
-      d += ` L ${p.x} ${p.y}`
-      continue
-    }
-    const inX = Math.sign(p.x - prev.x)
-    const inY = Math.sign(p.y - prev.y)
-    const outX = Math.sign(next.x - p.x)
-    const outY = Math.sign(next.y - p.y)
-    d += ` L ${p.x - inX * r} ${p.y - inY * r} Q ${p.x} ${p.y} ${p.x + outX * r} ${p.y + outY * r}`
-  }
-  const last = pts[pts.length - 1]
-  return `${d} L ${last.x} ${last.y}`
-}
-
-/** A turn costs this many pixels of travel: a straight run wins over a staircase, a real detour still happens. */
-const TURN_COST = 60
-/** Where in a channel each trace runs, interleaved so neighbouring traces land apart. */
-const SPREAD = [0, 4, -4, 2, -2, 6, -6, 1, -1, 5, -5, 3, -3]
-
-/**
- * The board's free lines, built once: the channels between rows (and a year's top and bottom
- * margins) and the gutters between columns and beside the trunk. A trace only ever runs along
- * these, which is why the result looks like a board rather than a maze solution. Each route is the
- * cheapest path across the lattice, where every turn costs TURN_COST.
- */
-function makeRouter(nodes: TreeNode[], bands: TreeBand[], g: Geometry, trunkX: number, trunkWidth: number, width: number) {
-  const baseYs = new Set<number>()
-  const byYear = new Map<number, TreeNode[]>()
-  for (const n of nodes) byYear.set(n.year, [...(byYear.get(n.year) ?? []), n])
-  for (const band of bands) {
-    if (band.kind !== 'year') continue
-    const list = byYear.get(band.year) ?? []
-    const rowTops = [...new Set(list.map((n) => n.y))].sort((a, b) => a - b)
-    if (rowTops.length === 0) {
-      baseYs.add(Math.round(band.y + band.h / 2))
-      continue
-    }
-    baseYs.add(Math.round(band.y + (rowTops[0] - band.y) / 2 + 4))
-    for (const top of rowTops.slice(1)) baseYs.add(Math.round(top - g.rowGap / 2))
-    baseYs.add(Math.round(rowTops[rowTops.length - 1] + g.nodeH + g.bandBottom / 2))
-  }
-  const colEdges = [...new Set(nodes.map((n) => `${n.x}:${n.w}`))].map((s) => s.split(':').map(Number))
-  const baseXs = new Set<number>()
-  const trunkL = trunkX - trunkWidth / 2
-  const trunkR = trunkX + trunkWidth / 2
-  const xsSorted = [...new Set(colEdges.map(([x]) => x))].sort((a, b) => a - b)
-  const w = nodes[0]?.w ?? 0
-  for (const x of xsSorted) {
-    baseXs.add(Math.round(x - g.colGap / 2))
-    baseXs.add(Math.round(x + w + g.colGap / 2))
-  }
-  baseXs.add(Math.round(trunkL - g.innerGap / 2))
-  baseXs.add(Math.round(trunkR + g.innerGap / 2))
-  const minX = g.gutter - 2
-  const maxX = width - 4
-  const rects = nodes.map((n) => ({ code: n.code, x: n.x - 2, y: n.y - 2, x2: n.x + n.w + 2, y2: n.y + n.h + 2 }))
-
-  return (from: Pt, to: Pt, a: TreeNode, b: TreeNode, index: number): Pt[] => {
-    const spread = SPREAD[index % SPREAD.length]
-    const dy = Math.max(-(g.rowGap / 2 - 3), Math.min(g.rowGap / 2 - 3, spread))
-    const dx = Math.max(-(g.colGap / 2 - 2), Math.min(g.colGap / 2 - 2, spread / 2))
-    // Out of the source's top into the channel above it; into the target from the channel below it.
-    const p1 = { x: from.x, y: Math.round(a.y - g.rowGap / 2 + dy) }
-    const p2 = { x: to.x, y: Math.round(b.y + b.h + g.rowGap / 2 + dy) }
-    if (p1.y < p2.y) {
-      // Same row band edge case (level link across the trunk): a straight hop through the channel.
-      const mid = Math.round((a.y + b.y + b.h) / 2)
-      return [from, { x: from.x, y: mid }, { x: to.x, y: mid }, to]
-    }
-    const xs = [...new Set([...[...baseXs].map((x) => Math.round(x + dx)), p1.x, p2.x])]
-      .filter((x) => x >= minX && x <= maxX && (x <= trunkL - 1 || x >= trunkR + 1 || x === p1.x || x === p2.x))
-      .sort((m, n) => m - n)
-    const ys = [...new Set([...[...baseYs].map((y) => Math.round(y + dy)), p1.y, p2.y])]
-      .filter((y) => y >= p2.y - 1 && y <= p1.y + 1)
-      .sort((m, n) => m - n)
-    const obstacles = rects.filter((r) => r.code !== a.code && r.code !== b.code)
-    const blocked = (x1: number, y1: number, x2: number, y2: number) => {
-      if (x1 === x2 && x1 > trunkL - 1 && x1 < trunkR + 1) return true
-      const lx = Math.min(x1, x2)
-      const hx = Math.max(x1, x2)
-      const ly = Math.min(y1, y2)
-      const hy = Math.max(y1, y2)
-      return obstacles.some((r) => lx < r.x2 && hx > r.x && ly < r.y2 && hy > r.y)
-    }
-    const path = cheapest(xs, ys, p1, p2, blocked)
-    return path ? [from, ...path, to] : [from, p1, { x: p2.x, y: p1.y }, p2, to]
-  }
-}
-
-/** Dijkstra over (column, row, axis arrived on), with a cost for every change of axis. */
-function cheapest(xs: number[], ys: number[], p1: Pt, p2: Pt, blocked: (x1: number, y1: number, x2: number, y2: number) => boolean): Pt[] | null {
-  const W = xs.length
-  const H = ys.length
-  const sx = xs.indexOf(p1.x)
-  const sy = ys.indexOf(p1.y)
-  const tx = xs.indexOf(p2.x)
-  const ty = ys.indexOf(p2.y)
-  if (sx < 0 || sy < 0 || tx < 0 || ty < 0) return null
-  const key = (cx: number, cy: number, axis: number) => (cy * W + cx) * 2 + axis
-  const dist = new Float64Array(W * H * 2).fill(Infinity)
-  const prev = new Int32Array(W * H * 2).fill(-1)
-  const heap: [number, number][] = []
-  const push = (k: number, d: number) => {
-    dist[k] = d
-    heap.push([d, k])
-    let i = heap.length - 1
-    while (i > 0) {
-      const p = (i - 1) >> 1
-      if (heap[p][0] < heap[i][0] || (heap[p][0] === heap[i][0] && heap[p][1] <= heap[i][1])) break
-      ;[heap[p], heap[i]] = [heap[i], heap[p]]
-      i = p
-    }
-  }
-  const pop = () => {
-    const top = heap[0]
-    const last = heap.pop()!
-    if (heap.length > 0) {
-      heap[0] = last
-      let i = 0
-      for (;;) {
-        const l = i * 2 + 1
-        const r = l + 1
-        let m = i
-        const less = (u: number, v: number) => heap[u][0] < heap[v][0] || (heap[u][0] === heap[v][0] && heap[u][1] < heap[v][1])
-        if (l < heap.length && less(l, m)) m = l
-        if (r < heap.length && less(r, m)) m = r
-        if (m === i) break
-        ;[heap[m], heap[i]] = [heap[i], heap[m]]
-        i = m
-      }
-    }
-    return top
-  }
-  // It arrives in the channel vertically (out of the card's top) and must leave it vertically too.
-  push(key(sx, sy, 1), 0)
-  let end = -1
-  while (heap.length > 0) {
-    const [d, k] = pop()
-    if (d > dist[k]) continue
-    const axis = k % 2
-    const cell = (k - axis) / 2
-    const cx = cell % W
-    const cy = (cell - cx) / W
-    if (cx === tx && cy === ty) {
-      end = k
-      if (axis === 1) break
-      // Arriving horizontally needs one more turn into the card: keep looking for a cheaper vertical arrival.
-      const vertical = key(cx, cy, 1)
-      if (d + TURN_COST < dist[vertical]) {
-        prev[vertical] = k
-        push(vertical, d + TURN_COST)
-      }
-      continue
-    }
-    for (const [ddx, ddy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
-      const nx = cx + ddx
-      const ny = cy + ddy
-      if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue
-      if (blocked(xs[cx], ys[cy], xs[nx], ys[ny])) continue
-      const nAxis = ddx !== 0 ? 0 : 1
-      const cost = d + Math.abs(xs[nx] - xs[cx]) + Math.abs(ys[ny] - ys[cy]) + (nAxis === axis ? 0 : TURN_COST)
-      const nk = key(nx, ny, nAxis)
-      if (cost < dist[nk]) {
-        prev[nk] = k
-        push(nk, cost)
-      }
-    }
-  }
-  if (end < 0) return null
-  const goal = dist[key(tx, ty, 1)] < Infinity ? key(tx, ty, 1) : end
-  const pts: Pt[] = []
-  for (let k = goal; k >= 0; k = prev[k]) {
-    const cell = (k - (k % 2)) / 2
-    const cx = cell % W
-    pts.push({ x: xs[cx], y: ys[(cell - cx) / W] })
-  }
-  return pts.reverse()
 }
 
 // ─────────────────────────────────────────────────────────────── queries for the UI
