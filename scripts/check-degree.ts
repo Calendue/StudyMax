@@ -2,7 +2,8 @@
 // degree. This builds plans exactly as App.tsx does (buildStudentPlan with the program's degree, the
 // in-progress courses booked in their own terms, the skill tree from layoutSkillTree) and checks them
 // against the published rules, which are encoded HERE, independently of the engine's own data, so the
-// engine can't grade itself.
+// engine can't grade itself. Each degree variant a student can pick (Four-year, Honours, Three-year)
+// has its own rule set, written from its own page, and its own cases.
 //
 // Run: node --experimental-strip-types --experimental-loader ./scripts/_resolve-ts-loader.mjs scripts/check-degree.ts
 //   --p0       exit status ignores I5 (the credit-unit degree rules land in P1)
@@ -11,6 +12,10 @@
 //
 // Sources (2026-27 catalogue, effective May 1 2026 to April 30 2027):
 //   https://programs.usask.ca/arts-and-science/computer-science/bsc-4-computer-science.php  C1-C5 lists
+//   https://programs.usask.ca/arts-and-science/computer-science/bsc-honours-computer-science.php  Honours C3-C4
+//     (C4 60 cu: CMPT 360, 364, 400, STAT 241, 15 cu of the core, 6 cu CMPT 410+ or CME 433/435, MATH 116/134/177)
+//   https://programs.usask.ca/arts-and-science/computer-science/bsc-3-computer-science.php  Three-year: 90 cu,
+//     42 senior; C3 12 (no PHIL 232, no business); C4 33 (9 cu CMPT 300/400, at most one CME course)
 //   https://programs.usask.ca/arts-and-science/policies.php  120 cu, 66 senior, 15 cu per Fall/Winter term,
 //     "Maximum Junior Credit Units by Subject" (printable PDF pp. 32-33)
 //   https://www.cs.usask.ca/documents/advising/2024-bsc-4y-advising.pdf  Y1/Y2/Y3-4 tags per slot
@@ -149,14 +154,65 @@ const RULES: Rule[] = [
   one('C4 Statistics', ['STAT242', 'STAT245', 'EE216']),
   { id: 'C4 Math list', needCu: 6, accepts: (c) => MATH_LIST.includes(c), slot: /math|statistic/i, oneOf: [['MATH116', 'MATH134', 'MATH177']], allOf: [['MATH361', 'MATH362']] },
 ]
+
+// The other two variants, from their own pages. C1 and C2 are word for word the Four-year's.
+const C1_C2 = RULES.filter((r) => /^C[12] /.test(r.id))
+const INTRO = RULES.filter((r) => /^C4 CMPT \d{3}$/.test(r.id))
+const STATS = RULES.find((r) => r.id === 'C4 Statistics')!
+// Honours: C3 is the Four-year's (science, PHIL 232/GE 449, MATH 110/133/176, business).
+const HONOURS_RULES: Rule[] = [
+  ...RULES.filter((r) => /^C[123] /.test(r.id)),
+  ...INTRO,
+  one('C4 CMPT 360', ['CMPT360']),
+  one('C4 CMPT 364', ['CMPT364']),
+  one('C4 CMPT 400', ['CMPT400']),
+  one('C4 STAT 241', ['STAT241']),
+  { id: 'C4 Senior core', needCu: 15, accepts: (c) => codes('CMPT317 CMPT332 CMPT340 CMPT353 CMPT370 CMPT381').includes(c) },
+  // "Choose 6 credit units of CMPT courses with number 410 or higher ... CME 433.3, CME 435.3"
+  { id: 'C4 CMPT 410+', needCu: 6, accepts: (c) => (subjectOf(c) === 'CMPT' && numberOf(c) >= 410) || c === 'CME433' || c === 'CME435', slot: /410/ },
+  one('C4 Calculus 2', ['MATH116', 'MATH134', 'MATH177']),
+  STATS,
+]
+// Three-year: C3 is junior science and MATH 110/133/176 only; C4 the intro courses, 9 cu of CMPT 300/400
+// ("at most 1 course from CME 332, CME 334, CME 341, CME 342, CME 433, CME 435") and the stats course.
+const THREE_YEAR_CME = codes('CME332 CME334 CME341 CME342 CME433 CME435')
+const THREE_YEAR_RULES: Rule[] = [
+  ...C1_C2,
+  ...RULES.filter((r) => r.id === 'C3 Junior science' || r.id === 'C3 MATH 110/133/176'),
+  ...INTRO,
+  {
+    id: 'C4 Upper CMPT',
+    needCu: 9,
+    accepts: (c) => (subjectOf(c) === 'CMPT' && levelOf(c) >= 300) || THREE_YEAR_CME.includes(c),
+    slot: /senior cmpt|upper/i,
+    oneOf: [THREE_YEAR_CME],
+  },
+  STATS,
+]
+
+type Variant = 'bsc-4' | 'bsc-honours' | 'bsc-3'
+interface RuleSet {
+  name: string
+  rules: Rule[]
+  totalCu: number
+  minSeniorCu: number
+  /** Fall/Winter terms a first-year's plan takes at a full load. */
+  terms: number
+}
+const VARIANTS: Record<Variant, RuleSet> = {
+  'bsc-4': { name: 'four-year', rules: RULES, totalCu: 120, minSeniorCu: 66, terms: 8 },
+  'bsc-honours': { name: 'Honours', rules: HONOURS_RULES, totalCu: 120, minSeniorCu: 66, terms: 8 },
+  'bsc-3': { name: 'three-year', rules: THREE_YEAR_RULES, totalCu: 90, minSeniorCu: 42, terms: 6 },
+}
+
 // Slot labels are matched in this order ("Senior CMPT elective" before "Senior elective").
 const SLOT_ORDER = ['C2 Breadth', 'C1 English writing', 'C1 Indigenous learning', 'C3 Business', 'C4 CMPT 410+', 'C4 Upper CMPT', 'C4 Math list', 'C3 Junior science']
 const SENIOR_SLOT = /senior|200-level or higher|410/i
-function ruleForSlot(label: string): Rule | null {
+function ruleForSlot(label: string, rules: Rule[]): Rule | null {
   if (/senior elective|200-level or higher|free elective/i.test(label)) return null
   for (const id of SLOT_ORDER) {
-    const rule = RULES.find((r) => r.id === id)!
-    if (rule.slot!.test(label)) return rule
+    const rule = rules.find((r) => r.id === id)
+    if (rule && rule.slot!.test(label)) return rule
   }
   return null
 }
@@ -173,7 +229,8 @@ interface Audit {
 }
 
 /** Credits every course and slot to at most one rule, maximising what's counted, then checks the degree. */
-function auditPlan(named: string[], slots: string[]): Audit {
+function auditPlan(named: string[], slots: string[], set: RuleSet): Audit {
+  const RULES = set.rules
   const problems: string[] = []
   const all = new Set(named)
   const credit = new Map<string, string[]>() // rule id → courses/slots credited
@@ -229,7 +286,7 @@ function auditPlan(named: string[], slots: string[]): Audit {
   }
 
   for (const slot of slots) {
-    const rule = ruleForSlot(electiveLabel(slot))
+    const rule = ruleForSlot(electiveLabel(slot), RULES)
     if (rule && room(rule) > 0) credit.get(rule.id)!.push(slot)
   }
   // Most-constrained courses first; a course whose rules are full may bump one that has another home.
@@ -269,12 +326,13 @@ function auditPlan(named: string[], slots: string[]): Audit {
   }
   for (const [id, cu] of Object.entries(shortBy)) problems.push(`${id} short by ${cu} cu`)
 
-  // C2: at least 3 cu from Humanities or Social Science.
+  // C2: at least 3 cu from Humanities or Social Science (every variant's C2).
   const c2 = credit.get('C2 Breadth')!
   const humSocCu = c2.reduce((n, c) => n + (isElective(c) ? (/humanities or social science/i.test(electiveLabel(c)) ? 3 : 0) : humSoc(c) ? cuOf(c) : 0), 0)
   if (humSocCu < 3) problems.push(`C2 has ${humSocCu} cu of Humanities or Social Science (needs 3)`)
 
-  // Totals: 120 cu, at least 66 of them at the 200 level or higher (so at most 54 junior count).
+  // Totals: 120 cu with at least 66 at the 200 level or higher (at most 54 junior count), or the
+  // Three-year's 90 with 42 (at most 48 junior).
   let junior = 0
   let senior = 0
   const cappedJunior: Record<string, number> = {}
@@ -292,9 +350,10 @@ function auditPlan(named: string[], slots: string[]): Audit {
     if (SENIOR_SLOT.test(electiveLabel(slot))) senior += 3
     else junior += 3
   }
-  const totalCu = senior + Math.min(junior, 54)
-  if (totalCu < 120) problems.push(`degree totals ${totalCu} cu that count (needs 120; ${junior} junior, of which at most 54 count)`)
-  if (senior < 66) problems.push(`${senior} cu at the 200 level or higher (needs 66)`)
+  const juniorMax = set.totalCu - set.minSeniorCu
+  const totalCu = senior + Math.min(junior, juniorMax)
+  if (totalCu < set.totalCu) problems.push(`degree totals ${totalCu} cu that count (needs ${set.totalCu}; ${junior} junior, of which at most ${juniorMax} count)`)
+  if (senior < set.minSeniorCu) problems.push(`${senior} cu at the 200 level or higher (needs ${set.minSeniorCu})`)
   return { credited: new Set([...credit.values()].flat()), overJunior, shortBy, totalCu, seniorCu: senior, problems }
 }
 
@@ -321,6 +380,8 @@ interface Case {
   start: TermStart
   /** Plan Spring/Summer terms too (DEFAULT_SUMMER_COURSES a term). */
   springSummer?: boolean
+  /** The degree variant the student chose in the plan's settings; the Four-year when absent. */
+  variant?: Variant
 }
 
 type Legacy = (...args: unknown[]) => PlannedTerm[]
@@ -335,12 +396,15 @@ function build(c: Case) {
     .filter((g) => g.courses.length > 0)
   const booked = bookedByTerm(currentByTerm, TODAY)
   const specs = computerScience.specializations
-  const matches = computeMatches(specs, completed, computerScience.degree as never)
+  // The variant's degree as App.tsx picks it (the chosen one of Program.degrees, else Program.degree).
+  const variant = c.variant ?? 'bsc-4'
+  const degree = computerScience.degrees?.find((d) => d.variant === variant) ?? (variant === 'bsc-4' ? computerScience.degree : undefined)
+  if (!degree) throw new Error(`no ${variant} degree on the CS program`)
+  const matches = computeMatches(specs, completed, degree as never)
   const credentials = computeCredentials(usask.programs, completed, computerScience.id)
   const planningSpecs = [...specs, ...credentials.map((x) => x.spec)]
   const hero = c.spec ? matches.find((m) => m.spec.id === c.spec!.id)! : matches[0]
   const targets = [hero].filter((m) => m.remaining > 0)
-  const degree = computerScience.degree
   const plan = LEGACY
     ? (buildStudentPlan as unknown as Legacy)(targets.map((t) => t.spec), planningSpecs, completed, inProgress, LOAD, c.start, c.springSummer ?? false, DEFAULT_SUMMER_COURSES, degree, booked)
     : buildStudentPlan(targets.map((t) => t.spec), planningSpecs, completed, inProgress, LOAD, c.start, {
@@ -368,6 +432,64 @@ function build(c: Case) {
 
 // ───────────────────────── the invariants ─────────────────────────
 
+/**
+ * The fewest Fall/Winter terms (from a Fall, at 15 cu a term) that the plan's own named courses need:
+ * each one after its prerequisites (the plan's pick where a group has one it takes; a concurrent one
+ * may share the term), after the credit units its level or credit prerequisite asks for ("6 credit
+ * units of 300-level CMPT" counted from the plan's own such courses), and in a season it runs.
+ * Independent of the planner. CMPT 384 and 484 both run in Winter only, so Information Visualization
+ * needs a fourth Winter whatever the degree; Programming Languages' CMPT 440 needs CMPT 340, both
+ * Winter only, after CMPT 263 (Winter); Social Computing's CMPT 412 (Fall) needs CMPT 317 or 353 (both
+ * Winter, after CMPT 280 in Year 2's Winter).
+ */
+function chainTerms(completed: string[], inProgress: string[], planned: string[]): { terms: number; via: string } {
+  const done = new Set(completed)
+  const now = new Set(inProgress)
+  const mine = new Set([...completed, ...inProgress, ...planned])
+  const doneCu = completed.reduce((n, code) => n + cuOf(code), 0)
+  const memo = new Map<string, number>()
+  const afterCu = (cu: number) => Math.max(0, Math.ceil((cu - doneCu) / MAX_CU))
+  const earliest = (code: string, depth = 0): number => {
+    if (done.has(code)) return -1
+    if (now.has(code)) return 0
+    if (memo.has(code) || depth > 20) return memo.get(code) ?? 0
+    const info = courseInfo[code]
+    const pick = (group: string[]) => (group.some((o) => mine.has(o)) ? group.filter((o) => mine.has(o)) : group)
+    let t = 0
+    for (const group of info?.requires ?? []) if (group.length > 0) t = Math.max(t, Math.min(...pick(group).map((o) => earliest(o, depth + 1))) + 1)
+    for (const group of info?.concurrent ?? []) if (group.length > 0) t = Math.max(t, Math.min(...pick(group).map((o) => earliest(o, depth + 1))))
+    const level = levelOf(code)
+    if (level === 300) t = Math.max(t, afterCu(30))
+    if (level >= 400) t = Math.max(t, afterCu(60))
+    for (const rule of [...(creditPrereqs[code] ?? []), ...(courseInfo[code]?.creditRequires ?? [])]) {
+      t = Math.max(t, afterCu(rule.cu))
+      if (!rule.level && !rule.subjects) continue
+      // Credit units of a given level or subject: the plan's own such courses, earliest first.
+      const pool = [...mine]
+        .filter((o) => o !== code && (!rule.subjects || rule.subjects.includes(subjectOf(o))) && (!rule.level || levelOf(o) === rule.level))
+        .map((o) => ({ o, at: earliest(o, depth + 1) }))
+        .sort((a, b) => a.at - b.at)
+      let cu = 0
+      for (const { o, at } of pool) {
+        cu += cuOf(o)
+        if (cu >= rule.cu) {
+          t = Math.max(t, at + 1)
+          break
+        }
+      }
+    }
+    for (let tries = 0; tries < 2 && runsIn(code, t % 2 === 0 ? 'Fall' : 'Winter') === false; tries++) t++
+    memo.set(code, t)
+    return t
+  }
+  let best = { terms: 0, via: '' }
+  for (const code of planned) {
+    const terms = earliest(code) + 1
+    if (terms > best.terms) best = { terms, via: code }
+  }
+  return best
+}
+
 type Inv = 'I1' | 'I2' | 'I3' | 'I4' | 'I5' | 'I6' | 'I7' | 'I8' | 'I9' | 'I10'
 const INVS: Inv[] = ['I1', 'I2', 'I3', 'I4', 'I5', 'I6', 'I7', 'I8', 'I9', 'I10']
 
@@ -386,6 +508,8 @@ const unscheduled = (code: string) => !(offerings[code]?.length) && courseInfo[c
 
 function check(c: Case) {
   const v: Record<Inv, string[]> = Object.fromEntries(INVS.map((i) => [i, []])) as unknown as Record<Inv, string[]>
+  const variant = c.variant ?? 'bsc-4'
+  const set = VARIANTS[variant]
   const b = build(c)
   const { completed, inProgress, plan, timeline } = b
   const planned = plan.flatMap((t) => t.courses.map((x) => ({ ...x, term: t.label })))
@@ -435,8 +559,10 @@ function check(c: Case) {
       if (group.length > 0 && !group.some((o) => before.has(o) || now.has(o))) v.I3.push(`${x.code} (${x.term}) without its co-requisite ${group.join('/')}`)
     }
     for (const rule of [...(creditPrereqs[x.code] ?? []), ...(courseInfo[x.code]?.creditRequires ?? [])]) {
-      if (rule.standing === 'honours') {
-        v.I3.push(`${x.code} needs Honours standing, planned in a Four-year plan`)
+      // Honours standing: only an Honours plan may take it, and then only with the credit units it
+      // names (CMPT 400: 60 cu, after the Honours application).
+      if (rule.standing === 'honours' && variant !== 'bsc-honours') {
+        v.I3.push(`${x.code} needs Honours standing, planned in a ${set.name} plan`)
         continue
       }
       const have = cuIn(before, (code) => (!rule.subjects || rule.subjects.includes(subjectOf(code))) && (!rule.level || levelOf(code) === rule.level))
@@ -474,7 +600,7 @@ function check(c: Case) {
   const everything = [...completed, ...inProgress, ...named.map((x) => x.code)]
   const dup = everything.filter((code, i) => everything.indexOf(code) !== i)
   if (dup.length > 0) v.I5.push(`counted twice: ${[...new Set(dup)].join(', ')}`)
-  const audit = auditPlan([...new Set(everything)], slots.map((x) => x.code))
+  const audit = auditPlan([...new Set(everything)], slots.map((x) => x.code), set)
   v.I5.push(...audit.problems)
   // Never plan a 100-level course that its subject's junior cap leaves counting toward nothing.
   for (const x of named) {
@@ -498,7 +624,14 @@ function check(c: Case) {
     const last = fw.at(-1) ? orderOf(fw.at(-1)!.label) : 0
     let span = 0
     for (let o = first; o <= last; o++) if (o % 10 === 0 || o % 10 === 2) span++
-    if (span !== 8) v.I7.push(`${span} Fall/Winter terms from ${fw[0]?.label} to ${fw.at(-1)?.label} (a four-year degree is 8)`)
+    // Eight Fall/Winter terms (six for the Three-year), unless a published chain the plan must take
+    // can't fit: then the chain's own minimum, computed here from prerequisites, level gates and seasons.
+    const chain = chainTerms([...completed], inProgress, named.map((x) => x.code))
+    const want = Math.max(set.terms, chain.terms)
+    if (span !== want) {
+      const why = chain.terms > set.terms ? ` (${chain.via} needs ${chain.terms})` : ` (a ${set.name} degree is ${set.terms})`
+      v.I7.push(`${span} Fall/Winter terms from ${fw[0]?.label} to ${fw.at(-1)?.label}${why}`)
+    }
     const yearOf = (label: string) => {
       let n = 0
       for (let o = first; o <= orderOf(label); o++) if (o % 10 === 0 || o % 10 === 2) n++
@@ -516,6 +649,12 @@ function check(c: Case) {
     const il2 = il + inYear((code) => IL.includes(code) || slotIs(/indigenous/i)(code), 2)
     if (il2 < 3) v.I7.push('Indigenous learning not in Year 1 or 2')
     for (const m of ['MATH163', 'MATH164']) if (where.get(m) !== 1) v.I7.push(`${m} in Year ${where.get(m) ?? '?'}, not Year 1`)
+    // Honours: the thesis after admission to Honours (60 cu, applied for by May 1), so Year 3 at the earliest.
+    if (variant === 'bsc-honours' && !had.has('CMPT400')) {
+      const y = where.get('CMPT400')
+      if (y === undefined) v.I7.push('no CMPT 400 in an Honours plan')
+      else if (y < 3) v.I7.push(`CMPT400 in Year ${y}, before Honours admission`)
+    }
     const sci = inYear((code) => Object.values(SCIENCE_AREAS).flat().includes(code) || slotIs(/science/i)(code), 1)
     if (sci < 6) v.I7.push(`only ${sci} cu of junior science in Year 1`)
     for (const alt of CORE_200) {
@@ -545,7 +684,17 @@ function check(c: Case) {
     if (dead.length > 0) v.I8.push(`default target ${hero.spec.name} needs a course missing from the 2026-27 catalogue (${dead.map((g) => g.courses.join('/')).join('; ')})`)
     const tied = b.matches.filter((m) => m.remaining === hero.remaining && !m.spec.unavailable)
     if (tied.length > 1) {
-      const degreeCodes = new Set([...CORE_200.flatMap((x) => x.split('|')), 'CMPT141', 'CMPT145', ...CORE_SENIOR, ...MATH_LIST, 'STAT242', 'STAT245'])
+      // What the variant's page names outright (the Three-year names no senior core and no Mathematics List).
+      const degreeCodes = new Set([
+        ...CORE_200.flatMap((x) => x.split('|')),
+        'CMPT141',
+        'CMPT145',
+        'STAT242',
+        'STAT245',
+        ...(variant === 'bsc-3' ? [] : CORE_SENIOR),
+        ...(variant === 'bsc-4' ? MATH_LIST : []),
+        ...(variant === 'bsc-honours' ? codes('CMPT364 CMPT400 STAT241 MATH116 MATH134 MATH177') : []),
+      ])
       const overlap = (m: SpecializationMatch) => new Set(m.spec.requirements.flatMap((g) => g.courses).filter((code) => degreeCodes.has(code))).size
       const best = Math.max(...tied.map(overlap))
       const byName = [...tied].sort((x, y) => x.spec.name.localeCompare(y.spec.name))[0]
@@ -576,6 +725,7 @@ function check(c: Case) {
 
 const next = upcomingTerm(TODAY)
 const nextFall: TermStart = { season: 'Fall', year: next.season === 'Fall' ? next.year : next.year }
+const ALL_SPECS = computerScience.specializations.map((x) => x.id)
 const cases: Case[] = [
   { name: 'sample', kind: 'sample', completed: sampleCompleted, inProgress: sampleInProgress, terms: sampleTerms, start: next },
 ]
@@ -603,6 +753,24 @@ cases.push({ name: twins[0][0], kind: 'C', spec: specById('software-development'
 cases.push({ name: twins[0][1], kind: 'C', spec: specById('software-development'), completed: SWITCHER.filter((x) => x !== 'ENG113' && x !== 'ENG114'), inProgress: [], terms: {}, start: winter2027 })
 cases.push({ name: twins[1][0], kind: 'C', completed: [...C_COURSES, 'ENG112', 'ENG114'], inProgress: [], terms: {}, start: next })
 cases.push({ name: twins[1][1], kind: 'C', completed: C_COURSES, inProgress: [], terms: {}, start: next })
+// The Honours and Three-year variants (chosen in the plan's settings): the sample, a first-year with
+// the default target, and first-years (A) and first-years under way (B) aimed at a few specializations.
+const VARIANT_SPECS: Record<Exclude<Variant, 'bsc-4'>, string[]> = {
+  'bsc-honours': ALL_SPECS,
+  'bsc-3': ALL_SPECS,
+}
+for (const [variant, ids] of Object.entries(VARIANT_SPECS) as [Variant, string[]][]) {
+  const tag = variant === 'bsc-honours' ? 'H' : '3y'
+  cases.push({ name: `${tag} sample`, kind: 'sample', completed: sampleCompleted, inProgress: sampleInProgress, terms: sampleTerms, start: next, variant })
+  cases.push({ name: `${tag} A default`, kind: 'A', completed: [], inProgress: [], terms: {}, start: nextFall, variant })
+  cases.push({ name: `${tag} A default +summer`, kind: 'A', completed: [], inProgress: [], terms: {}, start: nextFall, springSummer: true, variant })
+  for (const id of ids) {
+    const spec = computerScience.specializations.find((x) => x.id === id)
+    if (!spec) throw new Error(`no specialization ${id}`)
+    cases.push({ name: `${tag} A ${id}`, kind: 'A', spec, completed: [], inProgress: [], terms: {}, start: nextFall, variant })
+    cases.push({ name: `${tag} B ${id}`, kind: 'B', spec, completed: [], inProgress: B_COURSES, terms: Object.fromEntries(B_COURSES.map((x) => [x, 'Fall'])), start: next, variant })
+  }
+}
 
 // I10: the inputs, read from App.tsx's source (they're React state, not pure functions).
 const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
