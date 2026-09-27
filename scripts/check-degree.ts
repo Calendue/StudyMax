@@ -250,8 +250,14 @@ function auditPlan(named: string[], slots: string[]): Audit {
   // Totals: 120 cu, at least 66 of them at the 200 level or higher (so at most 54 junior count).
   let junior = 0
   let senior = 0
-  for (const code of named) (levelOf(code) >= 200 ? (senior += cuOf(code)) : (junior += cuOf(code)))
-  for (const slot of slots) (SENIOR_SLOT.test(electiveLabel(slot)) ? (senior += 3) : (junior += 3))
+  for (const code of named) {
+    if (levelOf(code) >= 200) senior += cuOf(code)
+    else junior += cuOf(code)
+  }
+  for (const slot of slots) {
+    if (SENIOR_SLOT.test(electiveLabel(slot))) senior += 3
+    else junior += 3
+  }
   const totalCu = senior + Math.min(junior, 54)
   if (totalCu < 120) problems.push(`degree totals ${totalCu} cu that count (needs 120; ${junior} junior, of which at most 54 count)`)
   if (senior < 66) problems.push(`${senior} cu at the 200 level or higher (needs 66)`)
