@@ -213,6 +213,71 @@
   animation: climb-owl-flap 180ms ease-in-out infinite alternate;
 }
 
+.climb__owl-body {
+  transform-origin: 50% 70%;
+}
+
+/* Real flight: the two wing frames alternate, a full, unhurried beat every 380 ms. */
+.climb__owl-fly {
+  position: relative;
+  display: block;
+}
+
+.climb__owl-fly img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  user-select: none;
+  pointer-events: none;
+  animation: climb-owl-wing-a 380ms infinite;
+}
+
+.climb__owl-fly img + img {
+  animation-name: climb-owl-wing-b;
+}
+
+@keyframes climb-owl-wing-a {
+  0%,
+  49.9% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes climb-owl-wing-b {
+  0%,
+  49.9% {
+    opacity: 0;
+  }
+  50%,
+  100% {
+    opacity: 1;
+  }
+}
+
+/* Touchdown: a squash onto the twig and a small rebound. */
+.climb__owl-land {
+  transform-origin: 50% 100%;
+  animation: climb-owl-land 260ms var(--settle);
+}
+
+@keyframes climb-owl-land {
+  0% {
+    transform: scale(1.1, 0.86);
+  }
+  55% {
+    transform: scale(0.96, 1.05);
+  }
+  100% {
+    transform: none;
+  }
+}
+
 @keyframes climb-owl-in {
   to {
     opacity: 1;
