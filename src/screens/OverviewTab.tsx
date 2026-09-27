@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { MaxNudge } from './MaxNudge.tsx'
 import { useModel } from '../model.ts'
 import { KIND_LABEL, WHY_IT_MATTERS, WHY_SHORT, courseCode, plural } from '../format.ts'
 import { withoutRegistered, type SpecializationMatch } from '../lib/match.ts'
@@ -102,6 +103,7 @@ export function OverviewTab() {
           </p>
         </div>
       </Appear>
+      <MaxNudge index={1} />
       <Appear index={1}>
         <WhyItMatters />
       </Appear>

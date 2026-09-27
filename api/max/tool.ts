@@ -26,7 +26,7 @@ import type { AppAction, CallPlanInputs } from '../../src/lib/max/live.js'
 import type { ScenarioOp } from '../../src/lib/max/types.js'
 import { maxSkills } from '../../src/lib/max/skills.generated.js'
 import { planOptions, type OptionTopic } from '../../src/lib/max/options.js'
-import { programName, regenerate, speakableCourse, specializationName } from '../../src/lib/max/planningAdapter.js'
+import { programName, regenerate, speakableCourse, specializationName, underWayByTerm } from '../../src/lib/max/planningAdapter.js'
 import { computeMatches } from '../../src/lib/match.js'
 import { programs } from '../../src/data/programs/index.js'
 import { currentTermOf } from '../../src/lib/plan.js'
@@ -182,6 +182,8 @@ async function overviewFromCall(call: ResolvedCall, p: CallPlanInputs): Promise<
     },
     currentTerm: `${currentTerm.season} ${currentTerm.year}`,
     currentCourses: s.enrolled,
+    // Term by term: "what am I taking in Fall" is answered from its own term, never the whole year's list.
+    currentCoursesByTerm: underWayByTerm(adapterInput(s)),
     ...(s.droppedCourses.length > 0 ? { droppedInSavedPlan: s.droppedCourses } : {}),
     roadmap: {
       projectedGraduation: terms[terms.length - 1]?.label ?? null,

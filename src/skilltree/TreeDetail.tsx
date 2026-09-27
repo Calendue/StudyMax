@@ -144,6 +144,15 @@ export function TreeDetail({
         {node.elective && node.status !== 'next' ? 'Elective' : statusLabel(node)}
       </p>
       <p className="tree-detail__when">{when}</p>
+      {/* Moved here by hand (a drag on the tree, or Max): it stays in this term until they let go of it. */}
+      {Object.values(m.pinned).some((codes) => codes.includes(node.code)) && (
+        <p className="footnote tree-detail__pinned">
+          You put it in {node.term}.{' '}
+          <Button variant="secondary" onClick={() => m.unpinCourse(node.code)}>
+            Let the plan choose its term
+          </Button>
+        </p>
+      )}
       {(info?.creditUnits ?? 0) > 0 || isElective(node.code) ? <p className="footnote">{plural(node.cu, 'credit unit')}</p> : null}
       {node.status === 'next' && (
         <p className="footnote">Of everything still to take, this one counts toward the most credentials at once.</p>

@@ -13,6 +13,9 @@ const FRAME_GAP_MS = 1200
 const JOIN_TIMEOUT_MS = 4000
 const LINGER_AFTER_END_MS = 60_000
 const STORAGE_KEY = 'studymax.maxLive'
+/** Saves this device already took on, so a reopen never re-applies one over later changes. */
+const ADOPTED_KEY = 'studymax.maxLive.adopted'
+const ADOPTED_KEEP = 50
 const TERMINAL = new Set(['ended', 'failed', 'voicemail', 'no_answer'])
 
 export type Transport = 'realtime' | 'polling'
@@ -49,6 +52,8 @@ interface Options {
   onAction?: (action: AppAction) => void
   /** The student told Max a new name to go by. */
   onName?: (name: string) => void
+  /** False until the app's own saved session is loaded; nothing is followed (or adopted) before then. */
+  ready?: boolean
 }
 
 interface Saved {
@@ -58,9 +63,11 @@ interface Saved {
 
 const keyOf = (s: LiveScenario) => `${s.scenarioId}:${s.presentedHash ?? ''}`
 
+// localStorage, not sessionStorage: the call being followed survives closing the browser, so a change
+// Max saved while the app was closed (the student on the phone, app shut) is picked up on reopen.
 function readSaved(): Saved | null {
   try {
-    const s = JSON.parse(sessionStorage.getItem(STORAGE_KEY) ?? 'null') as Saved | null
+    const s = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null') as Saved | null
     return s && typeof s.token === 'string' && typeof s.callId === 'string' ? s : null
   } catch {
     return null
@@ -69,14 +76,31 @@ function readSaved(): Saved | null {
 
 function writeSaved(s: Saved | null) {
   try {
-    if (s) sessionStorage.setItem(STORAGE_KEY, JSON.stringify(s))
-    else sessionStorage.removeItem(STORAGE_KEY)
+    if (s) localStorage.setItem(STORAGE_KEY, JSON.stringify(s))
+    else localStorage.removeItem(STORAGE_KEY)
   } catch {
-    // storage blocked: a reload just won't rejoin
+    // storage blocked: a reopen just won't rejoin
   }
 }
 
-export function useMaxLive({ onCommitted, onAction, onName }: Options): MaxLive {
+function readAdopted(): Set<string> {
+  try {
+    const ids = JSON.parse(localStorage.getItem(ADOPTED_KEY) ?? '[]') as unknown
+    return new Set(Array.isArray(ids) ? ids.filter((x): x is string => typeof x === 'string') : [])
+  } catch {
+    return new Set()
+  }
+}
+
+function writeAdopted(ids: Set<string>) {
+  try {
+    localStorage.setItem(ADOPTED_KEY, JSON.stringify([...ids].slice(-ADOPTED_KEEP)))
+  } catch {
+    // storage blocked: at worst a reopen re-applies the same save
+  }
+}
+
+export function useMaxLive({ onCommitted, onAction, onName, ready = true }: Options): MaxLive {
   const [saved, setSaved] = useState<Saved | null>(readSaved)
   const [transport, setTransport] = useState<Transport | null>(null)
   const [callStatus, setCallStatus] = useState<string | null>(null)
@@ -93,7 +117,7 @@ export function useMaxLive({ onCommitted, onAction, onName }: Options): MaxLive 
   const queue = useRef<LiveFrame[]>([])
   const lastShown = useRef(0)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const adopted = useRef(new Set<string>())
+  const adopted = useRef(readAdopted())
   /** Which proposal the tree already shows, so a catch-up only redraws when Max actually changed it. */
   const shownKey = useRef<string | null>(null)
   const committedRef = useRef(onCommitted)
@@ -136,6 +160,7 @@ export function useMaxLive({ onCommitted, onAction, onName }: Options): MaxLive 
   const adopt = useCallback((scenarioId: string, inputs: LiveInputs, terms: PlannedTerm[]) => {
     if (adopted.current.has(scenarioId)) return
     adopted.current.add(scenarioId)
+    writeAdopted(adopted.current)
     queue.current = []
     committedRef.current(inputs, terms)
     // The app's own plan is now the saved one, so the tree drops the override without a jump.
@@ -203,6 +228,12 @@ export function useMaxLive({ onCommitted, onAction, onName }: Options): MaxLive 
         const snap = (await res.json()) as LiveSnapshot
         setCallStatus(snap.call.status)
         setEndedReason(snap.call.endedReason)
+        // The call's last save, even if a newer proposal is on top: take it on if this device hasn't.
+        const saved = snap.committed
+        if (saved && saved.frames.length > 0) {
+          const last = saved.frames[saved.frames.length - 1]
+          adopt(saved.scenarioId, last.inputs, last.terms)
+        }
         const s = snap.scenario
         if (s) {
           setScenario((prev) => (prev && prev.scenarioId === s.scenarioId && prev.status === s.status ? prev : s))
@@ -228,7 +259,7 @@ export function useMaxLive({ onCommitted, onAction, onName }: Options): MaxLive 
 
   // Follow the call: Realtime if we can, polling if we can't, re-reading the snapshot throughout.
   useEffect(() => {
-    if (!saved) return
+    if (!saved || !ready) return
     const { token } = saved
     let cancelled = false
     let channel: LiveChannel | null = null
@@ -275,7 +306,7 @@ export function useMaxLive({ onCommitted, onAction, onName }: Options): MaxLive 
       document.removeEventListener('visibilitychange', onVisible)
       channel?.close()
     }
-  }, [saved, apply, catchUp])
+  }, [saved, ready, apply, catchUp])
 
   // After the call ends with nothing left open, stop following it (the end state lingers a minute).
   useEffect(() => {

@@ -89,6 +89,10 @@ export interface TreeBand {
   heads: { lane: TreeLane; label: string; y: number }[]
   /** The internship year. */
   internship: boolean
+  /** The calendar term each lane stands for, from this year on (earlier years aren't dated): where a dragged course lands. */
+  terms?: Partial<Record<TreeLane, string>>
+  /** With a Spring/Summer lane: how far down the band (from its top) that lane runs before Fall and Winter start. */
+  summerTop?: number
 }
 
 export interface TreeNode {
@@ -647,7 +651,20 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
     // A lane with no card this year gets no head ("Winter 2028" over nothing reads as a missing term).
     const inLane = (lane: TreeLane) => [...drafts.values()].some((d) => d.year === year && d.lane === lane)
     const shown = heads.some((hd) => inLane(hd.lane)) ? heads.filter((hd) => inLane(hd.lane)) : heads
-    bands.push({ key: `year-${year}`, kind: 'year', year, label: `Year ${year}`, y, h, current: started && year === currentYear, heads: shown, internship })
+    const terms = year >= currentYear ? { fall: head('Fall'), winter: head('Winter'), summer: head('Spring/Summer') } : undefined
+    bands.push({
+      key: `year-${year}`,
+      kind: 'year',
+      year,
+      label: `Year ${year}`,
+      y,
+      h,
+      current: started && year === currentYear,
+      heads: shown,
+      internship,
+      ...(terms ? { terms } : {}),
+      ...(summer > 0 ? { summerTop: low - 6 } : {}),
+    })
     bandY.set(year, { y, h })
     y += h
   }

@@ -8,7 +8,7 @@
 //                                 proposal the app displayed (presentedHash).
 //
 // Holding the call's liveToken is the authorization: 192 random bits, returned only to whoever placed
-// the call, and dead two hours after it ends.
+// the call, and dead a day after it ends.
 import { db, hasDatabase } from '../_db.js'
 import { publish } from './_live.js'
 import { adapterInput, commitScenario, discardScenario, liveInputs, liveScenarioOf, snapshotFromCall } from './_scenarios.js'
@@ -29,7 +29,9 @@ interface VercelResponse {
 }
 
 const TOKEN_RE = /^[A-Za-z0-9_-]{20,64}$/
-const EXPIRES_AFTER_END_MS = 2 * 60 * 60 * 1000
+// A day, not two hours: a change Max saved while the app was closed is only picked up when the app next
+// reads this, which can be the next morning.
+const EXPIRES_AFTER_END_MS = 24 * 60 * 60 * 1000
 const TERMINAL = new Set(['ended', 'failed', 'voicemail', 'no_answer'])
 
 function tokenFrom(req: VercelRequest): string | null {
@@ -79,11 +81,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       where: { callId: call.callId, status: { in: ['presented', 'committed', 'discarded'] } },
       orderBy: { updatedAt: 'desc' },
     })
+    // The last save on this call, even when a later proposal is what's on screen: it's the one the app
+    // must have adopted (each save builds on the one before, so the last is the whole story).
+    const lastSaved =
+      latest?.status === 'committed'
+        ? latest
+        : await db().scenario.findFirst({ where: { callId: call.callId, status: 'committed' }, orderBy: { updatedAt: 'desc' } })
     const snapshot: LiveSnapshot = {
       call: { callId: String(call.callId), status: call.status, endedReason: call.endedReason },
       parity,
       baseline,
       scenario: latest ? liveScenarioOf(latest) : null,
+      committed: lastSaved ? liveScenarioOf(lastSaved) : null,
       seq: Date.now(),
     }
     res.status(200).json(snapshot)

@@ -11,6 +11,7 @@ import { authHeader, startPhoneVerification, type PhoneVerificationSession } fro
 import { api } from '../platform.ts'
 import { ActionBar, ScreenBody, ScreenTitle, TopBar } from '../ui/chrome.tsx'
 import { Icon } from '../ui/Icon.tsx'
+import { MaxOwl } from '../ui/MaxOwl.tsx'
 import { Appear, Button, Group, Row } from '../ui/primitives.tsx'
 
 const RECAPTCHA_CONTAINER_ID = 'ping-max-recaptcha'
@@ -266,8 +267,8 @@ export function PingMaxScreen() {
             <span className="pulse__ring" />
             <span className="pulse__ring" />
             <span className="pulse__ring" />
-            <span className="pulse__core">
-              <Icon name={step === 'placed' ? 'check' : 'phone'} size={34} />
+            <span className="pulse__core pulse__core--quiet">
+              <MaxOwl pose={step === 'placed' ? 'talking' : 'thinking'} size={72} />
             </span>
           </div>
           <div className="call-state__text" aria-live="polite">
@@ -292,6 +293,7 @@ export function PingMaxScreen() {
     <>
       <TopBar onBack={() => m.go('results', -1)} backLabel="Results" />
       <ScreenBody>
+        <MaxOwl pose="idle" size={88} className="ping-max__owl" label="Max, the StudyMax owl" />
         <ScreenTitle lead="Max calls you, reads your real roadmap, and can save a change on a clear yes — all from one phone call.">
           Ping Max
         </ScreenTitle>
