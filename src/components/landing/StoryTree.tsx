@@ -102,6 +102,15 @@ export function Links({ g, grown, live }: { g: ClimbGeometry; grown: number; liv
           ) : null,
         )}
       </defs>
+      {live.has(0) && grown >= 0 && (
+        <g className="climb-link climb-link--sap is-live" style={{ '--len': g.sap.len } as CSSProperties}>
+          <filter id="climb-sap-glow" filterUnits="userSpaceOnUse" x={g.sap.box.x} y={g.sap.box.y} width={g.sap.box.w} height={g.sap.box.h}>
+            <feGaussianBlur stdDeviation="7" />
+          </filter>
+          <path d={g.sap.d} className="climb-link__signal" filter="url(#climb-sap-glow)" />
+          <path d={g.sap.d} className="climb-link__signal climb-link__signal--core" />
+        </g>
+      )}
       <g mask="url(#climb-cards)">
         {g.links.map((l, i) => {
           const on = l.from <= grown && (live.has(l.beat) || live.has(l.from))

@@ -27,8 +27,8 @@ export const beatIndex = (id: BeatId) => BEATS.findIndex((b) => b.id === id)
 export const ROOTS = {
   headline: 'Your university hides things in plain sight.',
   promise:
-    'Upload your transcript. StudyMax finds the credential you’re closest to, the one course that gets you there fastest, and calls you before your next award closes.',
-  note: 'End to end for Computer Science at USask. Everyone else still gets the awards.',
+    'Upload your transcript. StudyMax finds the credential you’re closest to and the one course that counts toward the most at once. One tap, and it calls you about the next award to close.',
+  note: `End to end for Computer Science at USask. Every USask student gets the awards, and ${FACTS.plannedMajors} more majors get a plan.`,
 }
 
 export const PROBLEM = {
@@ -45,10 +45,10 @@ export const SCATTERED = {
   headline: 'It was all there. Just scattered.',
   body: 'Across catalogue pages, program pages and award listings nobody reads end to end.',
   facts: [
-    { figure: FACTS.courses, label: 'courses in the USask catalogue' },
+    { figure: FACTS.courses, label: 'undergraduate courses in the USask catalogue' },
     { figure: FACTS.csSpecializations, label: 'Computer Science specializations' },
-    { figure: FACTS.certificatesAndMinors, label: 'certificates and minors to add on' },
-    { figure: FACTS.awards, label: `awards and bursaries, ${FACTS.awardDeadlines} with a published deadline` },
+    { figure: FACTS.certificatesAndMinors, label: 'certificates and minors we map on top' },
+    { figure: FACTS.awards, label: `awards we track, only ${FACTS.awardDeadlines} with a listed deadline` },
   ],
 }
 
@@ -60,7 +60,7 @@ export const GUIDE = {
 export const STEPS: { icon: IconName; title: string; body: string }[] = [
   { icon: 'upload', title: 'Upload your transcript', body: 'A DegreeWorks audit or an unofficial transcript PDF.' },
   { icon: 'target', title: 'See what you’re closest to', body: 'The specialization, certificate or minor nearest to done.' },
-  { icon: 'spark', title: 'Take the one course that moves you furthest', body: 'The single course that counts toward the most of it.' },
+  { icon: 'spark', title: 'Find the one course that counts most', body: 'The single course that counts toward the most specializations at once.' },
   { icon: 'plan', title: 'Follow a term-by-term plan', body: 'Prerequisites included, even the ones the program page never lists.' },
   { icon: 'phone', title: 'Get a call before the award closes', body: 'One phone call about the deadline closing soonest.' },
 ]
@@ -77,7 +77,7 @@ export const MORE = {
   headline: 'And a few more branches.',
   leaves: [
     { icon: 'seat', title: 'Class Tracker', body: 'Watch a full section and see the moment a seat opens.' },
-    { icon: 'award', title: 'Awards by deadline', body: 'Ranked by how soon they close, with why each one fits you.' },
+    { icon: 'award', title: 'Awards by deadline', body: 'The next one to close up top, and why each one fits you.' },
     { icon: 'compare', title: 'What if…', body: 'Put another credential beside yours and compare the plans.' },
     { icon: 'share', title: 'Share your path', body: 'Your result as one image, ready to post or send.' },
     {
@@ -90,7 +90,7 @@ export const MORE = {
 }
 
 export const TEAM = {
-  headline: 'Built by four of us, in 24 hours.',
+  headline: 'Built by the four of us.',
   names: ['Ayo Ogunade', 'Sam Lafiaji', 'Tobi Salam', 'Ibraheem Arif'],
   close: 'For the students we were on day one.',
 }

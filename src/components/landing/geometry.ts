@@ -85,6 +85,8 @@ export interface ClimbGeometry {
   branches: Wood[]
   crown: Wood[]
   links: Link[]
+  /** Sap: a signal rising up the trunk out of the roots, from the soil to the first beat. */
+  sap: { d: string; len: number; box: Box }
   /** Every card's box: the links pass under them. */
   cards: Box[]
   /** Where the dusk sky meets the page. */
@@ -237,6 +239,10 @@ export function growClimb(input: ClimbInput): ClimbGeometry {
   const trunkShade = strip(0.2, 0.5)
   const trunkLine = line(samples)
 
+  const sapPoints = samples.filter((p) => p.y >= (input.beatTops[1] ?? top.y) + 40)
+  const sapStart = { x: base.x, y: base.y + (compact ? 30 : 70) }
+  const sap = { d: line([sapStart, ...sapPoints]), len: Math.round(lengthOf([sapStart, ...sapPoints])), box: boundsOf([sapStart, ...sapPoints], 24) }
+
   const grownAt = input.beatTops.map((y, i) =>
     i === input.beatTops.length - 1 ? 1 : Math.min(1, fractionAt(y - (compact ? 40 : 90))),
   )
@@ -344,6 +350,7 @@ export function growClimb(input: ClimbInput): ClimbGeometry {
     branches,
     crown,
     links,
+    sap,
     cards: [...[...input.twigs, ...input.chain, ...input.blossoms].map((t) => t.box), ...input.masks],
     dusk: input.dusk,
     soil,

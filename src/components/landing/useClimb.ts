@@ -232,7 +232,7 @@ export function useClimb(stageRef: RefObject<HTMLDivElement | null>, reduce: boo
           break
         }
       }
-    return Math.round((width / 2 - x) * 0.14 * 10) / 10
+    return Math.round((width / 2 - x) * 0.14)
   }, [])
 
   // ── the presenter's keys: a clicker's Next goes up the tree, beat by beat ──

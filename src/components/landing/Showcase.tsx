@@ -79,7 +79,10 @@ function layout(width: number) {
 
   // Links straight from the catalogue: a course's prerequisites that are on the tree, up into it.
   const pairs: { from: string; to: string }[] = []
-  for (const n of nodes) for (const p of prerequisitesOf(n.code)) if (shown.has(p) && p !== n.code) pairs.push({ from: p, to: n.code })
+  // A prerequisite the catalogue lets you take alongside (MATH 110 with CMPT 141) doesn't sequence, as in the app.
+  const rowOf = new Map(COURSES.map((c) => [c.code, c.row]))
+  for (const n of nodes)
+    for (const p of prerequisitesOf(n.code)) if (shown.has(p) && rowOf.get(p)! < rowOf.get(n.code)!) pairs.push({ from: p, to: n.code })
   pairs.push({ from: NEXT, to: LEAF })
   const spread = (list: string[], key: string, box: { x: number; w: number }) => {
     const i = list.indexOf(key)

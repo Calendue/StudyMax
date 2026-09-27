@@ -12,9 +12,10 @@ export const FACTS = {
   courses: count(catalogueCourses.length),
   csSpecializations: count(computerScience.specializations.length),
   certificatesAndMinors: count(programs.filter((p) => p.kind === 'certificate' || p.kind === 'minor').length),
-  programs: count(programs.length),
+  /** Majors besides Computer Science that get a plan (the empty stubs don't count). */
+  plannedMajors: count(programs.filter((p) => (p.kind ?? 'major') === 'major' && p.id !== computerScience.id && p.specializations.length > 0).length),
   awards: count(usask.resources.length),
-  /** Awards whose deadline is published, rather than "Not listed". */
+  /** Awards whose deadline is listed, rather than "Not listed". */
   awardDeadlines: count(usask.resources.filter((r) => !/^not listed/i.test(r.deadline)).length),
 }
 

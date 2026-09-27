@@ -172,6 +172,7 @@
 
 .climb__world {
   position: relative;
+  will-change: transform; /* the camera pans it every frame: keep it on its own layer */
 }
 
 .climb__wood,
@@ -301,6 +302,19 @@
 .climb-link__signal--core {
   stroke: var(--signal-core);
   stroke-width: 2;
+}
+
+/* Sap: a longer, slower bead rising up the trunk out of the roots. */
+.climb-link--sap .climb-link__signal {
+  --bead: 90px;
+  stroke-width: 12;
+  animation-duration: 5.2s;
+  animation-delay: 1s;
+}
+
+.climb-link--sap .climb-link__signal--core {
+  stroke: var(--signal-core);
+  stroke-width: 4;
 }
 
 @keyframes climb-signal {
