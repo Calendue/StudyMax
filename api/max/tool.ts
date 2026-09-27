@@ -19,6 +19,7 @@ import {
   type CallScope,
 } from './_scenarios.js'
 import { publish, uiVisible } from './_live.js'
+import { DEMO_AUTH_UID } from './_demoUser.js'
 import type { CallPlanInputs } from '../../src/lib/max/live.js'
 import type { ScenarioOp } from '../../src/lib/max/types.js'
 import { maxSkills } from '../../src/lib/max/skills.generated.js'
@@ -99,11 +100,13 @@ interface ResolvedCall {
   /** The app's plan inputs at call time, advanced on each save — Max plans exactly what's on screen. */
   planInputs: CallPlanInputs | null
   uiSeenAt: Date | null
+  /** The shared demo student: nothing personal may be written to it (it reaches the next guest). */
+  isGuest: boolean
 }
 
 async function resolveCall(vapiCallId: string | null): Promise<ResolvedCall | null> {
   if (!vapiCallId) return null
-  const call = await db().maxCall.findUnique({ where: { vapiCallId } })
+  const call = await db().maxCall.findUnique({ where: { vapiCallId }, include: { user: { select: { authUid: true } } } })
   if (!call || call.status === 'ended' || call.status === 'failed') return null
   return {
     callId: call.callId,
@@ -111,10 +114,11 @@ async function resolveCall(vapiCallId: string | null): Promise<ResolvedCall | nu
     liveToken: call.liveToken,
     planInputs: (call.planInputs as CallPlanInputs | null) ?? null,
     uiSeenAt: call.uiSeenAt,
+    isGuest: call.user.authUid === DEMO_AUTH_UID,
   }
 }
 
-const scopeOf = (call: ResolvedCall): CallScope => ({ callId: call.callId, planInputs: call.planInputs })
+const scopeOf = (call: ResolvedCall): CallScope => ({ callId: call.callId, planInputs: call.planInputs, isGuest: call.isGuest })
 
 type ToolResponse = Record<string, unknown>
 
@@ -375,10 +379,13 @@ const NAME_RE = /^.{1,60}$/
 /** Lets Max update the student's name mid-call (e.g. "actually, call me James") and use it for the
  * rest of that same call — Vapi bakes {{name}} into the system prompt once at call start and never
  * re-templates it, so a tool result is the only way a correction actually takes for the rest of the call. */
-async function runUpdateName(userId: bigint, args: Record<string, unknown>): Promise<ToolResponse> {
+async function runUpdateName(call: ResolvedCall, args: Record<string, unknown>): Promise<ToolResponse> {
   const name = typeof args.name === 'string' ? args.name.trim() : ''
   if (!NAME_RE.test(name)) return { ok: false, code: 'INVALID_NAME', speakable: "I didn't catch a usable name there." }
-  const user = await db().userInfo.update({ where: { userId }, data: { firstName: name } })
+  // A guest is the demo student every guest shares: saving their name there would greet the next guest
+  // by it. The tool result alone carries it through this call.
+  if (call.isGuest) return { ok: true, name }
+  const user = await db().userInfo.update({ where: { userId: call.userId }, data: { firstName: name } })
   return { ok: true, name: user.firstName }
 }
 
@@ -395,7 +402,7 @@ async function executeTool(name: string, call: ResolvedCall, args: Record<string
     case 'get_plan_options':
       return runGetPlanOptions(call, args)
     case 'update_name':
-      return runUpdateName(call.userId, args)
+      return runUpdateName(call, args)
     case 'load_skill':
       return runLoadSkill(args)
     default:

@@ -6,6 +6,7 @@
 // to live in the shared useStudyMax() model, since none of it is read by any other screen.
 import { useEffect, useState } from 'react'
 import { useModel } from '../model.ts'
+import { lastFour, readGuestCall, updateGuestCall } from '../maxLive/guestCall.ts'
 import { authHeader, startPhoneVerification, type PhoneVerificationSession } from '../auth.ts'
 import { api } from '../platform.ts'
 import { ActionBar, ScreenBody, ScreenTitle, TopBar } from '../ui/chrome.tsx'
@@ -45,30 +46,6 @@ interface MaxSettingsState {
   hasMetMax: boolean
 }
 
-// A guest's number and consent for this browser tab only — sent with each call, never saved to the
-// demo student every guest shares (which made Ping Max ring the last guest's phone).
-const GUEST_KEY = 'studymax.maxGuestCall'
-interface GuestCall {
-  phoneE164: string
-  consent: boolean
-}
-function readGuestCall(): GuestCall | null {
-  try {
-    const g = JSON.parse(sessionStorage.getItem(GUEST_KEY) ?? 'null') as GuestCall | null
-    return g && typeof g.phoneE164 === 'string' ? g : null
-  } catch {
-    return null
-  }
-}
-function writeGuestCall(g: GuestCall | null) {
-  try {
-    if (g) sessionStorage.setItem(GUEST_KEY, JSON.stringify(g))
-    else sessionStorage.removeItem(GUEST_KEY)
-  } catch {
-    // storage blocked: they'll just confirm the number again next time
-  }
-}
-const lastFour = (phone: string) => phone.replace(/\D/g, '').slice(-4)
 
 type Step = 'loading' | 'phone' | 'code' | 'consent' | 'ready' | 'calling' | 'placed' | 'error'
 
@@ -108,7 +85,12 @@ export function PingMaxScreen() {
         // A guest's number and consent come from this session, not the server.
         const guest = raw.isGuest ? readGuestCall() : null
         const data = raw.isGuest
-          ? { ...raw, phoneVerified: Boolean(guest), phoneHint: guest ? lastFour(guest.phoneE164) : null, consentGranted: guest?.consent === true }
+          ? {
+              ...raw,
+              phoneVerified: Boolean(guest?.phoneE164),
+              phoneHint: guest?.phoneE164 ? lastFour(guest.phoneE164) : null,
+              consentGranted: Boolean(guest?.phoneE164) && guest?.consent === true,
+            }
           : raw
         setSettings(data)
         setStep(!data.phoneVerified ? 'phone' : !data.consentGranted ? 'consent' : 'ready')
@@ -140,7 +122,7 @@ export function PingMaxScreen() {
     const data = (await res.json()) as MaxSettingsState
     if (data.isGuest) {
       // A new number asks for consent again: it's consent to call *this* number.
-      writeGuestCall({ phoneE164, consent: false })
+      updateGuestCall({ phoneE164, consent: false })
       data.consentGranted = false
     }
     setSettings(data)
@@ -195,8 +177,8 @@ export function PingMaxScreen() {
       const data = (await res.json()) as MaxSettingsState
       if (data.isGuest) {
         const guest = readGuestCall()
-        if (!guest) throw new Error('no number for this session')
-        writeGuestCall({ ...guest, consent: true })
+        if (!guest?.phoneE164) throw new Error('no number for this session')
+        updateGuestCall({ consent: true })
         Object.assign(data, { phoneVerified: true, phoneHint: lastFour(guest.phoneE164), consentGranted: true })
       }
       setSettings(data)
@@ -222,7 +204,9 @@ export function PingMaxScreen() {
           planInputs: m.maxPlanInputs,
           dryRun: REHEARSE,
           // A guest's number for this call: the server never uses one stored on the shared demo account.
-          ...(settings?.isGuest ? { phoneE164: readGuestCall()?.phoneE164, consent: readGuestCall()?.consent === true } : {}),
+          ...(settings?.isGuest
+            ? { phoneE164: readGuestCall()?.phoneE164, consent: readGuestCall()?.consent === true, name: readGuestCall()?.name }
+            : {}),
         }),
       })
       const data = (await res.json().catch(() => ({}))) as { error?: string; callId?: string; liveToken?: string }
@@ -230,6 +214,8 @@ export function PingMaxScreen() {
         setError(
           data.error === 'NO_PROFILE'
             ? NO_PROFILE_MESSAGE
+            : data.error === 'MAX_BUSY'
+            ? 'Max is on another call right now — try again in a few minutes.'
             : data.error === 'ALREADY_ON_A_CALL'
             ? 'Max is already on a call with you.'
             : data.error === 'PHONE_NOT_VERIFIED'

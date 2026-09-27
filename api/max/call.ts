@@ -44,7 +44,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return
   }
 
-  const body = (req.body ?? {}) as { planInputs?: unknown; dryRun?: unknown; phoneE164?: unknown; consent?: unknown }
+  const body = (req.body ?? {}) as { planInputs?: unknown; dryRun?: unknown; phoneE164?: unknown; consent?: unknown; name?: unknown }
   // A rehearsal without a phone (scripts/max-rehearse.ts): only where MAX_DRY_RUN=1 is set — never Production.
   const dryRun = body.dryRun === true && process.env.MAX_DRY_RUN === '1'
 
@@ -148,8 +148,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const currentTerm = currentTermOf(new Date())
-  const firstName = user.firstName ?? 'there'
-  const isFirstCall = !settings?.hasMetMax
+  // A guest's name is the one they gave this session, or none — never the shared demo student's
+  // ("Demo", or whatever the last guest asked to be called). And every guest meets Max for the first
+  // time: "has met Max" on the shared account belongs to whoever called last.
+  const guestName = resolved.isGuest && typeof body.name === 'string' ? body.name.trim().slice(0, 60) : ''
+  const firstName = resolved.isGuest ? guestName || null : (user.firstName ?? null)
+  const isFirstCall = resolved.isGuest ? true : !settings?.hasMetMax
 
   // A call row that never heard its end (a lost webhook) would hold max_call_one_active_uq forever
   // and lock this student out of Max. No call outlives maxDurationSeconds (20 min), so anything
@@ -177,8 +181,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
     })
   } catch {
-    // max_call_one_active_uq: already queued/ringing/in_progress for this student.
-    res.status(409).json({ error: 'ALREADY_ON_A_CALL' })
+    // max_call_one_active_uq: already queued/ringing/in_progress for this student. Every guest is the
+    // same demo student, so for a guest it's someone else's call, not theirs.
+    res.status(409).json({ error: resolved.isGuest ? 'MAX_BUSY' : 'ALREADY_ON_A_CALL' })
     return
   }
   console.log(`[Max] call ${call.callId} placed${dryRun ? ' (dry run)' : ''} — ${planInputs ? `app inputs, parity=${parity}` : 'saved plan'}`)
@@ -198,7 +203,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       customer: { number: dial! },
       assistantOverrides: {
         variableValues: {
-          name: firstName,
+          name: firstName ?? "not given yet — ask what they'd like to be called if you need it",
           programLine: [profile.degree, programName(programId)].filter(Boolean).join(', '),
           currentTerm: `${currentTerm.season} ${currentTerm.year}`,
           currentCoursesLine: currentCourses.length > 0 ? currentCourses.join(', ') : 'none',
@@ -208,8 +213,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           wellnessResourceLine: WELLNESS_FALLBACK,
         },
         firstMessage: isFirstCall
-          ? `Hi ${firstName}, this is Max from StudyMax — I help you plan your degree. I've got your roadmap in front of me. What's on your mind?`
-          : `Hi ${firstName}, it's Max. What can I help with?`,
+          ? `Hi${firstName ? ` ${firstName}` : ''}, this is Max from StudyMax — I help you plan your degree. I've got your roadmap in front of me. What's on your mind?`
+          : `Hi${firstName ? ` ${firstName}` : ''}, it's Max. What can I help with?`,
         metadata: { callRowId: String(call.callId) },
       },
     })
