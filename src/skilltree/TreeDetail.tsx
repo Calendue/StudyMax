@@ -6,6 +6,7 @@ import { courseInfo } from '../data/prereqs.ts'
 import { haptic } from '../platform.ts'
 import { laneSeason, type SkillTreeLayout, type TreeNode } from '../lib/skillTree.ts'
 import { Button, Ring } from '../ui/primitives.tsx'
+import { CourseChanges, CourseWarnings } from '../ui/WhatChanged.tsx'
 import { statusLabel, type TreeSelection } from './planView.ts'
 
 export function Swatch({ kind, hue }: { kind?: string; hue?: number }) {
@@ -38,10 +39,13 @@ export function TreeDetail({
   layout,
   selection,
   onSelect,
+  onChanged,
 }: {
   layout: SkillTreeLayout
   selection: TreeSelection
   onSelect: (next: TreeSelection) => void
+  /** After a "Something changed?" action: the plan moves, so a phone's sheet makes way for the summary. */
+  onChanged?: () => void
 }) {
   const m = useModel()
   const toCourse = (code: string) => onSelect({ kind: 'node', code })
@@ -128,6 +132,9 @@ export function TreeDetail({
           : `Registered for ${node.term}`
         : node.term
   const done = m.completed.has(node.code)
+  // A course the student said they failed or withdrew from is undone there, not with Mark done.
+  const statusSaid = m.overrides.some((o) => o.code === node.code && (o.kind === 'failed' || o.kind === 'withdrew'))
+  const state = node.status === 'completed' ? 'done' : node.status === 'inProgress' ? (node.current ? 'now' : 'registered') : 'planned'
   return (
     <div className="tree-detail">
       {title && <p className="lead tree-detail__lead">{title}</p>}
@@ -206,17 +213,23 @@ export function TreeDetail({
         </section>
       )}
 
-      <Button
-        block
-        variant={done ? 'secondary' : 'primary'}
-        icon={done ? 'restart' : 'check'}
-        onClick={() => {
-          haptic.light()
-          m.toggleCourse(node.code)
-        }}
-      >
-        {done ? 'Undo: not done yet' : 'Mark done'}
-      </Button>
+      <CourseWarnings code={node.code} />
+
+      {!statusSaid && (
+        <Button
+          block
+          variant={done ? 'secondary' : 'primary'}
+          icon={done ? 'restart' : 'check'}
+          onClick={() => {
+            haptic.light()
+            m.toggleCourse(node.code)
+          }}
+        >
+          {done ? 'Undo: not done yet' : 'Mark done'}
+        </Button>
+      )}
+
+      <CourseChanges code={node.code} term={node.termKnown || node.status !== 'completed' ? node.term : undefined} state={state} onDone={onChanged} />
     </div>
   )
 }

@@ -1,5 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react'
-import { MAX_COURSES_PER_TERM, MAX_SUMMER_COURSES } from '../lib/cloudSession.ts'
+import { DEFAULT_SUMMER_LOAD, FW_LOADS, SUMMER_LOADS } from '../lib/planner/loads.ts'
 import { motion, useReducedMotion } from 'motion/react'
 import { useModel } from '../model.ts'
 import type { Internship, Screen } from '../App.tsx'
@@ -636,7 +636,12 @@ export function RegisteredScreen() {
         role="switch"
         aria-checked={m.springSummer}
         className={`toggle-card${m.springSummer ? ' toggle-card--on' : ''}`}
-        onClick={() => m.setSpringSummer(!m.springSummer)}
+        onClick={() => {
+          const on = !m.springSummer
+          m.setSpringSummer(on)
+          // On with 0 classes is off, so turning it on starts at the default.
+          if (on && m.summerPerTerm < 1) m.setSummerPerTerm(DEFAULT_SUMMER_LOAD)
+        }}
       >
         <span className="toggle-card__body">
           <span className="toggle-card__title">Spring and Summer classes</span>
@@ -649,7 +654,7 @@ export function RegisteredScreen() {
 
       <Field label="Classes per term" hint="Fall and Winter" index={2}>
         <div className="opt-chips" role="radiogroup" aria-label="Classes per term" data-choices>
-          {Array.from({ length: MAX_COURSES_PER_TERM }, (_, i) => i + 1).map((n) => (
+          {FW_LOADS.map((n) => (
             <OptionChip key={n} selected={m.coursesPerTerm === n} onClick={() => m.setCoursesPerTerm(n)}>
               <span className="tnum">{n}</span>
             </OptionChip>
@@ -659,7 +664,7 @@ export function RegisteredScreen() {
       {m.springSummer && (
         <Field label="Spring/Summer classes" hint="Most per term" index={3}>
           <div className="opt-chips" role="radiogroup" aria-label="Spring/Summer classes" data-choices>
-            {Array.from({ length: MAX_SUMMER_COURSES }, (_, i) => i + 1).map((n) => (
+            {SUMMER_LOADS.filter((n) => n > 0).map((n) => (
               <OptionChip key={n} selected={m.summerPerTerm === n} onClick={() => m.setSummerPerTerm(n)}>
                 <span className="tnum">{n}</span>
               </OptionChip>
