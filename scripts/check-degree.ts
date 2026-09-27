@@ -317,9 +317,13 @@ function check(c: Case) {
     // Eight Fall/Winter terms (six for the Three-year), unless a published chain the plan must take
     // can't fit: then the chain's own minimum, computed here from prerequisites, level gates and seasons.
     const chain = chainTerms([...completed], inProgress, named.map((x) => x.code))
-    const want = Math.max(set.terms, chain.terms)
+    // Seats: a full-year course (CMPT 400.3, Fall and Winter) takes a seat in each of its two terms,
+    // so the Honours' 40 courses need 41 seats: 9 Fall/Winter terms at a load of 5.
+    const seats = timeline.flatMap((t) => t.courses).reduce((n, x) => n + (!isElective(x.code) && courseInfo[x.code]?.offered === 'full-year' ? 2 : 1), 0)
+    const seatTerms = Math.ceil(seats / LOAD)
+    const want = Math.max(set.terms, chain.terms, seatTerms)
     if (span !== want) {
-      const why = chain.terms > set.terms ? ` (${chain.via} needs ${chain.terms})` : ` (a ${set.name} degree is ${set.terms})`
+      const why = chain.terms > set.terms && chain.terms >= seatTerms ? ` (${chain.via} needs ${chain.terms})` : seatTerms > set.terms ? ` (${seats} seats need ${seatTerms})` : ` (a ${set.name} degree is ${set.terms})`
       v.I7.push(`${span} Fall/Winter terms from ${fw[0]?.label} to ${fw.at(-1)?.label}${why}`)
     }
     const yearOf = (label: string) => {
