@@ -47,7 +47,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return
   }
 
-  const body = (req.body ?? {}) as { planInputs?: unknown; dryRun?: unknown; phoneE164?: unknown; consent?: unknown; name?: unknown }
+  const body = (req.body ?? {}) as { planInputs?: unknown; dryRun?: unknown; phoneE164?: unknown; consent?: unknown; name?: unknown; deviceId?: unknown }
   // A rehearsal without a phone (scripts/max-rehearse.ts): only where MAX_DRY_RUN=1 is set — never Production.
   const dryRun = body.dryRun === true && process.env.MAX_DRY_RUN === '1'
 
@@ -68,7 +68,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.status(500).json({ error: 'demo student not seeded — run npm run db:seed:demo-student' })
     return
   }
-  const user = await db().userInfo.findUnique({ where: { userId: resolved.userId } })
+  // A guest's own device: each browser or phone sends a random id it keeps, and its calls, proposals
+  // and saves live on a guest row of its own (cloned from the demo student), never on the account that
+  // owns the phone number and never on the demo student another guest is using.
+  const deviceUser = resolved.isGuest ? await guestForDevice(body.deviceId, resolved.userId) : null
+  const user = deviceUser ?? (await db().userInfo.findUnique({ where: { userId: resolved.userId } }))
   if (!user) {
     res.status(500).json({ error: 'demo student not seeded — run npm run db:seed:demo-student' })
     return
@@ -126,7 +130,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let account = user
   let accountSettings = settings
   let isGuest = resolved.isGuest
-  if (isGuest && dial) {
+  if (isGuest && dial && !deviceUser) {
     const ownerId = await accountForPhone(dial)
     const owner = ownerId ? await db().userInfo.findUnique({ where: { userId: ownerId } }) : null
     if (owner) {
@@ -280,3 +284,52 @@ function allowedToDial(phone: string): boolean {
   const allowed = (process.env.MAX_ALLOWED_NUMBERS ?? '').split(',').map(digits).filter(Boolean)
   return allowed.includes(digits(phone))
 }
+
+/** The guest row for one device (authUid "guest-device:<id>"), made on its first call from the demo student's profile and plan. */
+async function guestForDevice(raw: unknown, demoUserId: bigint) {
+  if (typeof raw !== 'string' || !/^[A-Za-z0-9_-]{16,64}$/.test(raw)) return null
+  const authUid = `guest-device:${raw}`
+  const found = await db().userInfo.findUnique({ where: { authUid } })
+  if (found) return found
+  const [profile, plan] = await Promise.all([
+    db().studentProfile.findUnique({ where: { userId: demoUserId } }),
+    db().generatedPlan.findUnique({ where: { userId: demoUserId } }),
+  ])
+  if (!profile || !plan) return null
+  try {
+    return await db().userInfo.create({
+      data: {
+        authUid,
+        profile: {
+          create: {
+            studentType: profile.studentType,
+            institutionId: profile.institutionId,
+            degree: profile.degree,
+            majorProgramId: profile.majorProgramId,
+            minorProgramId: profile.minorProgramId,
+            concentrationIds: profile.concentrationIds,
+            startingTermSeason: profile.startingTermSeason,
+            startingTermYear: profile.startingTermYear,
+            springSummer: profile.springSummer,
+            maxCoursesPerTerm: profile.maxCoursesPerTerm,
+            maxSummerCourses: profile.maxSummerCourses,
+          },
+        },
+        plan: {
+          create: {
+            targetProgramId: plan.targetProgramId,
+            targetSpecializationIds: plan.targetSpecializationIds,
+            coursesPerTerm: plan.coursesPerTerm,
+            startSeason: plan.startSeason,
+            startYear: plan.startYear,
+            terms: plan.terms as Prisma.InputJsonValue,
+          },
+        },
+      },
+    })
+  } catch {
+    // Two first calls at once: the other one made it.
+    return db().userInfo.findUnique({ where: { authUid } })
+  }
+}
+
