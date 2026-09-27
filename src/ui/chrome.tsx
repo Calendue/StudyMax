@@ -30,7 +30,20 @@ function AccountButton() {
 }
 
 /** The top of a screen: Back on the left (never on the first screen), an optional action on the right. */
-export function TopBar({ onBack, backLabel = 'Back', right, brand }: { onBack?: () => void; backLabel?: string; right?: ReactNode; brand?: boolean }) {
+export function TopBar({
+  onBack,
+  backLabel = 'Back',
+  right,
+  brand,
+  noAccount,
+}: {
+  onBack?: () => void
+  backLabel?: string
+  right?: ReactNode
+  brand?: boolean
+  /** The results screen has its own account button, in the tab bar. */
+  noAccount?: boolean
+}) {
   return (
     <header className="topbar">
       <div className="topbar__side">
@@ -41,12 +54,12 @@ export function TopBar({ onBack, backLabel = 'Back', right, brand }: { onBack?: 
           </button>
         )}
         {brand && (
-          <Wordmark height={30} className="wordmark" />
+          <Wordmark height={28} className="wordmark" />
         )}
       </div>
       <div className="topbar__side topbar__side--end">
         {right}
-        <AccountButton />
+        {!noAccount && <AccountButton />}
       </div>
     </header>
   )
