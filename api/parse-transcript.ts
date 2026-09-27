@@ -1,4 +1,4 @@
-import { buildTranscriptParsePrompt, parseTranscriptProgram, parseTranscriptResponse, parseTranscriptTerms } from '../src/lib/transcriptParse.js'
+import { buildTranscriptParsePrompt, parseTranscriptProgram, parseTranscriptResponse, parseTranscriptTimeline } from '../src/lib/transcriptParse.js'
 import { catalogueCourses } from '../src/data/courses.js'
 import { openAIKey, respond, sendFailure } from './_openai.js'
 import { allow, clientIp } from './_rateLimit.js'
@@ -47,7 +47,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         { type: 'file', file: { filename: 'transcript.pdf', file_data: `data:application/pdf;base64,${body.pdfBase64}` } },
         { type: 'text', text: buildTranscriptParsePrompt() },
       ],
-      4096,
+      // A term for every completed course roughly doubles the answer for a long transcript.
+      6000,
     )
   } catch (err) {
     // The app tells the student whether the problem is on our side (401/403) from the status alone.
@@ -55,13 +56,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return
   }
 
-  const { completed, inProgress } = parseTranscriptResponse(text, CATALOGUE_CODES)
+  const courses = parseTranscriptResponse(text, CATALOGUE_CODES)
+  const { completed, inProgress } = courses
   const { major, minor } = parseTranscriptProgram(text)
-  const allTerms = parseTranscriptTerms(text)
-  // Only for courses that made it into the in-progress list.
-  const inProgressTerms = Object.fromEntries(inProgress.filter((c) => allTerms[c]).map((c) => [c, allTerms[c]]))
+  // Terms only for courses that made it into the lists. inProgressTerms stays season-only ("Fall"),
+  // the shape installed apps read; the "Season YYYY" labels and the document's date are new fields.
+  const { inProgressTerms, inProgressTermLabels, completedTerms, documentDate } = parseTranscriptTimeline(text, courses)
 
   // A readable PDF with no recognisable courses is a different problem from an unreadable one, and
   // the student needs to be told which.
-  res.status(200).json({ completed, inProgress, inProgressTerms, major, minor, sawText: text.trim().length > 0 })
+  res.status(200).json({
+    completed,
+    inProgress,
+    inProgressTerms,
+    inProgressTermLabels,
+    completedTerms,
+    documentDate,
+    major,
+    minor,
+    sawText: text.trim().length > 0,
+  })
 }
