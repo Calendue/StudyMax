@@ -13,7 +13,9 @@
 // earlier (a concurrent group: earlier or the same term); level 3 needs 30 cu passed, level 4 60;
 // credit rules count passed cu (done, booked after their term, items), a subject-filtered rule only
 // named items/done of those subjects (rule (a)); per term: cap seats, cuCap cu, seniorCap senior CMPT.
-// Not generated: full-year items, level-filtered credit rules, assumedCuPerTerm.
+// Full-year items (1 in 12) start in a Fall and hold a seat and half their cu in the next Winter;
+// they pass after that Winter, and graduation counts that Winter. Never a concurrent option.
+// Not generated: level-filtered credit rules, booked courses, assumedCuPerTerm.
 //
 // Run: node --experimental-strip-types --experimental-loader ./scripts/_resolve-ts-loader.mjs scripts/check-plan-oracle.ts [--verbose]
 import { courseInfo } from '../src/data/prereqs.ts'
@@ -68,12 +70,14 @@ function canPlace(input: CoreInput, i: number, t: number, before: Set<string>, s
   }
   return null
 }
-function termOk(input: CoreInput, t: number, idx: number[]): string | null {
+/** Seats, cu and senior CMPT of a term: `idx` placed there, `carry` full-year items started the term before. */
+function termOk(input: CoreInput, t: number, idx: number[], carry: number[] = []): string | null {
   const term = input.terms[t]
-  if (idx.length > term.cap) return `term ${t}: ${idx.length} > cap ${term.cap}`
-  const cu = idx.reduce((n, i) => n + input.items[i].cu, 0)
+  const all = [...idx, ...carry]
+  if (all.length > term.cap) return `term ${t}: ${all.length} > cap ${term.cap}`
+  const cu = all.reduce((n, i) => n + (input.items[i].fullYear ? input.items[i].cu / 2 : input.items[i].cu), 0)
   if (cu > term.cuCap) return `term ${t}: ${cu} cu > ${term.cuCap}`
-  const senior = idx.filter((i) => input.items[i].seniorCmpt).length
+  const senior = all.filter((i) => input.items[i].seniorCmpt).length
   if (senior > term.seniorCap) return `term ${t}: ${senior} senior > ${term.seniorCap}`
   return null
 }
@@ -82,12 +86,18 @@ function termOk(input: CoreInput, t: number, idx: number[]): string | null {
 function validateSchedule(input: CoreInput, at: number[]): string[] {
   const out: string[] = []
   if (at.length !== input.items.length) return [`at has ${at.length} entries for ${input.items.length} items`]
+  const end = (i: number) => at[i] + (input.items[i].fullYear ? 1 : 0)
+  for (const [i, x] of at.entries()) {
+    const it = input.items[i]
+    if (it.fullYear && (input.terms[x]?.season !== 'Fall' || input.terms[x + 1]?.season !== 'Winter')) out.push(`${it.id} (full-year) at ${x}: not a Fall followed by a Winter`)
+  }
   for (let t = 0; t < input.terms.length; t++) {
     const here = at.flatMap((x, i) => (x === t ? [i] : []))
-    if (here.length === 0) continue
-    const e = termOk(input, t, here)
+    const carry = at.flatMap((x, i) => (x === t - 1 && input.items[i].fullYear ? [i] : []))
+    if (here.length === 0 && carry.length === 0) continue
+    const e = termOk(input, t, here, carry)
     if (e) out.push(e)
-    const beforeIdx = at.flatMap((x, i) => (x < t ? [i] : []))
+    const beforeIdx = at.flatMap((_, i) => (end(i) < t ? [i] : []))
     const before = new Set(beforeIdx.map((i) => input.items[i].id))
     const same = new Set(here.map((i) => input.items[i].id))
     for (const i of here) {
@@ -104,30 +114,42 @@ function bfs(input: CoreInput): { grad: number; at: number[] | null; states: num
   const n = input.items.length
   if (n === 0) return { grad: -1, at: [], states: 0 }
   const full = (1 << n) - 1
-  let layer = new Map<number, number[]>([[0, new Array(n).fill(-1)]]) // mask → a witness schedule
+  // State: passed mask + carry mask (full-year items started last term) → a witness schedule.
+  const key = (mask: number, carry: number) => mask * 8192 + carry
+  let layer = new Map<number, number[]>([[key(0, 0), new Array(n).fill(-1)]])
   let states = 0
   for (let t = 0; t < input.terms.length; t++) {
     const next = new Map<number, number[]>()
-    for (const [mask, witness] of [...layer.entries()].sort((a, b) => a[0] - b[0])) {
+    for (const [k, witness] of [...layer.entries()].sort((a, b) => a[0] - b[0])) {
       states++
+      const mask = Math.floor(k / 8192)
+      const carryMask = k % 8192
+      const carry: number[] = []
+      for (let i = 0; i < n; i++) if (carryMask & (1 << i)) carry.push(i)
       const passedIdx: number[] = []
       for (let i = 0; i < n; i++) if (mask & (1 << i)) passedIdx.push(i)
       const before = new Set(passedIdx.map((i) => input.items[i].id))
       // Candidates: allowed now, not passed, and each pre group met by passed or (concurrent) a candidate.
       const cand: number[] = []
-      for (let i = 0; i < n; i++) if (!(mask & (1 << i)) && input.items[i].allowed.includes(t)) cand.push(i)
-      const cap = Math.min(input.terms[t].cap, cand.length)
+      for (let i = 0; i < n; i++) if (!(mask & (1 << i)) && !(carryMask & (1 << i)) && input.items[i].allowed.includes(t)) cand.push(i)
+      const cap = Math.min(Math.max(0, input.terms[t].cap - carry.length), cand.length)
       const pick: number[] = []
       const visit = (from: number) => {
         if (pick.length > 0) {
           const same = new Set(pick.map((i) => input.items[i].id))
-          if (!termOk(input, t, pick) && pick.every((i) => !canPlace(input, i, t, before, same, passedIdx))) {
-            let m = mask
-            for (const i of pick) m |= 1 << i
-            if (!next.has(m)) {
+          const fyOk = pick.every((i) => !input.items[i].fullYear || input.terms[t + 1]?.season === 'Winter')
+          if (fyOk && !termOk(input, t, pick, carry) && pick.every((i) => !canPlace(input, i, t, before, same, passedIdx))) {
+            let m = mask | carryMask
+            let c = 0
+            for (const i of pick) {
+              if (input.items[i].fullYear) c |= 1 << i
+              else m |= 1 << i
+            }
+            const nk = key(m, c)
+            if (!next.has(nk)) {
               const w = [...witness]
               for (const i of pick) w[i] = t
-              next.set(m, w)
+              next.set(nk, w)
             }
           }
         }
@@ -138,10 +160,11 @@ function bfs(input: CoreInput): { grad: number; at: number[] | null; states: num
           pick.pop()
         }
       }
-      visit(0)
-      if (!next.has(mask)) next.set(mask, witness)
+      if (termOk(input, t, [], carry) === null) visit(0)
+      const idle = key(mask | carryMask, 0)
+      if (!next.has(idle) && termOk(input, t, [], carry) === null) next.set(idle, witness)
     }
-    const done = next.get(full)
+    const done = next.get(key(full, 0))
     if (done) return { grad: t, at: done, states }
     layer = next
   }
@@ -189,21 +212,24 @@ function randomInstance(rand: () => number, seed: number): CoreInput {
     if (i > 0) {
       for (let g = r(3); g > 0; g--) {
         const opts = [...new Set([items[r(i)].id, ...(r(3) === 0 ? [items[r(i)].id] : [])])].sort()
-        pre.push({ opts, concurrent: r(5) === 0 })
+        pre.push({ opts, concurrent: r(5) === 0 && !opts.some((o) => items.find((x) => x.id === o)!.fullYear) })
       }
     }
     const credit: CreditRule[] = []
     if (r(8) === 0) credit.push({ cu: 3 * (1 + r(4)) })
     if (r(10) === 0) credit.push({ cu: 3 * (1 + r(2)), subjects: [subject] })
     const named = r(6) !== 0
+    // Now and then a full-year item: starts in a Fall, holds a seat in the next Winter too.
+    const fyAllowed = allowed.filter((k) => terms[k].season === 'Fall' && terms[k + 1]?.season === 'Winter' && terms[k + 1].cap > 0)
+    const fy = r(12) === 0 && fyAllowed.length > 0
     items.push({
       id,
       named,
       cu: 3,
       level,
       seniorCmpt: subject === 'CMPT' && level >= 3,
-      fullYear: false,
-      allowed,
+      fullYear: fy,
+      allowed: fy ? fyAllowed : allowed,
       pre,
       credit,
       year: 1 + Math.floor(i / 4),
@@ -312,7 +338,7 @@ function runOne(name: string, input: CoreInput) {
   }
   const bad = validateSchedule(input, res.at)
   if (bad.length) fails.push(`${name}: engine schedule breaks a rule: ${bad.slice(0, 3).join('; ')}`)
-  const last = Math.max(-1, ...res.at)
+  const last = Math.max(-1, ...res.at.map((x, i) => x + (input.items[i].fullYear ? 1 : 0)))
   if (last !== res.graduation) fails.push(`${name}: engine graduation ${res.graduation} but its last placed term is ${last}`)
   if (res.graduation !== o.grad) fails.push(`${name}: engine graduates at term ${res.graduation}, the optimum is ${o.grad} (${res.optimality})${res.optimality === 'proven' ? ' — it CLAIMS proven' : ''}`)
   if (res.optimality === 'proven') proven++
@@ -339,7 +365,7 @@ let brute = 0
     const at = new Array(inst.items.length).fill(0)
     const rec = (i: number) => {
       if (i === at.length) {
-        const g = Math.max(...at)
+        const g = Math.max(...at.map((x, j) => x + (inst.items[j].fullYear ? 1 : 0)))
         if ((best === -2 || g < best) && validateSchedule(inst, at).length === 0) best = g
         return
       }
