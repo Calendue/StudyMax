@@ -1559,12 +1559,6 @@ p.card__empty {
   margin-top: var(--s6);
 }
 
-.onb__foot-end {
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
-}
-
 .onb__back {
   display: inline-flex;
   align-items: center;
