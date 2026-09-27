@@ -393,7 +393,8 @@ export function SkillTree({
                   <span className="tree__year-label">
                     {b.label}
                     {b.current && <span className="tree__now"> · now</span>}
-                    {b.internship && <span className="tree__internship-tag"> · internship</span>}
+                    {/* Only when the year has courses: an empty one has its card, and a one-card band is too short for the longer label. */}
+                    {b.internship && layout.nodes.some((n) => n.year === b.year) && <span className="tree__internship-tag"> · internship</span>}
                   </span>
                   {b.heads.map((h) => (
                     <span
@@ -420,7 +421,7 @@ export function SkillTree({
               .map((b) => (
                 <div key={`${b.key}-internship`} className="tree__internship" role="note" style={{ top: b.y + b.h / 2 + 10, left: layout.trunkX }}>
                   <strong>Internship year</strong>
-                  <span>No courses planned. Your plan picks up after it.</span>
+                  <span>No courses this year</span>
                 </div>
               ))}
             <div className="tree__band-sentinel" style={{ top: 0, height: layout.trunkTop }} data-band="canopy" aria-hidden />
