@@ -160,7 +160,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Term by term when the app said which term each is in; else one list (a saved plan has no seasons).
   let currentLine: string | null = null
   let programId = profile.majorProgramId
-  const parsed = body.planInputs === undefined || byPhone ? null : parseCallPlanInputs(body.planInputs)
+  // The screen the student is looking at wins, even for a guest whose number belongs to an account (the
+  // web without sign-in, the account on their phone): Max plans what they see, and the tree follows him.
+  const parsed = body.planInputs === undefined ? null : parseCallPlanInputs(body.planInputs)
   if (parsed && 'inputs' in parsed) {
     planInputs = parsed.inputs
     const terms = regenerate(adapterInput(snapshotFromCall(planInputs))).terms

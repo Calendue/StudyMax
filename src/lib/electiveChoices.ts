@@ -1,11 +1,11 @@
-import { courseInfo } from '../data/prereqs.ts'
-import { offerings } from '../data/offerings.ts'
-import { breadth } from '../data/breadth.ts'
-import { catalogueCourses, type CatalogueCourse } from '../data/courses.ts'
-import type { Degree } from '../data/degrees/types.ts'
-import { courseCu, groupAccepts, TYPED_BREADTH_LABEL } from './degree.ts'
-import { electiveLabel, isElective, type PlannedTerm, type Season } from './plan.ts'
-import { FREE_ELECTIVE, SENIOR_ELECTIVE } from './planDegree.ts'
+import { courseInfo } from '../data/prereqs.js'
+import { offerings } from '../data/offerings.js'
+import { breadth } from '../data/breadth.js'
+import { catalogueCourses, type CatalogueCourse } from '../data/courses.js'
+import type { Degree } from '../data/degrees/types.js'
+import { courseCu, groupAccepts, TYPED_BREADTH_LABEL } from './degree.js'
+import { electiveLabel, isElective, type PlannedTerm, type Season } from './plan.js'
+import { FREE_ELECTIVE, SENIOR_ELECTIVE } from './planDegree.js'
 
 // Which real courses can fill one of the plan's unnamed elective slots ("Breadth elective",
 // "Senior elective (200-level or higher)") in the term the plan put it. A pick is the student's own
