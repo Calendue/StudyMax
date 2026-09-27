@@ -575,8 +575,11 @@ for (const mode of ['native', 'bookmarklet'] as const) {
   // (and end the script), so Max stops and says how to start again, rather than wait.
   const r = run({ url: CLASS_REG, ids: true, termFirst: true }, mode)
   await r.settle()
-  const again = mode === 'native' ? 'close PAWS and tap Fill it in on PAWS again.' : 'click Fill it in for me again.'
-  const said = `Banner is asking for the term first: choose Winter 2027, press Continue, then ${again}`
+  const again =
+    mode === 'native'
+      ? "Close PAWS, tap Fill it in on PAWS again and pick Winter 2027 on Banner’s term page when it asks."
+      : 'Choose Winter 2027, press Continue, then click Fill it in for me again.'
+  const said = `Banner is asking for the term first. ${again}`
   if (mode === 'native') assert.deepEqual(r.msgs().slice(-1), [{ type: 'error', text: said }], 'term first: one error, no dump')
   assert.ok(r.body.children.find((c) => c.getAttribute('role') === 'status')?.textContent.includes(said), `term first (${mode}): the bubble says so`)
   assert.ok(!r.msgs().some((m) => m.type === 'ready' || /^Choose/.test(m.text ?? '')), `term first (${mode}): never asks to press Continue mid-script`)
@@ -655,5 +658,17 @@ for (const file of readdirSync(new URL('api/', ROOT), { recursive: true }) as st
   const src = readFileSync(new URL(`api/${file}`, ROOT), 'utf8')
   assert.doesNotMatch(src, /cas\.usask\.ca|registerPostSignIn|ssb\/classRegistration|submitRegistration|mode=registration/, `api/${file} stays off sign-in and registration`)
 }
+
+// --- 6. the in-app browser is the patched 8.20.0 (patches/, applied on postinstall) ---
+const plugin = new URL('node_modules/@capgo/capacitor-inappbrowser/', ROOT)
+assert.equal(JSON.parse(readFileSync(new URL('package.json', plugin), 'utf8')).version, '8.20.0', 'the installed plugin is the patched version')
+const pkg = JSON.parse(readFileSync(new URL('package.json', ROOT), 'utf8'))
+assert.equal(pkg.dependencies['@capgo/capacitor-inappbrowser'], '8.20.0', 'the plugin is pinned')
+assert.match(pkg.scripts.postinstall, /patch-package --error-on-fail/, 'a patch that fails to apply fails the install')
+const droid = readFileSync(new URL('android/src/main/java/ee/forgr/capacitor_inappbrowser/WebViewDialog.java', plugin), 'utf8')
+assert.ok(droid.includes('SCRIPT_ORIGIN = "https://banner.usask.ca"') && droid.includes('scriptsAllowedNow()'), 'Android: the plugin scripts banner.usask.ca only')
+assert.doesNotMatch(droid, /Collections\.singleton\("\*"\)/, 'Android: no document-start script for every origin')
+const swift = readFileSync(new URL('ios/Sources/InAppBrowserPlugin/WKWebViewController.swift', plugin), 'utf8')
+assert.ok(swift.includes('func syncUserScripts') && swift.includes('func scriptsAllowedNow'), 'iOS: the plugin scripts banner.usask.ca only')
 
 console.log('check-paws-agent: ok')

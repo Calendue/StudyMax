@@ -266,8 +266,8 @@ node --experimental-strip-types scripts/check-paws-agent.ts
 - **The Banner 9 selectors on USask's signed-in page.** They come from Banner 9's standard page and
   public tools for it; nobody has seen USask's signed-in Enter CRNs panel.
 - **Term selection.** Whether Continue always lands on the class registration page. If the term
-  chooser shows on that page instead, Max stops and asks the student to choose the term, press
-  Continue, then close PAWS and tap Fill it in on PAWS again (one attempt per tap).
+  chooser shows on that page instead, Max stops: closing PAWS signs the student out, so they tap
+  Fill it in on PAWS again and pick the term on Banner's term page when it asks (one attempt per tap).
 - **Registration windows, time tickets and holds.** Max doesn't know when a student's time ticket
   opens or whether they have a hold. Banner's notices are relayed, but the flow hasn't met them.
 - **MFA inside the embedded view.** Authenticator push and codes are expected to work; nobody has

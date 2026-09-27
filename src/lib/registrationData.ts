@@ -100,9 +100,9 @@ function termLabelOf(code: string): string {
 /**
  * Which term's sections to read. Banner's own term when it lists it (open, or view-only); when it
  * doesn't list it yet, the latest listed term of the same season (202609 for 202709), as a preview.
- * Unreadable terms leave the request's term, with termOpen unknown. A term Banner doesn't list and no
- * same-season term to stand in (it lists about three years, so in practice there always is one) reads
- * as not open.
+ * Unreadable terms (an empty list is Banner throttling) leave the request's term, with termOpen
+ * unknown; so does a term Banner doesn't list with no same-season term to stand in (it lists about
+ * three years, so in practice there always is one).
  */
 function termToRead(request: RegRequest, terms: Term[] | null): { termCode: string; termOpen: boolean | null; preview?: RegPlan['preview'] } {
   if (!terms) return { termCode: request.termCode, termOpen: null }
@@ -114,7 +114,7 @@ function termToRead(request: RegRequest, terms: Term[] | null): { termCode: stri
     .filter((code) => code.slice(4) === season && code < request.termCode)
     .sort()
     .at(-1)
-  if (!stand) return { termCode: request.termCode, termOpen: false }
+  if (!stand) return { termCode: request.termCode, termOpen: null }
   return { termCode: stand, termOpen: false, preview: { termCode: stand, termLabel: termLabelOf(stand) } }
 }
 
@@ -202,7 +202,7 @@ export async function loadRegistration(request: RegRequest, opts: { signal?: Abo
 
   // The term decides which timetable is read, so it comes first. Unreadable, it's the request's own.
   const terms = await run(() => getJson<{ terms?: Term[] }>('/api/classes?op=terms', signal)).then(
-    ({ terms }) => (Array.isArray(terms) ? terms : null),
+    ({ terms }) => (Array.isArray(terms) && terms.length > 0 ? terms : null),
     () => null,
   )
   if (signal?.aborted) throw abortError()

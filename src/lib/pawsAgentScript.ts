@@ -423,8 +423,10 @@ __DIAGNOSE__
     step = 'finding the Enter CRNs tab';
     var tab = await waitFor(function () { return crnTab() || (termChooser() ? 'term' : null); }, 20000, 'The Enter CRNs tab');
     if (tab === 'term') {
-      var again = CFG.mode === 'native' ? 'close PAWS and tap Fill it in on PAWS again.' : 'click Fill it in for me again.';
-      post({ type: 'error', text: 'Banner is asking for the term first: choose ' + CFG.termLabel + ', press Continue, then ' + again });
+      var again = CFG.mode === 'native'
+        ? 'Close PAWS, tap Fill it in on PAWS again and pick ' + CFG.termLabel + ' on Banner’s term page when it asks.'
+        : 'Choose ' + CFG.termLabel + ', press Continue, then click Fill it in for me again.';
+      post({ type: 'error', text: 'Banner is asking for the term first. ' + again });
       return;
     }
     if (CFG.year && !termShown()) post({ type: 'progress', text: 'These CRNs are for ' + CFG.termLabel + '. If Banner shows another term, stop here.' });

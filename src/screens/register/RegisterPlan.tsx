@@ -491,8 +491,8 @@ export function RegisterPlan({ request, loaded, onPractice }: { request: RegRequ
               </>
             )}
 
-            {!canFillOnPaws && real && <CrnSteps plan={plan} />}
-            {!canFillOnPaws && real && wide && <Bookmarklet crns={plan.crns} termLabel={termLabel} />}
+            {!canFillOnPaws && registrable && <CrnSteps plan={plan} />}
+            {!canFillOnPaws && registrable && wide && <Bookmarklet crns={plan.crns} termLabel={termLabel} />}
 
             <p className="footnote">
               {canFillOnPaws ? PAWS_COPY.pitch : 'Max plans your registration; you sign in and press Submit on PAWS.'} {PAWS_COPY.tuition}
