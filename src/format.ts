@@ -1,3 +1,5 @@
+import { electiveLabel, isElective } from './lib/plan.ts'
+
 export type TargetKind = 'specialization' | 'certificate' | 'minor'
 
 /** The one-line version, with the full sentence a tap away. */
@@ -24,6 +26,8 @@ export const KIND_LABEL: Record<TargetKind, string> = {
 
 /** "CMPT280" → "CMPT 280" */
 export function courseCode(code: string) {
+  // An unnamed elective in a plan shows what kind of course it is ("Breadth elective").
+  if (isElective(code)) return electiveLabel(code)
   return code.replace(/([A-Z]+)(\d+)/, '$1 $2')
 }
 

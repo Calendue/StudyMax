@@ -10,7 +10,7 @@ import type { School } from './data/schools/types.ts'
 import { computerScience } from './data/programs/computerScience.ts'
 import type { Program } from './data/programs/types.ts'
 import { buildCallScript, type CallContext } from './lib/callScript.ts'
-import { buildStudentPlan, DEFAULT_SUMMER_COURSES, termsFrom, upcomingTerm, type TermStart } from './lib/plan.ts'
+import { buildStudentPlan, DEFAULT_SUMMER_COURSES, isElective, termsFrom, upcomingTerm, type TermStart } from './lib/plan.ts'
 import { computeCredentials } from './lib/credentials.ts'
 import { searchCourses, catalogueTitle } from './lib/courseSearch.ts'
 import { courseInfo } from './data/prereqs.ts'
@@ -306,6 +306,7 @@ function useStudyMax() {
   }, [programOptions, programPickQuery])
 
   function courseLabel(code: string) {
+    if (isElective(code)) return courseCode(code)
     // Prerequisites can pull in courses from outside the program's own title map, so fall back to
     // the scraped catalogue so they don't render as a bare code.
     const title = courseTitle(code)
@@ -314,6 +315,7 @@ function useStudyMax() {
   }
 
   function courseTitle(code: string) {
+    if (isElective(code)) return 'Any course that fits this requirement'
     return selectedProgram?.courseTitles[code] ?? courseInfo[code]?.title ?? catalogueTitle(code)
   }
 
@@ -782,8 +784,9 @@ function useStudyMax() {
         startTerm,
         springSummer,
         summerPerTerm,
+        selectedProgram?.degree,
       ),
-    [targets, planningSpecs, completed, inProgressCourses, coursesPerTerm, startTerm, springSummer, summerPerTerm],
+    [targets, planningSpecs, completed, inProgressCourses, coursesPerTerm, startTerm, springSummer, summerPerTerm, selectedProgram],
   )
   const [planCopied, setPlanCopied] = useState(false)
   // Clipboard writes are blocked in some browsers and contexts. Rather than a button that appears to

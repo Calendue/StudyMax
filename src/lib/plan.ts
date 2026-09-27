@@ -1,4 +1,5 @@
 import type { Specialization } from '../data/specializations.ts'
+import type { Degree } from '../data/programs/types.ts'
 import { courseInfo } from '../data/prereqs.ts'
 import { computeCourseOverlap, computeMatches, type SpecializationMatch } from './match.ts'
 
@@ -8,8 +9,10 @@ export interface PlannedCourse {
    * `requirement` — the specialization asks for it directly.
    * `prerequisite` — the specialization doesn't ask for it, but a course that does can't be taken
    * without it. This is the hidden cost of a specialization.
+   * `elective` — an open slot the degree needs filled ("Breadth elective", "Free elective"), with no
+   * particular course: its code is an `elective:` placeholder (see isElective/electiveLabel).
    */
-  reason: 'requirement' | 'prerequisite'
+  reason: 'requirement' | 'prerequisite' | 'elective'
   /** Names of OTHER specializations this same course also advances — the double-dip payoff. */
   alsoAdvances: string[]
   /** For prerequisites: the course that needs it, and the catalogue's verbatim rule. */
@@ -35,6 +38,17 @@ export interface TermStart {
 }
 
 /** 3 in "CMPT317". Ranks courses when prerequisites leave the order free. */
+/** An unnamed elective slot in a plan. It has no prerequisites, no catalogue page and no sections. */
+export const isElective = (code: string) => code.startsWith('elective:')
+/** "elective:3:Breadth elective" → "Breadth elective". */
+export const electiveLabel = (code: string) => code.split(':').slice(2).join(':')
+const elective = (n: number, label: string): PlannedCourse => ({
+  code: `elective:${n}:${label}`,
+  reason: 'elective',
+  alsoAdvances: [],
+})
+export const FREE_ELECTIVE = 'Free elective'
+
 export function courseLevel(code: string): number {
   const digits = code.match(/(\d)/)
   return digits ? Number(digits[1]) : 9
@@ -63,6 +77,8 @@ export function selectCourses(
   target: SpecializationMatch | SpecializationMatch[],
   allSpecializations: Specialization[],
   completed: Set<string>,
+  /** A target that ranks picks but isn't named in "also counts toward" (the degree itself). */
+  quietId?: string,
 ): PlannedCourse[] {
   const targets = Array.isArray(target) ? target : [target]
   const overlap = computeCourseOverlap(allSpecializations, completed)
@@ -98,6 +114,12 @@ export function selectCourses(
     }
     if (need === 0) continue
 
+    // An open choice isn't pinned to one course: it stays an unnamed slot the student fills.
+    if (slot.label) {
+      for (let i = 0; i < need; i++) picked.push(elective(picked.length, slot.label))
+      continue
+    }
+
     const ranked = slot.options
       .filter((code) => !pickedCodes.has(code))
       .sort(
@@ -115,7 +137,7 @@ export function selectCourses(
         code,
         reason: 'requirement',
         alsoAdvances: (overlapByCourse.get(code) ?? [])
-          .filter((s) => s.id !== slot.specId)
+          .filter((s) => s.id !== slot.specId && s.id !== quietId)
           .map((s) => s.name),
       })
     }
@@ -221,28 +243,41 @@ export function buildPlan(
     includePrerequisites = true,
     springSummer = false,
     summerPerTerm = DEFAULT_SUMMER_COURSES,
-  }: { includePrerequisites?: boolean; springSummer?: boolean; summerPerTerm?: number } = {},
+    degree,
+  }: { includePrerequisites?: boolean; springSummer?: boolean; summerPerTerm?: number; degree?: Degree } = {},
 ): PlannedTerm[] {
   const perTerm = Math.max(1, Math.floor(coursesPerTerm))
   const perSummer = Math.max(1, Math.floor(summerPerTerm))
-  const picked = selectCourses(target, allSpecializations, completed)
-  const withPrereqs = includePrerequisites ? withPrerequisites(picked, completed) : picked
+  const picked = selectCourses(target, allSpecializations, completed, degree?.id)
+  const slots = picked.filter((c) => isElective(c.code))
+  const real = picked.filter((c) => !isElective(c.code))
+  const withPrereqs = includePrerequisites ? withPrerequisites(real, completed) : real
+  // With a degree, its open slots are counted after the prerequisites are in: a prerequisite can
+  // fill one itself (BIOL 120 for BINF 451 is also a science course).
+  const open = degree ? openSlots(degree, completed, withPrereqs) : slots
   const ordered = topologicalOrder(withPrereqs, completed)
+  let electives = [...open, ...freeElectives(degree, completed, withPrereqs, open.length)]
 
   const terms: PlannedTerm[] = []
   const satisfied = new Set(completed)
   let pending = [...ordered]
   let term = start
 
-  while (pending.length > 0) {
+  while (pending.length > 0 || electives.length > 0) {
     const thisTerm: PlannedCourse[] = []
     const limit = term.season === 'Spring/Summer' ? perSummer : perTerm
-    for (const course of pending) {
-      if (thisTerm.length === limit) break
-      // A prerequisite taken this same term doesn't count — it has to be finished first.
-      if (unmetPrerequisites(course.code, satisfied).length > 0) continue
-      thisTerm.push(course)
+    const fill = (cap: number) => {
+      for (const course of pending) {
+        if (thisTerm.length >= cap) break
+        // A prerequisite taken this same term doesn't count — it has to be finished first.
+        if (thisTerm.includes(course) || unmetPrerequisites(course.code, satisfied).length > 0) continue
+        thisTerm.push(course)
+      }
     }
+    // Named courses first, in prerequisite order: they hold the chains that set how long the degree
+    // takes. Electives fill the seats left, which a prerequisite chain leaves in most terms.
+    fill(limit)
+    while (thisTerm.length < limit && electives.length > 0) thisTerm.push(electives.shift()!)
 
     // Everything left is blocked by something not in the plan: place it rather than loop forever.
     const batch = thisTerm.length > 0 ? thisTerm : pending.slice(0, limit)
@@ -254,6 +289,30 @@ export function buildPlan(
   }
 
   return terms
+}
+
+/**
+ * Free electives: the degree's course total, less its named slots, less every course taken or planned
+ * that no slot uses (a specialization course the degree doesn't list, a prerequisite, an outside
+ * course on the transcript). Those already fill elective room.
+ */
+function freeElectives(degree: Degree | undefined, completed: Set<string>, planned: PlannedCourse[], offset: number) {
+  if (!degree) return []
+  const taken = new Set([...completed, ...planned.map((c) => c.code)])
+  const slots = degree.requirements.reduce((n, g) => n + g.need, 0)
+  const unused = taken.size - computeMatches([degree], taken)[0].doneCount
+  const count = Math.max(0, degree.totalCourses - slots - unused)
+  return Array.from({ length: count }, (_, i) => elective(offset + i, FREE_ELECTIVE))
+}
+
+/** The degree's open-choice slots still unfilled once the planned courses are counted. */
+function openSlots(degree: Degree, completed: Set<string>, planned: PlannedCourse[]): PlannedCourse[] {
+  const taken = new Set([...completed, ...planned.map((c) => c.code)])
+  const out: PlannedCourse[] = []
+  for (const slot of computeMatches([degree], taken)[0].unsatisfied) {
+    if (slot.label) for (let i = 0; i < slot.need; i++) out.push(elective(out.length, slot.label))
+  }
+  return out
 }
 
 /**
@@ -272,12 +331,18 @@ export function buildStudentPlan(
   start: TermStart,
   springSummer = false,
   summerPerTerm = DEFAULT_SUMMER_COURSES,
+  degree?: Degree,
 ): PlannedTerm[] {
   const done = new Set([...completed, ...inProgress])
-  const open = computeMatches(targets, done).filter((m) => m.remaining > 0)
-  return open.length > 0
-    ? buildPlan(open, allSpecializations, done, coursesPerTerm, start, { springSummer, summerPerTerm })
-    : []
+  // With the degree mapped, the plan is the whole degree: the targets and the degree's own slots
+  // together, so every pick has to fit the degree too, and its open slots become unnamed electives.
+  const open = computeMatches(degree ? [...targets, degree] : targets, done).filter((m) => m.remaining > 0)
+  if (!degree && open.length === 0) return []
+  return buildPlan(open, degree ? [...allSpecializations, degree] : allSpecializations, done, coursesPerTerm, start, {
+    springSummer,
+    summerPerTerm,
+    degree,
+  })
 }
 
 /** `count` consecutive terms from `start`, for a start-term picker. */

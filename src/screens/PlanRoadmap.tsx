@@ -1,4 +1,5 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { isElective } from '../lib/plan.ts'
 import { useModel } from '../model.ts'
 import { courseCode, plural } from '../format.ts'
 import { catalogueUrl } from '../lib/courseSearch.ts'
@@ -212,10 +213,14 @@ export function CourseDetail({ code, node }: RoadmapSelection) {
         </p>
       )}
       {node.alsoAdvances.length > 0 && <p className="footnote">Also counts toward {node.alsoAdvances.join(', ')}</p>}
-      <a className="btn btn--secondary btn--block course-detail__link" href={catalogueUrl(code)} target="_blank" rel="noreferrer">
-        <Icon name="external" size={20} />
-        Open in catalogue
-      </a>
+      {isElective(code) ? (
+        <p className="footnote">Your degree needs a course of this kind here. Any one that fits counts.</p>
+      ) : (
+        <a className="btn btn--secondary btn--block course-detail__link" href={catalogueUrl(code)} target="_blank" rel="noreferrer">
+          <Icon name="external" size={20} />
+          Open in catalogue
+        </a>
+      )}
     </>
   )
 }

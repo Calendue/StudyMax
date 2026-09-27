@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
+import { isElective } from '../lib/plan.ts'
 import { createPortal } from 'react-dom'
 import { useReducedMotion } from 'motion/react'
 import { useModel } from '../model.ts'
@@ -487,7 +488,7 @@ function NodeCard({
     title,
     `${node.lane === 'fall' ? 'Fall' : 'Winter'} ${node.termKnown ? node.term : `Year ${node.year}`}`,
     status === 'inProgress' ? 'in progress' : status === 'next' ? 'best next course' : status,
-    node.elective ? `elective, ${node.elective.need} of ${node.elective.of} choices` : '',
+    isElective(node.code) ? 'your choice of course' : node.elective ? `elective, ${node.elective.need} of ${node.elective.of} choices` : '',
     creds.length > 0 ? `counts toward ${creds.join(', ')}` : '',
   ]
     .filter(Boolean)
@@ -498,9 +499,11 @@ function NodeCard({
       ? needs
         ? `Needs ${courseCode(needs)} first`
         : 'Needs its prerequisites first'
-      : node.elective
-        ? `Elective · ${node.elective.need} of ${node.elective.of}`
-        : title
+      : isElective(node.code)
+        ? 'Your choice'
+        : node.elective
+          ? `Elective · ${node.elective.need} of ${node.elective.of}`
+          : title
   const filled = status === 'completed' || status === 'next'
   return (
     <button

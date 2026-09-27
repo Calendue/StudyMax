@@ -1,7 +1,7 @@
 import { courseInfo } from '../data/prereqs.ts'
 import type { RequirementGroup } from '../data/specializations.ts'
 import type { SpecializationMatch } from './match.ts'
-import { courseLevel, upcomingTerm, type PlannedTerm, type Season, type TermStart } from './plan.ts'
+import { courseLevel, isElective, upcomingTerm, type PlannedTerm, type Season, type TermStart } from './plan.ts'
 
 // The Academic Skill Tree: the student's degree drawn as a tree that grows UP. Roots at the bottom,
 // Year 1 above them, the years rising to a canopy of the credentials they're working toward. Fall
@@ -291,7 +291,10 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
     )
     if (unmet) d.status = 'locked'
   }
-  const firstPlanned = input.plan[0]?.courses.map((c) => c.code).find((c) => drafts.get(c)?.status === 'planned')
+  // An unnamed elective is never the one course to take next: there's nothing specific to take.
+  const firstPlanned = input.plan[0]?.courses
+    .map((c) => c.code)
+    .find((c) => !isElective(c) && drafts.get(c)?.status === 'planned')
   const beacon =
     input.bestNext && drafts.get(input.bestNext)?.status === 'planned' ? input.bestNext : (firstPlanned ?? null)
   if (beacon) drafts.get(beacon)!.status = 'next'
@@ -307,6 +310,8 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
     const need = Math.max(1, grp.need - grp.courses.filter((c) => doneOrNow.has(c)).length)
     if (open.length > need) d.elective = { need, of: open.length, options: open }
   }
+  // An unnamed slot ("Breadth elective") is an elective too, with no list to choose from here.
+  for (const d of drafts.values()) if (isElective(d.code)) d.elective = { need: 1, of: 0, options: [] }
 
   // ── lanes for completed courses ──
   // No term dates, so: a course whose prerequisite sits in the same year went in Winter; one that
