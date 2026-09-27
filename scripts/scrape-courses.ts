@@ -1,6 +1,6 @@
 // Scrapes the full undergraduate course index from the USask catalogue into src/data/courses.ts,
 // the list the course search box matches against.
-// Run: node --experimental-strip-types scripts/scrape-courses.ts
+// Run: node --experimental-strip-types --experimental-loader ./scripts/_resolve-ts-loader.mjs scripts/scrape-courses.ts
 //
 // This is deliberately separate from scrape-prereqs.ts: that one carries prerequisite chains for
 // the ~240 courses the planner actually reasons about, this one carries code + title for every

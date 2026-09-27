@@ -1,9 +1,11 @@
-import type { Specialization } from '../data/specializations.ts'
+import type { RequirementGroup, Specialization } from '../data/specializations.js'
 
 export interface UnsatisfiedGroup {
   /** Courses in this slot the student hasn't completed yet (any one/N of them would count). */
   options: string[]
   need: number
+  /** The slot's open-choice label, when it has one: planned as an unnamed elective. */
+  label?: string
 }
 
 export interface SpecializationMatch {
@@ -15,18 +17,29 @@ export interface SpecializationMatch {
 }
 
 function matchOne(spec: Specialization, completed: Set<string>): SpecializationMatch {
+  // A course counts once: where two slots list the same course (a writing course that's also on the
+  // breadth list), it goes to one of them. The slot with the fewest options claims first, so a course
+  // isn't used up by a broad slot that had other ways to be filled.
+  const used = new Set<string>()
+  const filled = new Map<RequirementGroup, number>()
+  for (const group of [...spec.requirements].sort((a, b) => a.courses.length - b.courses.length)) {
+    const mine = group.courses.filter((c) => completed.has(c) && !used.has(c)).slice(0, group.need)
+    for (const c of mine) used.add(c)
+    filled.set(group, mine.length)
+  }
+
   let totalRequired = 0
   let doneCount = 0
   const unsatisfied: UnsatisfiedGroup[] = []
-
   for (const group of spec.requirements) {
     totalRequired += group.need
-    const satisfied = Math.min(group.need, group.courses.filter((c) => completed.has(c)).length)
+    const satisfied = filled.get(group) ?? 0
     doneCount += satisfied
     if (satisfied < group.need) {
       unsatisfied.push({
         options: group.courses.filter((c) => !completed.has(c)),
         need: group.need - satisfied,
+        ...(group.label ? { label: group.label } : {}),
       })
     }
   }

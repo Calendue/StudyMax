@@ -1,4 +1,4 @@
-// Sanity check for the widget snapshot. Run: node --experimental-strip-types scripts/check-widget-snapshot.ts
+// Sanity check for the widget snapshot. Run: node --experimental-strip-types --experimental-loader ./scripts/_resolve-ts-loader.mjs scripts/check-widget-snapshot.ts
 import assert from 'node:assert/strict'
 import { buildWidgetSnapshot, type SnapshotInput } from '../src/lib/widgetSnapshot.ts'
 import { daysUntil, rankByUrgency } from '../src/lib/resources.ts'

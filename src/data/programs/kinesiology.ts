@@ -1,5 +1,5 @@
-import type { Program } from './types.ts'
-import { single } from './helpers.ts'
+import type { Program } from './types.js'
+import { single } from './helpers.js'
 
 // Source: programs.usask.ca/kinesiology/exercise-and-sport-studies/bsc-kin-exercise.php
 // (University Catalogue 2026-27, checked 2026-09-26).

@@ -10,7 +10,7 @@ import type { School } from './data/schools/types.ts'
 import { computerScience } from './data/programs/computerScience.ts'
 import type { Program } from './data/programs/types.ts'
 import { buildCallScript, type CallContext } from './lib/callScript.ts'
-import { buildStudentPlan, termsFrom, upcomingTerm, type Season, type TermStart } from './lib/plan.ts'
+import { buildStudentPlan, DEFAULT_SUMMER_COURSES, isElective, termsFrom, upcomingTerm, type Season, type TermStart } from './lib/plan.ts'
 import { computeCredentials } from './lib/credentials.ts'
 import { bookedByTerm, seasonNow, withCurrentCourses } from './lib/currentTerms.ts'
 import { searchCourses, catalogueTitle } from './lib/courseSearch.ts'
@@ -34,6 +34,8 @@ import { LandingScreen } from './screens/LandingScreen.tsx'
 import { LandingPage } from './components/landing/LandingPage.tsx'
 import { WelcomeScreen } from './screens/WelcomeScreen.tsx'
 import { AccountSheet } from './screens/AccountSheet.tsx'
+import { EditConcentrationsSheet, EditGradYearSheet, EditMajorSheet, EditMinorSheet } from './screens/EditProfileSheets.tsx'
+import { EditMaxNameSheet } from './screens/EditMaxNameSheet.tsx'
 import {
   DegreeScreen,
   GoalsScreen,
@@ -47,6 +49,7 @@ import { ReadingScreen } from './screens/ReadingScreen.tsx'
 import { RevealScreen } from './screens/RevealScreen.tsx'
 import { ResultsScreen } from './screens/ResultsScreen.tsx'
 import { CallScreen } from './screens/CallScreen.tsx'
+import { PingMaxScreen } from './screens/PingMaxScreen.tsx'
 import { AppShell, CoursesFocus, Wizard } from './shell/AppShell.tsx'
 import { useLayoutMode } from './ui/layout.ts'
 import './App.css'
@@ -89,6 +92,7 @@ export type Screen =
   | 'reveal'
   | 'results'
   | 'call'
+  | 'ping-max'
 export type Tab = 'overview' | 'plan' | 'awards' | 'classes'
 /** First-years have no courses to add yet, so they go from onboarding straight to the reveal. */
 export type StudentType = 'first-year' | 'existing'
@@ -153,6 +157,9 @@ interface SavedState {
   registered?: string[]
   /** Whether the plan may use Spring/Summer terms. */
   springSummer?: boolean
+  /** The most courses the plan puts in a Fall/Winter term, and in a Spring/Summer term. */
+  coursesPerTerm?: number
+  summerPerTerm?: number
   /** The term each in-progress course is in, from the transcript or set by the student. */
   courseTerms?: Record<string, Season>
 }
@@ -223,6 +230,9 @@ function useStudyMax() {
   const [gradYear, setGradYear] = useState<number | null>(saved.gradYear ?? null)
   const [registered, setRegistered] = useState<string[]>(() => registeredFrom(saved.registered))
   const [springSummer, setSpringSummer] = useState(saved.springSummer ?? false)
+  // The plan's load limits: the most courses per Fall/Winter term, and per Spring/Summer term.
+  const [coursesPerTerm, setCoursesPerTerm] = useState(saved.coursesPerTerm ?? 2)
+  const [summerPerTerm, setSummerPerTerm] = useState(saved.summerPerTerm ?? DEFAULT_SUMMER_COURSES)
 
   const selectedSchool = universityId === 'usask' ? usask : null
   const availablePrograms = useMemo(() => selectedSchool?.programs ?? [], [selectedSchool])
@@ -303,6 +313,7 @@ function useStudyMax() {
   }, [programOptions, programPickQuery])
 
   function courseLabel(code: string) {
+    if (isElective(code)) return courseCode(code)
     // Prerequisites can pull in courses from outside the program's own title map, so fall back to
     // the scraped catalogue so they don't render as a bare code.
     const title = courseTitle(code)
@@ -311,6 +322,7 @@ function useStudyMax() {
   }
 
   function courseTitle(code: string) {
+    if (isElective(code)) return 'Any course that fits this requirement'
     return selectedProgram?.courseTitles[code] ?? courseInfo[code]?.title ?? catalogueTitle(code)
   }
 
@@ -351,6 +363,8 @@ function useStudyMax() {
     registered,
     springSummer,
     courseTerms,
+    coursesPerTerm,
+    summerPerTerm,
   }
   const snapshotJson = JSON.stringify(snapshot)
   useEffect(() => {
@@ -378,6 +392,9 @@ function useStudyMax() {
     minorId,
     concentrationIds,
     registered,
+    springSummer,
+    coursesPerTerm,
+    summerPerTerm,
     ...(phone.trim() ? { phone: phone.trim() } : {}),
   } satisfies CloudSession)
   const accountUid = account?.uid ?? null
@@ -564,6 +581,33 @@ function useStudyMax() {
     setConcentrationIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]))
   }
 
+  // --- editing onboarding answers from Settings, after the reveal ---
+  // Same state changes as the onboarding handlers above, minus requestAdvance(): there's no flow to
+  // advance through here, just a value to change and a sheet to close.
+  function updateMajor(id: string) {
+    if (id === programId) return
+    haptic.selection()
+    setProgramId(id)
+    if (!fromTranscript) {
+      setCompleted(new Set())
+      setUploadInProgress([])
+      setUploadStatus('idle')
+    }
+    setHeroId(null)
+    setExtraTargetIds([])
+    setConcentrationIds([]) // they belong to the major they were picked from
+  }
+
+  function updateMinor(id: string | null) {
+    haptic.selection()
+    setMinorId(id)
+  }
+
+  function updateGradYear(year: number) {
+    haptic.selection()
+    setGradYear(year)
+  }
+
   const minorOptions = useMemo(() => availablePrograms.filter((p) => p.kind === 'minor'), [availablePrograms])
   // Only a major with specializations to pick from gets the concentration step.
   const concentrationOptions = universityId === 'usask' ? (selectedProgram?.specializations ?? []) : []
@@ -571,9 +615,9 @@ function useStudyMax() {
   // The transcript's stated major and minor, matched to USask programs by name (or shorthand like
   // "Accounting" for Commerce), longest name first so "Applied Mathematics" beats "Mathematics". A
   // named track ("Mechanical Engineering") becomes the concentration, so the reveal leads with it.
-  useEffect(() => {
-    if (!fromTranscript || universityId !== 'usask') return
-    const says = (text: string | null, name: string) => !!text && text.toLowerCase().includes(name.toLowerCase())
+  const transcriptMatch = useMemo(() => {
+    if (!fromTranscript || universityId !== 'usask') return null
+    const says =(text: string | null, name: string) => !!text && text.toLowerCase().includes(name.toLowerCase())
     // Shorthand is matched as a whole word: "COMM" must not find Commerce in "Communications".
     const saysWord = (text: string | null, word: string) => !!text && new RegExp(`\\b${word}\\b`, 'i').test(text)
     const { major, minor } = statedProgram
@@ -581,14 +625,21 @@ function useStudyMax() {
     const program =
       byLength.find((o) => says(major, o.name)) ??
       byLength.find((o) => o.aliases.some((alias) => alias.length > 3 && saysWord(major, alias)))
-    if (program) {
-      setProgramId((id) => id || program.id)
-      const track = availablePrograms.find((p) => p.id === program.id)?.specializations.find((s) => says(major, s.name))
-      if (track) setConcentrationIds((ids) => (ids.length > 0 ? ids : [track.id]))
-    }
+    const track = program
+      ? availablePrograms.find((p) => p.id === program.id)?.specializations.find((s) => says(major, s.name))
+      : undefined
     const minorProgram = minorOptions.find((p) => says(minor, p.name.replace(/\s*minor\s*/i, '').trim()))
-    if (minorProgram) setMinorId((id) => id ?? minorProgram.id)
+    return { programId: program?.id ?? null, trackId: track?.id ?? null, minorId: minorProgram?.id ?? null }
   }, [fromTranscript, universityId, statedProgram, programOptions, availablePrograms, minorOptions])
+  /** The transcript named a major StudyMax knows, so the degree step doesn't ask for it. */
+  const majorFromTranscript = transcriptMatch?.programId != null
+  useEffect(() => {
+    if (!transcriptMatch) return
+    const { programId: major, trackId, minorId: minor } = transcriptMatch
+    if (major) setProgramId((id) => id || major)
+    if (trackId) setConcentrationIds((ids) => (ids.length > 0 ? ids : [trackId]))
+    if (minor) setMinorId((id) => id ?? minor)
+  }, [transcriptMatch])
   const targetSeed = seedOf({ concentrationIds, minorId })
 
   function seedTargets(ids: string[]) {
@@ -769,7 +820,6 @@ function useStudyMax() {
   const resultsStale = revealed && revealedKey !== null && revealedKey !== resultsKey
 
   // --- term-by-term path to the closest specialization ---
-  const [coursesPerTerm, setCoursesPerTerm] = useState(2)
   // Extra targets the student added to the same plan. Only ids from what they're already close to;
   // an id that stops resolving (they switched program) simply drops out.
   const [extraTargetIds, setExtraTargetIds] = useState<string[]>(() => seedOf(saved).slice(1))
@@ -801,9 +851,11 @@ function useStudyMax() {
         coursesPerTerm,
         startTerm,
         springSummer,
+        summerPerTerm,
+        selectedProgram?.degree,
         booked,
       ),
-    [targets, planningSpecs, completed, inProgressCourses, coursesPerTerm, startTerm, springSummer, booked],
+    [targets, planningSpecs, completed, inProgressCourses, coursesPerTerm, startTerm, springSummer, summerPerTerm, selectedProgram, booked],
   )
   // The plan as the roadmap draws it: what's left, plus the courses already under way in their terms.
   const roadmap = useMemo(() => withCurrentCourses(plan, currentByTerm, today), [plan, currentByTerm, today])
@@ -1013,6 +1065,8 @@ function useStudyMax() {
     setGradYear(state.gradYear ?? null)
     setRegistered(registeredFrom(state.registered))
     setSpringSummer(state.springSummer ?? false)
+    setCoursesPerTerm(state.coursesPerTerm ?? 2)
+    setSummerPerTerm(state.summerPerTerm ?? DEFAULT_SUMMER_COURSES)
     setUploadStatus('idle')
     seedTargets(seedOf(state))
     setLookup(null)
@@ -1287,6 +1341,8 @@ function useStudyMax() {
     setRegistered([])
     setRegisteredQuery('')
     setSpringSummer(false)
+    setCoursesPerTerm(2)
+    setSummerPerTerm(DEFAULT_SUMMER_COURSES)
     setUniversityId('')
     setProgramId('')
     setCompleted(new Set())
@@ -1400,6 +1456,9 @@ function useStudyMax() {
         if (callStatus === 'calling') return true
         go('results', -1)
         return true
+      case 'ping-max':
+        go('results', -1)
+        return true
       case 'courses':
         // Once there are results, Courses is a destination beside them, not a step of onboarding.
         if (revealed) {
@@ -1459,6 +1518,7 @@ function useStudyMax() {
     studentType,
     chooseStudentType,
     chooseTranscript,
+    majorFromTranscript,
     degree,
     minorId,
     minorOptions,
@@ -1468,6 +1528,10 @@ function useStudyMax() {
     toggleConcentration,
     gradYear,
     chooseGradYear,
+    // editing onboarding answers post-reveal (Settings)
+    updateMajor,
+    updateMinor,
+    updateGradYear,
     registered,
     registeredQuery,
     setRegisteredQuery,
@@ -1475,6 +1539,8 @@ function useStudyMax() {
     toggleRegistered,
     springSummer,
     setSpringSummer,
+    summerPerTerm,
+    setSummerPerTerm,
     removeRegistered,
     inProgressCourses,
     // courses
@@ -1593,6 +1659,7 @@ const SCREENS: Record<Screen, ComponentType> = {
   reveal: RevealScreen,
   results: ResultsScreen,
   call: CallScreen,
+  'ping-max': PingMaxScreen,
 }
 
 // A screen change runs on ONE timeline: the outgoing screen is gone before the incoming one is
@@ -1638,7 +1705,8 @@ function App() {
   // Wider than a phone, the results (and the courses and the call, once there are results) live in
   // the dashboard shell; before that, courses get the desktop page and every other step the wizard.
   const wide = layout !== 'tabs'
-  const inShell = wide && model.revealed && (model.screen === 'results' || model.screen === 'courses' || model.screen === 'call')
+  const inShell =
+    wide && model.revealed && (model.screen === 'results' || model.screen === 'courses' || model.screen === 'call' || model.screen === 'ping-max')
   const coursesFocus = wide && !inShell && model.screen === 'courses'
   const frame = inShell ? 'shell' : coursesFocus ? 'courses-focus' : model.screen
   const Current = SCREENS[model.screen]
@@ -1672,6 +1740,11 @@ function App() {
         {launched && (wizard ? <Wizard>{screens}</Wizard> : screens)}
       </div>
       <AccountSheet />
+      <EditMajorSheet open={model.sheet === 'edit-major'} onClose={() => model.setSheet(null)} />
+      <EditMinorSheet open={model.sheet === 'edit-minor'} onClose={() => model.setSheet(null)} />
+      <EditConcentrationsSheet open={model.sheet === 'edit-concentrations'} onClose={() => model.setSheet(null)} />
+      <EditGradYearSheet open={model.sheet === 'edit-gradyear'} onClose={() => model.setSheet(null)} />
+      <EditMaxNameSheet open={model.sheet === 'edit-max-name'} onClose={() => model.setSheet(null)} />
       <Intro onReveal={() => setLaunched(true)} />
     </ModelContext.Provider>
   )

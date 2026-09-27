@@ -1,4 +1,5 @@
 import { useModel } from '../model.ts'
+import { isElective } from '../lib/plan.ts'
 import { firstName } from '../auth.ts'
 import { KIND_LABEL, courseCode, plural } from '../format.ts'
 import { daysUntil } from '../lib/resources.ts'
@@ -28,7 +29,7 @@ function WelcomeCard() {
   const hero = m.hero
   const done = hero.remaining === 0
   const name = firstName(m.account)
-  const next = m.topOverlap?.course ?? m.plan[0]?.courses[0]?.code ?? null
+  const next = m.topOverlap?.course ?? m.plan[0]?.courses.find((c) => !isElective(c.code))?.code ?? null
   return (
     <Appear index={0} className="welcome-card">
       <span className="welcome-card__glow" aria-hidden />

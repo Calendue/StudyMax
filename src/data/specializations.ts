@@ -6,6 +6,11 @@ export interface RequirementGroup {
   courses: string[]
   /** How many of `courses` are required. 1 for a single/either-or course. */
   need: number
+  /**
+   * An open choice ("any humanities course"): `courses` is what counts when it's already done, but the
+   * plan shows an unnamed slot with this label instead of picking one of them.
+   */
+  label?: string
 }
 
 export interface Specialization {

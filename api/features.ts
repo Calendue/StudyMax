@@ -16,5 +16,7 @@ export default function handler(_req: unknown, res: VercelResponse) {
     ai: Boolean(process.env.OPENAI_API_KEY),
     // the phone call about the award closing soonest
     call: Boolean(process.env.BLAND_API_KEY),
+    // Ping Max — the voice planning agent's outbound call
+    max: Boolean(process.env.VAPI_PRIVATE_KEY && process.env.VAPI_ASSISTANT_ID && process.env.VAPI_PHONE_NUMBER_ID),
   })
 }

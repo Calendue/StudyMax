@@ -1,6 +1,6 @@
-import type { Program } from './types.ts'
-import { single } from './helpers.ts'
-import { courseTitles } from '../courseTitles.ts'
+import type { Program } from './types.js'
+import { single } from './helpers.js'
+import { courseTitles } from '../courseTitles.js'
 
 // Source: programs.usask.ca/arts-and-science/applied-computing/bsc-4-applied-computing-{stream}.php
 // Each stream has its own C4 Major Requirement. Bioinformatics and Interactive System Design are

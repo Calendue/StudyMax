@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react'
+import { isElective } from '../lib/plan.ts'
 import { useModel } from '../model.ts'
 import { courseCode, KIND_LABEL, plural } from '../format.ts'
 import { courseInfo } from '../data/prereqs.ts'
@@ -137,7 +138,13 @@ export function TreeDetail({
       )}
       {node.status === 'locked' && <p className="footnote">Locked until the courses below it on the tree are done.</p>}
 
-      {node.elective && (
+      {isElective(node.code) && (
+        <p className="footnote">
+          Your degree needs a course of this kind here. Any one that fits counts, so pick it when you register.
+        </p>
+      )}
+
+      {node.elective && !isElective(node.code) && (
         <section className="tree-detail__section">
           <h3>
             Elective · {node.elective.need} of {node.elective.of}
@@ -156,11 +163,13 @@ export function TreeDetail({
         </section>
       )}
 
-      <section className="tree-detail__section">
-        <h3>Prerequisites</h3>
-        {info?.prerequisiteText ? <p className="footnote">{info.prerequisiteText}</p> : <p className="footnote">None listed in the catalogue.</p>}
-        {node.prereqs.length > 0 && <CodeChips codes={node.prereqs} onSelect={toCourse} />}
-      </section>
+      {!isElective(node.code) && (
+        <section className="tree-detail__section">
+          <h3>Prerequisites</h3>
+          {info?.prerequisiteText ? <p className="footnote">{info.prerequisiteText}</p> : <p className="footnote">None listed in the catalogue.</p>}
+          {node.prereqs.length > 0 && <CodeChips codes={node.prereqs} onSelect={toCourse} />}
+        </section>
+      )}
 
       {node.unlocks.length > 0 && (
         <section className="tree-detail__section">

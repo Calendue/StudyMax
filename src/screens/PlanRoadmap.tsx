@@ -1,4 +1,5 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { isElective } from '../lib/plan.ts'
 import { useModel } from '../model.ts'
 import { courseCode, plural } from '../format.ts'
 import { catalogueUrl } from '../lib/courseSearch.ts'
@@ -150,7 +151,8 @@ export function PlanRoadmap({ selected, onSelect }: { selected?: string | null; 
               {row.label}
             </p>
             <div
-              className="roadmap__row-nodes"
+              // A full term (4-5 courses) shares a phone's width five ways: smaller type so codes fit.
+              className={`roadmap__row-nodes${row.codes.length >= 4 ? ' roadmap__row-nodes--dense' : ''}`}
               style={{ gridTemplateColumns: `repeat(${row.codes.length}, minmax(0, 1fr))`, gap: NODE_GAP, height: NODE_HEIGHT }}
             >
               {row.codes.map((code) => {
@@ -199,10 +201,14 @@ export function CourseDetail({ code, node }: RoadmapSelection) {
         </p>
       )}
       {node.alsoAdvances.length > 0 && <p className="footnote">Also counts toward {node.alsoAdvances.join(', ')}</p>}
-      <a className="btn btn--secondary btn--block course-detail__link" href={catalogueUrl(code)} target="_blank" rel="noreferrer">
-        <Icon name="external" size={20} />
-        Open in catalogue
-      </a>
+      {isElective(code) ? (
+        <p className="footnote">Your degree needs a course of this kind here. Any one that fits counts.</p>
+      ) : (
+        <a className="btn btn--secondary btn--block course-detail__link" href={catalogueUrl(code)} target="_blank" rel="noreferrer">
+          <Icon name="external" size={20} />
+          Open in catalogue
+        </a>
+      )}
     </>
   )
 }
@@ -227,14 +233,16 @@ function RoadmapNodeView({
   return (
     <button type="button" className={classes.join(' ')} onClick={onSelect}>
       <span className="roadmap__node-head">
-        <span className="roadmap__node-code">{courseCode(node.code)}</span>
+        <span className={`roadmap__node-code${isElective(node.code) ? ' roadmap__node-code--elective' : ''}`}>
+          {courseCode(node.code)}
+        </span>
         {node.alsoAdvances.length > 0 && (
           <span className="roadmap__node-dot" title={`Also counts toward ${node.alsoAdvances.join(', ')}`} />
         )}
         {node.state === 'prerequisite' && <span className="roadmap__node-tag">Prereq</span>}
         {node.state === 'registered' && <span className="roadmap__node-tag">In progress</span>}
       </span>
-      <span className="roadmap__node-title">{title}</span>
+      <span className="roadmap__node-title">{isElective(node.code) ? 'Your choice' : title}</span>
     </button>
   )
 }

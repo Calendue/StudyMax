@@ -100,6 +100,26 @@ Schema lives in `prisma/schema.prisma`, migrated onto the team's shared remote S
 - Prisma's CLI doesn't read `.env.local` — `db:migrate`/`db:studio` are wrapped in `dotenv-cli` for this reason. Don't add a plain `.env` with the same values instead.
 - `Institution`/`Major` are seeded reference tables (`npm run db:seed`), not something to hand-edit rows into for testing — add to the JSON files in `scripts/` and reseed if a row is missing.
 
+## The `.js`-extension convention, and where it now reaches
+
+`api/*.ts` files have always used `.js` extensions on relative imports even though the source is
+`.ts` (NodeNext module resolution — Vercel's Node builder transpiles each `.ts` file to a same-named
+`.js` file without rewriting import specifiers, so a `.ts`-suffixed import 404s at runtime; Vite
+doesn't have this problem, since it fully bundles). Since BayMax (Max), `api/session.ts` and
+`api/max/_scenarios.ts` genuinely execute (not just type-import) `src/lib/plan.ts` and the whole
+`src/data/programs/*` graph server-side, so those files — and everything they import — now use `.js`
+extensions too (see `git log` for the exact file list; anything under `src/lib/max/`, `src/lib/plan.ts`,
+`src/lib/match.ts`, and `src/data/programs/**`/`specializations.ts`/`prereqs.ts`/`offerings.ts`/
+`transcript.ts`/`courseTitles.ts`/`courses.ts`). This is safe for Vite (which resolves `.js` specifiers
+to a sibling `.ts` file fine) but breaks plain Node, which doesn't do that fallback — so any script
+that imports one of those files needs `scripts/_resolve-ts-loader.mjs`:
+```
+node --experimental-strip-types --experimental-loader ./scripts/_resolve-ts-loader.mjs scripts/whatever.ts
+```
+Check each script's own header comment for its exact invocation — the affected ones already have it.
+If you add a new program file or touch this graph, keep using `.js` extensions in its own imports,
+matching its siblings, not the plain `.ts` most of the rest of `src/` still uses.
+
 ## Why we're not done: the three gaps to a winning submission
 
 Ranked by what actually swings judges, in order of what to protect first:

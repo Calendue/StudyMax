@@ -24,26 +24,40 @@ model UserInfo {
   profile StudentProfile?
   courses StudentCourse[]
   plan    GeneratedPlan?
+
+  // BayMax (Max, the voice agent) — see docs/BayMax/spec/03-data-model.md
+  maxSettings MaxSettings?
+  preferences StudentPreference[]
+  notes       StudentNote[]
+  scenarios   Scenario[]
+  calls       MaxCall[]
+  summaries   ConversationSummary[]
+  auditLogs   AuditLog[]
 }
 
 model StudentProfile {
-  profileId     BigInt @id @default(autoincrement())
-  userId        BigInt @unique
-  studentType   String @db.VarChar // "first-year" | "existing" — validated app-side, no DB enum. Matches OnboardingProfile.studentType.
-  institutionId BigInt
-  degree        String @db.VarChar
+  profileId          BigInt   @id @default(autoincrement())
+  userId             BigInt   @unique
+  studentType        String   @db.VarChar // "first-year" | "existing" — validated app-side, no DB enum. Matches OnboardingProfile.studentType.
+  institutionId      BigInt
+  degree             String   @db.VarChar
   // Program.id slugs from the static catalogue (e.g. "computer-science"), not freeform names — no FK,
   // catalogue is static. Matches OnboardingProfile.majorProgramId/minorProgramId exactly.
-  majorProgramId   String   @db.VarChar
-  minorProgramId   String?  @db.VarChar
+  majorProgramId     String   @db.VarChar
+  minorProgramId     String?  @db.VarChar
   // Specialization.id slugs the student is targeting alongside their major — matches
   // OnboardingProfile.concentrationIds. Optional/multi-select; empty when the major has no
   // specialization data or the student skipped it.
-  concentrationIds String[]
+  concentrationIds   String[]
   // Only set when studentType = "first-year"; null for "existing". Mirrors lib/plan.ts's TermStart shape.
   startingTermSeason String?  @db.VarChar // "Fall" | "Winter"
   startingTermYear   Int?
   goals              String?  @db.Text
+  // Plan generation's load limits (lib/plan.ts): whether Spring/Summer terms are used, and the most
+  // courses the plan puts in a Fall/Winter term and in a Spring/Summer term.
+  springSummer       Boolean  @default(false)
+  maxCoursesPerTerm  Int      @default(2)
+  maxSummerCourses   Int      @default(2)
   createdAt          DateTime @default(now()) @db.Timestamp(6)
   updatedAt          DateTime @updatedAt @db.Timestamp(6)
 
@@ -76,12 +90,17 @@ model GeneratedPlan {
   userId                  BigInt   @unique // one current plan per student — replaces the localStorage blob
   targetProgramId         String   @db.VarChar // Program.id slug, e.g. "computer-science" — no FK, catalogue is static
   targetSpecializationIds String[] // Specialization.id slugs
-  coursesPerTerm          Int      @default(2)
+  coursesPerTerm          Int      @default(4)
   startSeason             String   @db.VarChar // "Fall" | "Winter"
   startYear               Int
   terms                   Json // PlannedTerm[] snapshot from lib/plan.ts's buildPlan()
   createdAt               DateTime @default(now()) @db.Timestamp(6)
   updatedAt               DateTime @updatedAt @db.Timestamp(6)
+
+  // = versionNumber of the PlanVersion this head mirrors; optimistic-concurrency check for scenario
+  // commits (docs/BayMax/spec/03-data-model.md, 06-scenarios-and-commits.md).
+  version  Int           @default(1)
+  versions PlanVersion[]
 
   user UserInfo @relation(fields: [userId], references: [userId], onDelete: Cascade)
 }
@@ -107,4 +126,191 @@ model Major {
   isCustom  Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------------------------
+// BayMax — Max, the voice planning agent. See docs/BayMax/spec/03-data-model.md for the full
+// rationale; models below are copied from there verbatim (field order, comments, decisions).
+// ---------------------------------------------------------------------------------------------
+
+/// Calling setup (1:1 with UserInfo). Kept out of StudentProfile so Max concerns don't leak into
+/// the profile, and so students who skip Max have no row.
+model MaxSettings {
+  userId             BigInt    @id
+  phoneE164          String?   @db.VarChar // "+13065551234"
+  phoneVerifiedAt    DateTime? @db.Timestamp(6) // null → Ping Max disabled
+  callConsentGranted Boolean   @default(false)
+  callConsentVersion String?   @db.VarChar // version id of the consent text shown
+  callConsentAt      DateTime? @db.Timestamp(6)
+  timezone           String?   @db.VarChar // IANA; null → falls back to Institution.timezone (quiet hours)
+  hasMetMax          Boolean   @default(false) // flips true after first completed call; drives first-call intro
+  createdAt          DateTime  @default(now()) @db.Timestamp(6)
+  updatedAt          DateTime  @updatedAt @db.Timestamp(6)
+
+  user UserInfo @relation(fields: [userId], references: [userId], onDelete: Cascade)
+}
+
+/// Typed preferences, validated against src/lib/preferences.ts's registry.
+model StudentPreference {
+  preferenceId BigInt   @id @default(autoincrement())
+  userId       BigInt
+  key          String   @db.VarChar // registry key
+  value        Json // shape defined per key by the registry
+  source       String   @db.VarChar // "onboarding" | "max" | "settings"
+  evidence     String?  @db.Text // utterance or UI action that set it
+  createdAt    DateTime @default(now()) @db.Timestamp(6)
+  updatedAt    DateTime @updatedAt @db.Timestamp(6)
+
+  user UserInfo @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@unique([userId, key]) // one value per key; also serves as the userId index
+}
+
+/// Free-text context for Max. Never consumed by the planner.
+model StudentNote {
+  noteId    BigInt   @id @default(autoincrement())
+  userId    BigInt
+  text      String   @db.Text
+  source    String   @db.VarChar // "max" | "settings"
+  createdAt DateTime @default(now()) @db.Timestamp(6)
+
+  user UserInfo @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// Immutable plan history (I4). GeneratedPlan stays the head existing code reads; every write to it
+/// also appends a PlanVersion in the same transaction (src/lib/max/scenarios.ts's commitPlanVersion).
+model PlanVersion {
+  planVersionId BigInt @id @default(autoincrement())
+  planId        BigInt
+  versionNumber Int
+  parentVersion Int? // versionNumber this was derived from; null for v1
+
+  // Snapshot of planner inputs, so a restore rebuilds the head exactly
+  targetProgramId         String   @db.VarChar
+  minorProgramId          String?  @db.VarChar
+  targetSpecializationIds String[]
+  coursesPerTerm          Int
+  startSeason             String   @db.VarChar
+  startYear               Int
+
+  terms               Json // PlannedTerm[] — same shape as GeneratedPlan.terms
+  projectedGradSeason String? @db.VarChar
+  projectedGradYear   Int?
+  validation          Json // ValidationResult
+  plannerVersion      String  @db.VarChar // code version of buildPlan/planner
+  inputsHash          String  @db.VarChar // hash of planner inputs; determinism check
+
+  createdBy  String   @db.VarChar // "backfill" | "onboarding" | "scenario_commit" | "restore"
+  scenarioId BigInt?  @unique // one scenario commits at most once → commit idempotency
+  createdAt  DateTime @default(now()) @db.Timestamp(6)
+
+  plan     GeneratedPlan @relation(fields: [planId], references: [planId], onDelete: Cascade)
+  scenario Scenario?     @relation(fields: [scenarioId], references: [scenarioId], onDelete: SetNull)
+
+  @@unique([planId, versionNumber])
+}
+
+/// A hypothetical copy of the student's state with a list of operations applied. Never official
+/// until committed (I2). IDs are sequential and appear in tool arguments — acceptable only because
+/// the tool gateway checks scenario.userId === session.userId on every access.
+model Scenario {
+  scenarioId    BigInt    @id @default(autoincrement())
+  userId        BigInt
+  baseVersion   Int // GeneratedPlan.version when created; mismatch at commit → "stale"
+  operations    Json // ScenarioOp[]
+  resultInputs  Json? // planner-input snapshot after ops (program, specializations, coursesPerTerm, start)
+  resultTerms   Json? // PlannedTerm[]
+  diff          Json? // RoadmapDiff
+  validation    Json? // ValidationResult
+  status        String    @db.VarChar // "draft" | "computed" | "presented" | "committed" | "discarded" | "expired" | "stale"
+  presentedHash String?   @db.VarChar
+  presentedAt   DateTime? @db.Timestamp(6)
+  presentedVia  String?   @db.VarChar // "voice" | "app"
+  origin        String    @db.VarChar // "voice" | "app" | "settings"
+  callId        BigInt?
+  expiresAt     DateTime  @db.Timestamp(6)
+  createdAt     DateTime  @default(now()) @db.Timestamp(6)
+  updatedAt     DateTime  @updatedAt @db.Timestamp(6)
+
+  user        UserInfo     @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  call        MaxCall?     @relation(fields: [callId], references: [callId], onDelete: SetNull)
+  committedAs PlanVersion?
+
+  @@index([userId, status])
+}
+
+/// One outbound call to the student, resolved from Vapi's call id (I6 — the only source of identity
+/// for every agent tool call during that call).
+model MaxCall {
+  callId       BigInt    @id @default(autoincrement())
+  userId       BigInt
+  vapiCallId   String?   @unique @db.VarChar // set after Vapi create-call returns
+  status       String    @db.VarChar // "queued" | "ringing" | "in_progress" | "ended" | "failed" | "voicemail" | "no_answer"
+  endedReason  String?   @db.VarChar
+  startedAt    DateTime? @db.Timestamp(6)
+  endedAt      DateTime? @db.Timestamp(6)
+  durationSec  Int?
+  recordingUrl String?   @db.VarChar // retention: purge per policy
+  transcript   Json? // purge per retention policy
+  createdAt    DateTime  @default(now()) @db.Timestamp(6)
+  updatedAt    DateTime  @updatedAt @db.Timestamp(6)
+
+  user      UserInfo             @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  scenarios Scenario[]
+  toolCalls MaxToolCall[]
+  summary   ConversationSummary?
+
+  @@index([userId, createdAt])
+}
+
+/// Dedupe + trace: Vapi can redeliver tool-call webhooks. Keying on Vapi's tool-call id makes every
+/// tool idempotent for free, and doubles as the per-tool trace.
+model MaxToolCall {
+  toolCallId String   @id @db.VarChar // Vapi's tool call id
+  callId     BigInt
+  toolName   String   @db.VarChar
+  args       Json
+  result     Json? // cached response; a redelivery returns this without re-executing
+  ok         Boolean?
+  errorCode  String?  @db.VarChar
+  latencyMs  Int?
+  createdAt  DateTime @default(now()) @db.Timestamp(6)
+
+  call MaxCall @relation(fields: [callId], references: [callId], onDelete: Cascade)
+
+  @@index([callId])
+}
+
+model ConversationSummary {
+  summaryId   BigInt   @id @default(autoincrement())
+  userId      BigInt
+  callId      BigInt   @unique
+  summary     String   @db.Text // exactly 3 sentences
+  openThreads Json // OpenThread[]
+  flagged     Boolean  @default(false) // failed validation → not injected next call
+  createdAt   DateTime @default(now()) @db.Timestamp(6)
+
+  user UserInfo @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  call MaxCall  @relation(fields: [callId], references: [callId], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+/// Append-only. Also the only history for program changes, since StudentProfile is updated in place.
+model AuditLog {
+  auditId    BigInt   @id @default(autoincrement())
+  userId     BigInt
+  actor      String   @db.VarChar // "student_app" | "max" | "system"
+  action     String   @db.VarChar // "plan.commit" | "plan.restore" | "program.change" | "preference.set" | "preference.delete" | "consent.grant" | "consent.revoke" | "phone.verify"
+  before     Json?
+  after      Json?
+  callId     BigInt?
+  scenarioId BigInt?
+  createdAt  DateTime @default(now()) @db.Timestamp(6)
+
+  user UserInfo @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@index([userId, createdAt])
 }

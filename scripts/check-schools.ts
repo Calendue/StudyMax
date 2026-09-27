@@ -1,4 +1,4 @@
-// Sanity check for findSchool. Run: node --experimental-strip-types scripts/check-schools.ts
+// Sanity check for findSchool. Run: node --experimental-strip-types --experimental-loader ./scripts/_resolve-ts-loader.mjs scripts/check-schools.ts
 import assert from 'node:assert/strict'
 import { daysUntil } from '../src/lib/resources.ts'
 import { findSchool } from '../src/data/schools/index.ts'

@@ -1,6 +1,6 @@
-import type { Program } from './types.ts'
-import type { RequirementGroup, Specialization } from '../specializations.ts'
-import { single } from './helpers.ts'
+import type { Program } from './types.js'
+import type { RequirementGroup, Specialization } from '../specializations.js'
+import { single } from './helpers.js'
 
 // Sources (University Catalogue 2026-27, checked 2026-09-26):
 // - programs.usask.ca/engineering/first-year/index.php (common first year)
@@ -128,6 +128,6 @@ export const engineering: Program = {
   name: 'Engineering',
   courseTitles: {},
   specializationsAreMajors: true,
-  coursesPerTerm: 6,
+  coursesPerTerm: 5,
   specializations: [civil, mechanical, ...electrical],
 }

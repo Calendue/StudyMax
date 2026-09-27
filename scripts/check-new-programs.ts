@@ -1,5 +1,5 @@
 // Sanity check for the new USask Arts & Science program data. Run:
-// node --experimental-strip-types scripts/check-new-programs.ts
+// node --experimental-strip-types --experimental-loader ./scripts/_resolve-ts-loader.mjs scripts/check-new-programs.ts
 import assert from 'node:assert/strict'
 import { programs } from '../src/data/programs/index.ts'
 import { computeMatches } from '../src/lib/match.ts'
@@ -45,8 +45,9 @@ for (const id of EXPECTED_NEW_IDS) {
     // A valid minimal solution (first `need` courses of every group) should fully satisfy the specialization —
     // proves the data isn't malformed in a way that makes it unsatisfiable.
     const solution = new Set<string>()
+    // A course counts once, so each slot takes courses no earlier slot used.
     for (const group of spec.requirements) {
-      for (const code of group.courses.slice(0, group.need)) solution.add(code)
+      for (const code of group.courses.filter((c) => !solution.has(c)).slice(0, group.need)) solution.add(code)
     }
     const solved = computeMatches([spec], solution).find((m) => m.spec.id === spec.id)!
     assert.equal(solved.remaining, 0, `${id}/${spec.id}: a minimal valid solution fully satisfies the specialization`)

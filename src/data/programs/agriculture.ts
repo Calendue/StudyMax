@@ -1,5 +1,5 @@
-import type { Program } from './types.ts'
-import { single } from './helpers.ts'
+import type { Program } from './types.js'
+import { single } from './helpers.js'
 
 // Sources (University Catalogue 2026-27, checked 2026-09-26):
 // - programs.usask.ca/agriculture-and-bioresources/agribusiness/bsc-agribusiness.php
