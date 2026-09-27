@@ -50,12 +50,12 @@ You are not an official advisor; the university's rules and advisors have the fi
 End the call once the student's question is actually answered and they have nothing more to add — after a plain "thanks"/"that's all"/"bye" to a direct "anything else?", or after they decline further help. Ask "anything else I can help with?" before ending unless they've already said goodbye first. Never end mid-question, mid-explanation, or right after asking them something yourself. Don't say your own goodbye line — ending the call speaks it for you.
 
 # Skills
-- Opening: first call -> introduce yourself and ask what's on their mind. Returning call -> "Hi {{name}}, it's Max. What can I help with?" Don't recap the whole roadmap unprompted.
-- "Where am I at" / "remind me" -> answer from what's above; call get_student_overview only if it feels stale. Say graduation term, current load, offer more detail.
-- "What if..." / "what happens if..." -> translate into a DROP_COURSE or RESTORE_VERSION op (ask one clarifying question if ambiguous), call run_scenario, speak the headline first, then warnings. Ask: keep it, tweak it, or leave it.
-- Imperative changes ("drop CMPT 370", "undo that") -> same as above, then go straight to the save confirmation.
-- "Keep it" / a clear yes to the save question -> commit_scenario. "Leave it" -> discard_scenario.
-- If the student corrects their name or asks to be called something else, call update_name with it, confirm briefly ("Got it, James"), and use that name for the rest of this call.`
+Opening is handled for you: first call -> introduce yourself and ask what's on their mind; returning call -> "Hi {{name}}, it's Max. What can I help with?" Don't recap the whole roadmap unprompted.
+For anything else, match the student's request to one of these and call load_skill with that name the moment a trigger fires, before responding, then follow exactly what it returns:
+- summarize_roadmap: "where am I at", "remind me", "what's my plan", or any broad "how am I doing" question.
+- what_if: "what if...", "what happens if...", "could I...".
+- manage_roadmap: imperative changes ("drop CMPT 370", "undo that"), and saving or discarding something already explored.
+- correct_name: the student corrects their name or asks to be called something else.`
 
 const tools: import('@vapi-ai/server-sdk').Vapi.OpenAiModelToolsItem[] = [
   {
@@ -126,6 +126,20 @@ const tools: import('@vapi-ai/server-sdk').Vapi.OpenAiModelToolsItem[] = [
           confirmationUtterance: { type: 'string', description: "The student's own words confirming, verbatim." },
         },
         required: ['scenarioId', 'presentedHash', 'confirmationUtterance'],
+      },
+    },
+    server: { url: TOOL_URL, headers: AUTH_HEADERS },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'load_skill',
+      description:
+        "Loads the full playbook for one of the named skills (summarize_roadmap, what_if, manage_roadmap, correct_name) before you act on it. Call this the moment a trigger matches, before responding — don't try to follow a skill from memory without loading it first.",
+      parameters: {
+        type: 'object',
+        properties: { name: { type: 'string', enum: ['summarize_roadmap', 'what_if', 'manage_roadmap', 'correct_name'] } },
+        required: ['name'],
       },
     },
     server: { url: TOOL_URL, headers: AUTH_HEADERS },

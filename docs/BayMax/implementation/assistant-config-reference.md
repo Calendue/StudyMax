@@ -66,18 +66,46 @@ You are not an official advisor; the university's rules and advisors have the fi
 End the call once the student's question is actually answered and they have nothing more to add — after a plain "thanks"/"that's all"/"bye" to a direct "anything else?", or after they decline further help. Ask "anything else I can help with?" before ending unless they've already said goodbye first. Never end mid-question, mid-explanation, or right after asking them something yourself. Don't say your own goodbye line — ending the call speaks it for you.
 
 # Skills
-- Opening: first call -> introduce yourself and ask what's on their mind. Returning call -> "Hi {{name}}, it's Max. What can I help with?" Don't recap the whole roadmap unprompted.
-- "Where am I at" / "remind me" -> answer from what's above; call get_student_overview only if it feels stale. Say graduation term, current load, offer more detail.
-- "What if..." / "what happens if..." -> translate into a DROP_COURSE or RESTORE_VERSION op (ask one clarifying question if ambiguous), call run_scenario, speak the headline first, then warnings. Ask: keep it, tweak it, or leave it.
-- Imperative changes ("drop CMPT 370", "undo that") -> same as above, then go straight to the save confirmation.
-- "Keep it" / a clear yes to the save question -> commit_scenario. "Leave it" -> discard_scenario.
-- If the student corrects their name or asks to be called something else, call update_name with it, confirm briefly ("Got it, James"), and use that name for the rest of this call.
+Opening is handled for you: first call -> introduce yourself and ask what's on their mind; returning call -> "Hi {{name}}, it's Max. What can I help with?" Don't recap the whole roadmap unprompted.
+For anything else, match the student's request to one of these and call load_skill with that name the moment a trigger fires, before responding, then follow exactly what it returns:
+- summarize_roadmap: "where am I at", "remind me", "what's my plan", or any broad "how am I doing" question.
+- what_if: "what if...", "what happens if...", "could I...".
+- manage_roadmap: imperative changes ("drop CMPT 370", "undo that"), and saving or discarding something already explored.
+- correct_name: the student corrects their name or asks to be called something else.
 ```
+
+Note on progressive disclosure (docs/BayMax/implementation/08-skills-progressive-disclosure.md): the
+four named skills above each have a full playbook in `docs/BayMax/skills/<name>/SKILL.md`, compiled by
+`scripts/build-skills.ts` into `src/lib/max/skills.generated.ts` (a plain data import — no runtime file
+I/O, same reasoning as the `.js`-extension note above). The system prompt only carries the short
+routing table; the `load_skill` tool (below) fetches the real instructions on demand. Edit the
+`SKILL.md` files and rerun `npm run build:skills`, not this prompt, to change what a skill actually
+does.
 
 Note on identity: `api/_maxIdentity.ts`'s `resolveMaxUser()` resolves to whichever real account is
 signed in (via the `Authorization: Bearer <idToken>` header on `api/max/call.ts`/`settings.ts`),
 falling back to the seeded demo student only for a guest. `{{name}}` above therefore reflects a real
 tester's own account name when signed in, not always "Demo".
+
+Note on `{{currentTerm}}`/`{{currentCoursesLine}}`: `GeneratedPlan.terms` only ever holds courses not
+yet taken (`buildStudentPlan` assumes in-progress ones are already done "by start") — its last entry
+is the graduation term, not the one running now. `api/max/call.ts` computes `currentTerm` from
+`currentTermOf(new Date())` (`src/lib/plan.ts`, shared with the Academic Skill Tree) and
+`currentCoursesLine` from `StudentCourse` rows with `status: "in_progress"` — never from `plan.terms`.
+Found and fixed 2026-09-27: both were previously read off `plan.terms`' last entry, so a call would
+open by telling the student their current courses were their graduation-term ones.
+
+Note on `{{wellnessResourceLine}}`: no `Institution`-level wellness-resource field exists yet (spec
+`11` calls for one, deferred). `api/max/call.ts` sends a hardcoded national fallback (Canada/US's 988
+Suicide Crisis Helpline) for every school until a real per-institution one is built. Found and fixed
+2026-09-27: this variable was referenced in the live prompt but never set in `variableValues` at all.
+
+Note on program/specialization names: `profile.majorProgramId`/`minorProgramId` and
+`targetSpecializationIds` are catalogue slugs (`"computer-science"`), not display names — resolved to
+`Program.name`/`Specialization.name` via `programName()`/`specializationName()`
+(`src/lib/max/planningAdapter.ts`) before they reach `{{programLine}}` or a tool result. Found and
+fixed 2026-09-27: `programLine` and `get_student_overview`'s `program` object previously sent the raw
+slug, so Max would say "computer-science" instead of "Computer Science."
 
 ## Tools (`model.tools`)
 
@@ -162,6 +190,19 @@ whose p95 is closer to 1.5s than the others).
           "confirmationUtterance": { "type": "string", "description": "The student's own words confirming, verbatim." }
         },
         "required": ["scenarioId", "presentedHash", "confirmationUtterance"]
+      }
+    },
+    "server": { "url": "https://study-max-theta.vercel.app/api/max/tool" }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "load_skill",
+      "description": "Loads the full playbook for one of the named skills (summarize_roadmap, what_if, manage_roadmap, correct_name) before you act on it. Call this the moment a trigger matches, before responding — don't try to follow a skill from memory without loading it first.",
+      "parameters": {
+        "type": "object",
+        "properties": { "name": { "type": "string", "enum": ["summarize_roadmap", "what_if", "manage_roadmap", "correct_name"] } },
+        "required": ["name"]
       }
     },
     "server": { "url": "https://study-max-theta.vercel.app/api/max/tool" }

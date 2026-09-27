@@ -731,6 +731,12 @@ export function upcomingTerm(today: Date): TermStart {
   return month < 8 ? { season: 'Fall', year: today.getFullYear() } : { season: 'Winter', year: today.getFullYear() + 1 }
 }
 
+/** The term being sat now: the one before the term a student would register for next. */
+export function currentTermOf(today: Date): TermStart {
+  const next = upcomingTerm(today)
+  return next.season === 'Fall' ? { season: 'Winter', year: next.year } : { season: 'Fall', year: next.year - 1 }
+}
+
 /** The next Fall: where a student with nothing taken or under way starts (Fall 2027 on 2026-09-26). */
 export function nextFall(today: Date): TermStart {
   const upcoming = upcomingTerm(today)
