@@ -255,8 +255,8 @@ function geometry(width: number): Geometry {
   const compact = width < 560
   // A phone gets one card per side, wide enough for the course title; a desktop gets two.
   return compact
-    ? { compact, gutter: 24, pad: 10, nodeMinW: 112, nodeMaxW: 172, nodeH: 58, colGap: 10, rowGap: 12, innerGap: 20, bandTop: 38, bandBottom: 14, emptyBand: 64, summerGap: 30, degreeH: 92, maxCols: 1, leafH: 64, leafGap: 26, canopyTop: 12, rootsH: 170, trunkW: 18, trunkTopW: 3, sway: 2 }
-    : { compact, gutter: 36, pad: 16, nodeMinW: 150, nodeMaxW: 188, nodeH: 62, colGap: 14, rowGap: 16, innerGap: 28, bandTop: 44, bandBottom: 18, emptyBand: 80, summerGap: 32, degreeH: 84, maxCols: 2, leafH: 72, leafGap: 30, canopyTop: 16, rootsH: 190, trunkW: 26, trunkTopW: 4, sway: 3 }
+    ? { compact, gutter: 24, pad: 10, nodeMinW: 112, nodeMaxW: 172, nodeH: 58, colGap: 10, rowGap: 12, innerGap: 20, bandTop: 38, bandBottom: 14, emptyBand: 64, summerGap: 30, degreeH: 104, maxCols: 1, leafH: 64, leafGap: 26, canopyTop: 12, rootsH: 170, trunkW: 18, trunkTopW: 3, sway: 2 }
+    : { compact, gutter: 36, pad: 16, nodeMinW: 150, nodeMaxW: 188, nodeH: 62, colGap: 14, rowGap: 16, innerGap: 28, bandTop: 44, bandBottom: 18, emptyBand: 80, summerGap: 32, degreeH: 100, maxCols: 2, leafH: 72, leafGap: 30, canopyTop: 16, rootsH: 190, trunkW: 26, trunkTopW: 4, sway: 3 }
 }
 
 interface Draft {
@@ -406,9 +406,10 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
     )
     if (unmet) d.status = 'locked'
   }
-  // An unnamed elective is never the one course to take next: there's nothing specific to take.
-  const firstPlanned = input.plan[0]?.courses
-    .map((c) => c.code)
+  // An unnamed elective is never the one course to take next: there's nothing specific to take. A
+  // first term of only electives passes the beacon to the first named course after it.
+  const firstPlanned = input.plan
+    .flatMap((t) => t.courses.map((c) => c.code))
     .find((c) => !isElective(c) && drafts.get(c)?.status === 'planned')
   const beacon =
     input.bestNext && drafts.get(input.bestNext)?.status === 'planned' ? input.bestNext : (firstPlanned ?? null)

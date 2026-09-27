@@ -763,7 +763,7 @@
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 5px;
+  gap: 4px;
   margin: 2px 0 0;
   padding: 0;
   list-style: none;
@@ -772,12 +772,12 @@
 .tree-degree__block {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 1px 8px;
+  gap: 3px;
+  padding: 1px 6px;
   border: 1px solid var(--hairline);
   border-radius: 999px;
   background: var(--surface);
-  font-size: 11.5px;
+  font-size: 11px;
   line-height: 1.5;
   color: var(--ink-2);
   font-variant-numeric: tabular-nums;
@@ -788,10 +788,13 @@
   color: var(--ink);
 }
 
-.tree-degree__block--done,
-.tree-degree__block--done .tree-degree__id {
+.tree-degree__block--done {
   border-color: var(--accent-edge);
   background: var(--accent-tint);
+  color: var(--accent);
+}
+
+.tree-degree__block--done .tree-degree__id {
   color: var(--accent);
 }
 
