@@ -16,7 +16,7 @@ Matching/planning are deterministic (`src/lib/match.ts`, `src/lib/plan.ts`, `src
 - Term-by-term plan, drawn as a roadmap (see Plan roadmap below), with prerequisite chains expanded automatically (including prereqs the specialization page itself never lists). It starts in a term the student picks and counts in-progress courses as passed by then; onboarding seeds it with the chosen concentrations first, then the minor's requirement lists.
 - Certificates/minors detector — surfaces credentials a student is partway through without knowing it.
 - Scholarships/awards ranked by deadline, with AI-generated "why this fits you" copy.
-- Classes tab (USask only): look up a course's sections and watch live seat counts from USask's own class search (`api/classes.ts`, `api/_banner.ts`), with a badge when a watched seat opens.
+- Class Tracker tab (USask only): look up a course's sections and watch live seat counts from USask's own class search (`api/classes.ts`, `api/_banner.ts`), with a badge when a watched seat opens.
 - Outbound phone call (via Bland) about the award closing soonest — one-way, says its piece, hangs up.
 - "Load a sample student" — a bulletproof canned path for demoing without a real transcript.
 - Full end-to-end support for Computer Science at University of Saskatchewan; partial data (plan-only, no credential detection) for Applied Mathematics, Physics, and Applied Computing, and degree-requirement plans for Biology, Psychology, Engineering, Nursing, Agriculture, Commerce, Kinesiology and Education; every other Arts & Science subject reaches only the scholarship side.

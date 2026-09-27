@@ -35,7 +35,7 @@ export function TabBar() {
   const m = useModel()
   const reduce = useReducedMotion()
   const largeText = useLargeText()
-  // Seat watching reads USask's own class search, so the Classes tab is USask-only.
+  // Seat watching reads USask's own class search, so the Class Tracker tab is USask-only.
   const tabs = DESTINATIONS.filter((d) => d.id !== 'courses' && (d.id !== 'classes' || m.universityId === 'usask'))
   const activeIndex = Math.max(0, tabs.findIndex((t) => t.id === m.tab))
 

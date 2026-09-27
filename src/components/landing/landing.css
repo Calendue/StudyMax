@@ -140,6 +140,7 @@
 /* --- the redacted-audit hero visual --- */
 
 .landing__audit {
+  margin-top: var(--space-lg);
   border: 1px solid var(--divider);
   background: var(--surface);
   padding: var(--space-md);
@@ -378,10 +379,9 @@
 
 /* --- meme break --- */
 
-.landing__meme {
+.landing__hero-meme {
   display: flex;
   justify-content: center;
-  padding: 0 var(--space-md) var(--space-2xl);
 }
 
 .landing__meme-img {

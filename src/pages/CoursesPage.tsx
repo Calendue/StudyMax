@@ -133,16 +133,17 @@ export function CoursesPage() {
           ) : (
             <>
               <p className="courses-page__count">
-                <span className="tnum">{count}</span> completed
                 {m.uploadInProgress.length > 0 && (
                   <>
-                    {' '}
-                    · <span className="tnum">{m.uploadInProgress.length}</span> in progress
+                    <span className="tnum">{m.uploadInProgress.length}</span> in progress ·{' '}
                   </>
                 )}
+                <span className="tnum">{count}</span> completed
               </p>
-              <CompletedList label={false} />
+              {/* What they're taking now leads; the finished courses follow, labelled once there's
+                  something above them to tell them apart from. */}
               <InProgressList />
+              <CompletedList label={m.uploadInProgress.length > 0} />
             </>
           )}
         </Card>

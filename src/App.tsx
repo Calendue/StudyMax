@@ -1367,7 +1367,7 @@ function useStudyMax() {
     if (screen === 'results' && lookup === null && universityId === 'usask') loadAwards.current()
   }, [screen, lookup, universityId])
 
-  // Watching full USask sections for an open seat (the Classes tab). Lives up here so an opening is
+  // Watching full USask sections for an open seat (the Class Tracker tab). Lives up here so an opening is
   // heard from any tab.
   const classes = useClassTracker()
 

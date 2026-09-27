@@ -46,8 +46,8 @@ export function CoursesScreen() {
             onClick={() => m.openSheet('browse')}
           />
         </Group>
-        <CompletedList />
         <InProgressList />
+        <CompletedList />
       </ScreenBody>
 
       <RevealBar count={count} />
