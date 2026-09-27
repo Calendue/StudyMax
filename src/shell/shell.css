@@ -1069,8 +1069,10 @@ p.card__empty {
 
 /* The Plan page hosts the skill tree: the tree's box ends above the fold at 1440x900, so the roots
    and the program's name under them are in view on arrival and only the box scrolls. */
-.plan-page__tree .tree--contained .tree__scroll {
-  height: clamp(380px, calc(100dvh - 390px), 1100px);
+/* The Plan page shows the whole tree at full height and the page scrolls (no box inside the card);
+   the key and chips stay pinned over it in the card's colour, and the side panel stays in view. */
+.plan-page__tree .tree__bar {
+  background: var(--card);
 }
 
 .plan-page__lead {
@@ -1082,6 +1084,15 @@ p.card__empty {
   top: 0;
   display: grid;
   gap: var(--s4);
+}
+
+/* Beside the full-height tree, the side panel holds to the window: the course you picked stays in
+   view while the tree scrolls, and the settings under it scroll within the panel. */
+.plan-page:has(.plan-page__tree) .plan-page__side {
+  max-height: calc(100dvh - var(--header-height) - var(--s4));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
 }
 
 .plan-page .per-term {
