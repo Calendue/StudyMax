@@ -5,15 +5,6 @@ import { ActionBar, ScreenBody, ScreenTitle, TopBar } from '../ui/chrome.tsx'
 import { Icon } from '../ui/Icon.tsx'
 import { Appear, Button, Group, IconButton, Row, RowIcon, SectionLabel } from '../ui/primitives.tsx'
 
-// Degrees across the Arts & Science programs StudyMax covers. Descriptive: it doesn't change what
-// the matcher or the planner find.
-const DEGREE_OPTIONS = [
-  'Bachelor of Science (BSc)',
-  'Bachelor of Science, Honours (BSc Honours)',
-  'Bachelor of Arts (BA)',
-  'Bachelor of Arts, Honours (BA Honours)',
-]
-
 const check = <Icon name="check" size={20} className="row__check" />
 
 /** Where the student is in onboarding: one dot per question, the ones answered in Cherry Rose. */
@@ -176,26 +167,6 @@ export function UniversityScreen() {
             onClick={() => m.handleUniversityChange('other')}
           />
         )}
-      </Group>
-    </Step>
-  )
-}
-
-export function DegreeScreen() {
-  const m = useModel()
-  return (
-    <Step title="What degree are you working toward?" canContinue={m.degree !== ''}>
-      <Group>
-        {DEGREE_OPTIONS.map((option, i) => (
-          <Row
-            key={option}
-            index={i + 1}
-            title={option}
-            selected={m.degree === option}
-            trailing={m.degree === option ? check : null}
-            onClick={() => m.chooseDegree(option)}
-          />
-        ))}
       </Group>
     </Step>
   )

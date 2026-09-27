@@ -22,6 +22,8 @@ import { currentDeadlineWatch, startDeadlineWatch, stopDeadlineWatch, syncWidget
 import { useClassTracker } from './useClassTracker.ts'
 import { currentAccount, isAuthConfigured, signIn, signInErrorMessage, signOut, type Account, type Provider } from './auth.ts'
 import { ModelContext } from './model.ts'
+import { useTheme } from './theme.ts'
+import type { Destination } from './ui/layout.ts'
 import { courseCode, registeredCode, type TargetKind } from './format.ts'
 import { DUR, INSTANT, SETTLE } from './ui/motion.ts'
 import { Intro } from './screens/Intro.tsx'
@@ -31,7 +33,6 @@ import { WelcomeScreen } from './screens/WelcomeScreen.tsx'
 import { AccountSheet } from './screens/AccountSheet.tsx'
 import {
   ConcentrationScreen,
-  DegreeScreen,
   GraduationScreen,
   MajorScreen,
   MinorScreen,
@@ -45,6 +46,8 @@ import { ReadingScreen } from './screens/ReadingScreen.tsx'
 import { RevealScreen } from './screens/RevealScreen.tsx'
 import { ResultsScreen } from './screens/ResultsScreen.tsx'
 import { CallScreen } from './screens/CallScreen.tsx'
+import { AppShell, CoursesFocus, Wizard } from './shell/AppShell.tsx'
+import { useLayoutMode } from './ui/layout.ts'
 import './App.css'
 
 function fileToBase64(file: File): Promise<string> {
@@ -65,9 +68,9 @@ type Lookup =
 type UniversityChoice = '' | 'usask' | 'other'
 
 /**
- * The flow, in order. Onboarding asks one question per screen (student type, university, degree,
+ * The flow, in order. Onboarding asks one question per screen (student type, university,
  * graduation year, major, minor, concentrations, this term's courses, phone number); existing
- * students then add courses. Results is tabbed; the call is
+ * students then add courses. A transcript upload skips what the transcript already answers. Results is tabbed; the call is
  * the last step.
  */
 export type Screen =
@@ -75,7 +78,6 @@ export type Screen =
   | 'welcome'
   | 'student'
   | 'university'
-  | 'degree'
   | 'graduation'
   | 'major'
   | 'minor'
@@ -198,6 +200,9 @@ function resumeScreen(state: Partial<SavedState>): Screen {
 }
 
 function useStudyMax() {
+  // --- light, dark or the system's; set before first paint by index.html, kept here from then on ---
+  const { themePref, theme, setThemePref } = useTheme()
+
   // --- what this deployment can do: features whose server key is missing are left out entirely ---
   const [features, setFeatures] = useState(cachedFeatures)
   useEffect(() => {
@@ -309,6 +314,14 @@ function useStudyMax() {
 
   const [completed, setCompleted] = useState<Set<string>>(() => new Set(saved.completed ?? []))
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'sample' | 'error'>('idle')
+  // Picked "Upload my transcript" on the first question: the transcript answers the major, minor and
+  // this term's courses, so onboarding skips those and ends on the dashboard, not the course list.
+  const [fromTranscript, setFromTranscript] = useState(false)
+  // The major and minor the transcript states, as written; mapped to program ids once USask is picked.
+  const [statedProgram, setStatedProgram] = useState<{ major: string | null; minor: string | null }>({
+    major: null,
+    minor: null,
+  })
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploadInProgress, setUploadInProgress] = useState<string[]>(saved.inProgress ?? [])
   const completedRef = useRef(completed)
@@ -436,11 +449,14 @@ function useStudyMax() {
     }
     setUniversityId(id)
     setProgramId('')
-    setCompleted(new Set())
-    setUploadInProgress([])
+    // A transcript read from the first question is the student's, whichever school they then pick.
+    if (!fromTranscript) {
+      setCompleted(new Set())
+      setUploadInProgress([])
+      setUploadStatus('idle')
+    }
     setHeroId(null)
     setExtraTargetIds([])
-    setUploadStatus('idle')
     haptic.selection()
     requestAdvance()
   }
@@ -453,12 +469,15 @@ function useStudyMax() {
       return
     }
     setProgramId(id)
-    setCompleted(new Set())
-    setUploadInProgress([])
+    // A transcript's courses are the student's whatever their major; only hand-picked ones reset.
+    if (!fromTranscript) {
+      setCompleted(new Set())
+      setUploadInProgress([])
+      setUploadStatus('idle')
+    }
     setHeroId(null)
     setExtraTargetIds([])
     setConcentrationIds([]) // they belong to the major they were picked from
-    setUploadStatus('idle')
     requestAdvance()
   }
 
@@ -467,6 +486,7 @@ function useStudyMax() {
     // A first-year has no transcript: one being read from the first question is dropped.
     if (type === 'first-year' && uploadStatus === 'uploading') cancelUpload()
     setStudentType(type)
+    setFromTranscript(false)
     requestAdvance()
   }
 
@@ -475,12 +495,6 @@ function useStudyMax() {
     haptic.selection()
     setStudentType('existing')
     void handleTranscriptFile(file, true)
-  }
-
-  function chooseDegree(value: string) {
-    haptic.selection()
-    setDegree(value)
-    requestAdvance()
   }
 
   function chooseGradYear(year: number) {
@@ -526,6 +540,28 @@ function useStudyMax() {
   const minorOptions = useMemo(() => availablePrograms.filter((p) => p.kind === 'minor'), [availablePrograms])
   // Only a major with specializations to pick from gets the concentration step.
   const concentrationOptions = universityId === 'usask' ? (selectedProgram?.specializations ?? []) : []
+
+  // The transcript's stated major and minor, matched to USask programs by name (or shorthand like
+  // "Accounting" for Commerce), longest name first so "Applied Mathematics" beats "Mathematics". A
+  // named track ("Mechanical Engineering") becomes the concentration, so the reveal leads with it.
+  useEffect(() => {
+    if (!fromTranscript || universityId !== 'usask') return
+    const says = (text: string | null, name: string) => !!text && text.toLowerCase().includes(name.toLowerCase())
+    // Shorthand is matched as a whole word: "COMM" must not find Commerce in "Communications".
+    const saysWord = (text: string | null, word: string) => !!text && new RegExp(`\\b${word}\\b`, 'i').test(text)
+    const { major, minor } = statedProgram
+    const byLength = [...programOptions].sort((a, b) => b.name.length - a.name.length)
+    const program =
+      byLength.find((o) => says(major, o.name)) ??
+      byLength.find((o) => o.aliases.some((alias) => alias.length > 3 && saysWord(major, alias)))
+    if (program) {
+      setProgramId((id) => id || program.id)
+      const track = availablePrograms.find((p) => p.id === program.id)?.specializations.find((s) => says(major, s.name))
+      if (track) setConcentrationIds((ids) => (ids.length > 0 ? ids : [track.id]))
+    }
+    const minorProgram = minorOptions.find((p) => says(minor, p.name.replace(/\s*minor\s*/i, '').trim()))
+    if (minorProgram) setMinorId((id) => id ?? minorProgram.id)
+  }, [fromTranscript, universityId, statedProgram, programOptions, availablePrograms, minorOptions])
   const targetSeed = seedOf({ concentrationIds, minorId })
 
   function seedTargets(ids: string[]) {
@@ -534,6 +570,7 @@ function useStudyMax() {
   }
 
   function loadSampleStudent() {
+    setFromTranscript(false)
     setUniversityId('usask')
     setProgramId(computerScience.id)
     setCompleted(new Set(computerScience.sampleTranscript ?? []))
@@ -630,12 +667,17 @@ function useStudyMax() {
       setCompleted((prev) => new Set(replacing ? codes : [...prev, ...codes]))
       setUploadInProgress((prev) => (replacing ? inProgressCodes : [...new Set([...prev, ...inProgressCodes])]))
       setFoundCount(codes.length)
+      setStatedProgram({ major: data.major ?? null, minor: data.minor ?? null })
       if (!early) seedTargets(targetSeed)
       setReadPhase('found')
       setUploadStatus('success')
       haptic.light()
       await wait(1200)
-      if (live()) go(early ? 'university' : 'courses', early ? 1 : -1)
+      if (!live()) return
+      // Read on the first question: the transcript answers the program questions, so onboarding skips
+      // them from here on (see onboardingSteps) and ends on the dashboard.
+      if (early) setFromTranscript(true)
+      go(early ? 'university' : 'courses', early ? 1 : -1)
     } catch (err) {
       if (!live()) return
       setUploadStatus('error')
@@ -1009,6 +1051,24 @@ function useStudyMax() {
     setTabState(next)
   }
 
+  /**
+   * The navigation's one entry point once there are results: the tab bar, the rail, the sidebar and
+   * the search all come through here. A tab is a tab of the results screen; Courses is its own screen.
+   */
+  function navigate(dest: Destination) {
+    setSheet(null)
+    if (dest === 'courses') {
+      if (screen !== 'courses') {
+        haptic.selection()
+        go('courses', -1)
+      }
+      return
+    }
+    if (dest !== tab) haptic.selection()
+    setTabState(dest)
+    if (screen !== 'results') go('results', 1)
+  }
+
   function openSheet(id: string) {
     haptic.selection()
     setSheet(id)
@@ -1018,10 +1078,19 @@ function useStudyMax() {
   // far. Continue moves one along it and Back (the button or Android's) one back.
   // A question not answered yet assumes the longer USask path, so the dots and the button don't
   // promise an early finish.
-  const onboardingSteps: Screen[] = [
+  const onboardingSteps: Screen[] = fromTranscript
+    ? [
+        'student',
+        'university',
+        'graduation',
+        'phone',
+        // Only if the transcript didn't name a major StudyMax knows.
+        ...(uploadStatus === 'success' && !selectedProgram ? (['major'] as const) : []),
+      ]
+    : [
     'student',
     'university',
-    ...(universityId !== 'other' ? (['degree', 'graduation', 'major', 'minor'] as const) : (['graduation'] as const)),
+    ...(universityId !== 'other' ? (['graduation', 'major', 'minor'] as const) : (['graduation'] as const)),
     ...(universityId !== 'other' && (!selectedProgram || concentrationOptions.length > 0)
       ? (['concentration'] as const)
       : []),
@@ -1031,7 +1100,7 @@ function useStudyMax() {
   const flow: Screen[] = [
     ...(isAuthConfigured && !account ? (['welcome'] as const) : []),
     ...onboardingSteps,
-    ...(hasCourseStep ? (['courses'] as const) : []),
+    ...(hasCourseStep && !fromTranscript ? (['courses'] as const) : []),
   ]
   const flowIndex = flow.indexOf(screen)
   const nextIsReveal = flowIndex === flow.length - 1
@@ -1040,6 +1109,11 @@ function useStudyMax() {
   const resultsBack = flow[flow.length - 1]
 
   function next() {
+    // The major step drops out of the transcript path's list once it's answered, hence the explicit check.
+    if (fromTranscript && (screen === 'major' || flowIndex === flow.length - 1)) {
+      finishTranscriptPath()
+      return
+    }
     if (screen === onboardingSteps[onboardingSteps.length - 1]) completeOnboarding()
     const to = flow[flowIndex + 1]
     if (to) go(to)
@@ -1081,6 +1155,16 @@ function useStudyMax() {
       setUploadStatus('idle')
     }
     seedTargets(targetSeed)
+  }
+
+  /** End of the transcript path (the read already succeeded): straight to the dashboard. */
+  function finishTranscriptPath() {
+    if (!selectedProgram) {
+      go('major')
+      return
+    }
+    completeOnboarding()
+    startReveal()
   }
 
   function startReveal() {
@@ -1243,6 +1327,10 @@ function useStudyMax() {
   return {
     features,
     classes,
+    // appearance
+    themePref,
+    theme,
+    setThemePref,
     // account
     account,
     authBusy,
@@ -1267,7 +1355,6 @@ function useStudyMax() {
     chooseStudentType,
     chooseTranscript,
     degree,
-    chooseDegree,
     minorId,
     minorOptions,
     chooseMinor,
@@ -1350,6 +1437,8 @@ function useStudyMax() {
     watchDeadline,
     unwatchDeadline,
     // navigation
+    revealed,
+    navigate,
     screen,
     direction,
     go,
@@ -1382,7 +1471,6 @@ const SCREENS: Record<Screen, ComponentType> = {
   welcome: WelcomeScreen,
   student: StudentScreen,
   university: UniversityScreen,
-  degree: DegreeScreen,
   major: MajorScreen,
   minor: MinorScreen,
   concentration: ConcentrationScreen,
@@ -1414,6 +1502,7 @@ const instantVariants = {
 function App() {
   const model = useStudyMax()
   const reduce = useReducedMotion()
+  const layout = useLayoutMode()
   const backRef = useRef(model.back)
   backRef.current = model.back
   useEffect(() => onBackButton(() => backRef.current()), [])
@@ -1430,31 +1519,48 @@ function App() {
             <LandingPage onGetStarted={() => model.setShowLanding(false)} onSkip={() => model.setShowLanding(false)} />
           </main>
         </div>
+        <AccountSheet />
       </ModelContext.Provider>
     )
   }
 
+  // Wider than a phone, the results (and the courses and the call, once there are results) live in
+  // the dashboard shell; before that, courses get the desktop page and every other step the wizard.
+  const wide = layout !== 'tabs'
+  const inShell = wide && model.revealed && (model.screen === 'results' || model.screen === 'courses' || model.screen === 'call')
+  const coursesFocus = wide && !inShell && model.screen === 'courses'
+  const frame = inShell ? 'shell' : coursesFocus ? 'courses-focus' : model.screen
   const Current = SCREENS[model.screen]
+  const content = inShell ? (
+    <AppShell mode={layout === 'sidebar' ? 'sidebar' : 'rail'} />
+  ) : coursesFocus ? (
+    <CoursesFocus />
+  ) : (
+    <Current />
+  )
+  const wizard = wide && !inShell && !coursesFocus && model.screen !== 'landing'
+  const screens = (
+    <AnimatePresence mode="wait" initial={false} custom={model.direction}>
+      <motion.div
+        key={frame}
+        className="screen"
+        custom={model.direction}
+        variants={reduce ? instantVariants : screenVariants}
+        initial="enter"
+        animate="shown"
+        exit="leave"
+      >
+        {content}
+      </motion.div>
+    </AnimatePresence>
+  )
   return (
     <ModelContext.Provider value={model}>
-      <div className={`app${model.screen === 'landing' ? ' app--wide' : ''}`}>
-        {launched && (
-        <AnimatePresence mode="wait" initial={false} custom={model.direction}>
-          <motion.div
-            key={model.screen}
-            className="screen"
-            custom={model.direction}
-            variants={reduce ? instantVariants : screenVariants}
-            initial="enter"
-            animate="shown"
-            exit="leave"
-          >
-            <Current />
-          </motion.div>
-        </AnimatePresence>
-        )}
+      <div className={`app${model.screen === 'landing' || inShell || coursesFocus || wizard ? ' app--wide' : ''}`}>
+        {/* The wizard's art stays put while its questions change beside it. */}
+        {launched && (wizard ? <Wizard>{screens}</Wizard> : screens)}
       </div>
-      {model.account && <AccountSheet />}
+      <AccountSheet />
       <Intro onReveal={() => setLaunched(true)} />
     </ModelContext.Provider>
   )

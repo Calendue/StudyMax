@@ -147,7 +147,7 @@
   width: 52px;
   height: 52px;
   border-radius: var(--r3);
-  background: var(--accent);
+  background: var(--accent-fill);
   color: var(--on-accent);
 }
 
@@ -267,7 +267,7 @@
 }
 
 .status-line--done .status-line__icon {
-  background: var(--accent);
+  background: var(--accent-fill);
   color: var(--on-accent);
 }
 
@@ -474,7 +474,7 @@
 }
 
 .segmented__option--on {
-  background: var(--accent);
+  background: var(--accent-fill);
   color: var(--on-accent);
 }
 
@@ -848,7 +848,7 @@
   width: 84px;
   height: 84px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--accent-fill);
   color: var(--on-accent);
 }
 
@@ -903,97 +903,165 @@
   color: var(--ink-2);
 }
 
-/* ─────────────────────────────────────────────────────────── tab bar */
+/* ─────────────────────────────────────────────────────────── tab bar (CalenDue's) */
 
+/* 56pt of bar plus the safe area, floating on the page with the one elevation recipe. The whole bar
+   is a gesture surface: no text selection, no callout, and no scroll stealing a drag across it. */
 .tabbar {
   flex: none;
   position: relative;
   z-index: 2;
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: 1fr;
-  padding: var(--s1) calc(var(--s2) + var(--sar)) calc(var(--s1) + var(--sab)) calc(var(--s2) + var(--sal));
+  display: flex;
+  align-items: stretch;
+  gap: var(--s1);
+  height: calc(var(--tabbar-height) + var(--sab));
+  padding: 0 calc(var(--s2) + var(--sar)) var(--sab) calc(var(--s2) + var(--sal));
   background: var(--bg);
   border-radius: var(--r4) var(--r4) 0 0;
   box-shadow: var(--shadow-float);
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .keyboard-open .tabbar {
   display: none;
 }
 
+.tabbar__slots {
+  position: relative;
+  flex: 1;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  align-items: center;
+}
+
+/* The one glass element in the app: a translucent Cherry Rose tint over the surface, a hairline
+   of the same, and a blur, sitting behind the active tab. */
+.tabbar__capsule {
+  position: absolute;
+  top: 5px;
+  left: 0;
+  height: calc(var(--tabbar-height) - 10px);
+  border-radius: 999px;
+  background: var(--accent-tint);
+  box-shadow: inset 0 0 0 1px var(--accent-edge);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  pointer-events: none;
+}
+
 .tab {
+  position: relative;
+  z-index: 1;
   display: grid;
   justify-items: center;
-  gap: 2px;
-  min-height: 56px;
-  padding: var(--s2) 0 6px;
-  font-size: 0.75rem;
-  font-weight: 500;
+  align-content: center;
+  gap: 3px;
+  height: var(--tabbar-height);
+  padding: 0 var(--s1);
+  /* Overline-sized, body-strong: short, quiet labels. */
+  font: 600 0.6875rem / 1 var(--font-text);
+  letter-spacing: 0.02em;
   color: var(--ink-2);
-  transition: color var(--d-fast) var(--settle);
+  transition:
+    color var(--d-fast) var(--settle),
+    opacity var(--d-fast) var(--settle);
 }
 
-.tab svg {
-  transition: transform var(--d-fast) var(--settle);
-}
-
-.tab:active svg {
-  transform: scale(0.9);
+.tab:active {
+  opacity: 0.75;
 }
 
 .tab--active {
   color: var(--accent);
-  font-weight: 600;
 }
 
-/* The same three destinations as the bottom bar, as a top strip instead. Hidden below the
-   "desktop width" breakpoint, where the bottom bar (a thumb's reach away) is the better fit. */
-.topnav {
-  display: none;
+/* Under an armed capsule mid-drag: lifted to full ink until the release commits it. */
+.tab--under:not(.tab--active) {
+  color: var(--ink);
 }
 
-/* ─────────────────────────────────────────────────────────── desktop width */
+.tab__label {
+  white-space: nowrap;
+}
 
-@media (min-width: 700px) {
-  .screen__content {
-    padding-left: var(--s5);
-    padding-right: var(--s5);
-  }
+.tab--account {
+  flex: none;
+  width: 64px;
+}
 
-  .screen-title h1 {
-    font-size: 2.125rem;
-  }
+.tab--account .avatar {
+  box-shadow: 0 0 0 1.5px var(--bg), 0 0 0 2.5px var(--track);
+}
 
-  .actionbar {
-    margin-bottom: var(--s4);
-    border-radius: var(--r4);
-  }
+.tab__icon {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  height: 24px;
+}
 
-  .tabbar {
-    display: none;
-  }
+.tab__badge {
+  position: absolute;
+  top: -1px;
+  right: -4px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--bg);
+}
 
-  .topnav {
-    display: flex;
-    gap: var(--s5);
-    padding: 0 calc(var(--s5) + var(--sar)) 0 calc(var(--s5) + var(--sal));
-    border-bottom: 1px solid var(--divider);
-  }
+/* ─────────────────────────────────────────────────────────── theme switch, segmented labels */
 
-  .topnav .tab {
-    display: inline-flex;
-    flex-direction: row;
-    align-items: center;
-    gap: var(--s1);
-    min-height: 48px;
-    padding: 0;
-    border-bottom: 2px solid transparent;
-  }
+.theme-switch {
+  position: relative;
+  flex: none;
+  width: 52px;
+  height: 30px;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+  transition: background-color 300ms var(--settle);
+}
 
-  .topnav .tab--active {
-    border-bottom-color: var(--accent);
-  }
+.theme-switch--dark {
+  background: var(--accent-fill);
+}
+
+.theme-switch__knob {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--card);
+  color: var(--accent);
+  box-shadow: var(--shadow-knob);
+}
+
+.theme-switch--dark .theme-switch__knob {
+  background: var(--bg);
+}
+
+.segmented--labels {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+}
+
+.segmented--labels .segmented__option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: auto;
+  padding: 0 var(--s2);
+  font-size: 0.875rem;
 }
 
 /* ─────────────────────────────────────────────────────────── welcome, sign-in */
@@ -1073,13 +1141,14 @@
   opacity: 0.55;
 }
 
+/* Apple's button is the ink one: black-on-white's rule, so it inverts in dark mode (Apple's white). */
 .auth-btn--apple {
   background: var(--ink);
-  color: var(--old-lace);
+  color: var(--bg);
 }
 
 .auth-btn--google {
-  background: var(--old-lace);
+  background: var(--card);
   color: var(--ink);
   box-shadow: inset 0 0 0 1px var(--edge);
 }
@@ -1163,24 +1232,6 @@
   margin-bottom: var(--s1);
   font: 600 var(--fs-title) / 1.3 var(--font-brand);
   color: var(--accent);
-}
-
-/* ─────────────────────────────────────────────────────────── tab badge */
-
-.tab__icon {
-  position: relative;
-  display: inline-grid;
-}
-
-.tab__badge {
-  position: absolute;
-  top: -1px;
-  right: -3px;
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 0 2px var(--bg);
 }
 
 /* ─────────────────────────────────────────────────────────── results: classes */
