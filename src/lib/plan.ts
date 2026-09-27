@@ -554,6 +554,14 @@ function runPlan(
     const result = scheduleCore(force.size > 0 ? { ...built.core, nodeBudget: Math.min(built.core.nodeBudget ?? 3000, 300) } : built.core)
     const byCode = new Map(courses.map((c) => [c.code, c]))
     const diagnostics = [...built.diagnostics]
+    // A requirement with no course left in the 2026-27 catalogue (BINF 451) can't be planned: said, never dropped silently.
+    for (const t of targets) {
+      for (const slot of t.unsatisfied) {
+        if (slot.label || slot.options.some((o) => courseInfo[o] !== undefined)) continue
+        const first = [...slot.options].sort()[0]
+        if (first) diagnostics.push({ level: 'error', code: 'NO_OFFERING', course: first, message: `${t.spec.name} needs ${slot.options.map(spaced).join(' or ')}, which the 2026-27 catalogue no longer lists.` })
+      }
+    }
     const placed = new Map<number, PlannedCourse[]>()
     if (result.at) {
       built.core.items.forEach((item, i) => {
