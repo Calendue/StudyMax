@@ -5,6 +5,8 @@ import type { SpecializationMatch } from '../lib/match.ts'
 import { ScreenTitle } from '../ui/chrome.tsx'
 import { Appear, Button, Chip, CountUp, Group, OptionList, Ring, Row, SectionLabel } from '../ui/primitives.tsx'
 import { Sheet } from '../ui/Sheet.tsx'
+import { WhatIfSheet } from './WhatIfSheet.tsx'
+import { ShareSheet } from './ShareSheet.tsx'
 
 export function OverviewTab() {
   const m = useModel()
@@ -64,6 +66,12 @@ export function OverviewTab() {
           <Appear index={4} className="hero-action">
             <Button block onClick={() => m.setTab('plan')}>
               See your term-by-term plan
+            </Button>
+            <Button block variant="secondary" icon="compare" onClick={() => m.openSheet('whatif')}>
+              What if I went for something else?
+            </Button>
+            <Button block variant="quiet" icon="share" onClick={() => m.openSheet('share')}>
+              Share my result
             </Button>
           </Appear>
         </>
@@ -125,6 +133,8 @@ export function OverviewTab() {
       </p>
 
       <TargetSheet />
+      <WhatIfSheet />
+      <ShareSheet />
     </>
   )
 }

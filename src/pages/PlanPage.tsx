@@ -5,6 +5,8 @@ import { Icon } from '../ui/Icon.tsx'
 import { AddTargetSheet, HiddenPrereqsNotice, PlanControls, PlanCopy, PlanEmpty, PlanLead, PlanTargets } from '../screens/PlanTab.tsx'
 import { CourseDetail, PlanRoadmap, type RoadmapSelection } from '../screens/PlanRoadmap.tsx'
 import { Card } from './Card.tsx'
+import { WhatIfSheet } from '../screens/WhatIfSheet.tsx'
+import { ShareSheet } from '../screens/ShareSheet.tsx'
 
 // The desktop's Plan: Ayo's roadmap across the width, and beside it a panel for the course you pick,
 // the plan's settings, and the copy for an advisor. The phone shows the same pieces stacked.
@@ -58,6 +60,8 @@ export function PlanPage() {
         </Card>
       </aside>
       <AddTargetSheet />
+      <WhatIfSheet />
+      <ShareSheet />
     </div>
   )
 }

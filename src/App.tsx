@@ -10,7 +10,7 @@ import type { School } from './data/schools/types.ts'
 import { computerScience } from './data/programs/computerScience.ts'
 import type { Program } from './data/programs/types.ts'
 import { buildCallScript, type CallContext } from './lib/callScript.ts'
-import { buildStudentPlan, termsFrom, upcomingTerm, type TermStart } from './lib/plan.ts'
+import { buildStudentPlan, termsFrom, upcomingTerm, type Season, type TermStart } from './lib/plan.ts'
 import { computeCredentials } from './lib/credentials.ts'
 import { searchCourses, catalogueTitle } from './lib/courseSearch.ts'
 import { courseInfo } from './data/prereqs.ts'
@@ -155,6 +155,8 @@ interface SavedState {
   registered?: string[]
   /** Whether the plan may use Spring/Summer terms. */
   springSummer?: boolean
+  /** The term each in-progress course is in, from the transcript or set by the student. */
+  courseTerms?: Record<string, Season>
 }
 
 
@@ -326,6 +328,8 @@ function useStudyMax() {
   })
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploadInProgress, setUploadInProgress] = useState<string[]>(saved.inProgress ?? [])
+  // Which term each in-progress course is in. A course without one is taken to be in the current term.
+  const [courseTerms, setCourseTerms] = useState<Record<string, Season>>(saved.courseTerms ?? {})
   const completedRef = useRef(completed)
   completedRef.current = completed
 
@@ -348,6 +352,7 @@ function useStudyMax() {
     gradYear,
     registered,
     springSummer,
+    courseTerms,
   }
   const snapshotJson = JSON.stringify(snapshot)
   useEffect(() => {
@@ -605,6 +610,7 @@ function useStudyMax() {
     setProgramId(computerScience.id)
     setCompleted(new Set(computerScience.sampleTranscript ?? []))
     setUploadInProgress(computerScience.sampleInProgress ?? [])
+    setCourseTerms(computerScience.sampleInProgressTerms ?? {})
     // A sample student is an existing one. Targets picked in onboarding still lead the plan.
     setStudentType('existing')
     if (programId !== computerScience.id) setConcentrationIds([])
@@ -696,6 +702,8 @@ function useStudyMax() {
 
       setCompleted((prev) => new Set(replacing ? codes : [...prev, ...codes]))
       setUploadInProgress((prev) => (replacing ? inProgressCodes : [...new Set([...prev, ...inProgressCodes])]))
+      const terms: Record<string, Season> = data.inProgressTerms ?? {}
+      setCourseTerms((prev) => (replacing ? terms : { ...prev, ...terms }))
       setFoundCount(codes.length)
       setStatedProgram({ major: data.major ?? null, minor: data.minor ?? null })
       if (!early) seedTargets(targetSeed)
@@ -741,6 +749,32 @@ function useStudyMax() {
       document.removeEventListener('visibilitychange', refresh)
     }
   }, [])
+
+  // The courses the student is taking, grouped by term: this term first, then the ones after it.
+  const currentSeason: Season = today.getMonth() >= 8 ? 'Fall' : today.getMonth() >= 4 ? 'Spring/Summer' : 'Winter'
+  const currentByTerm = useMemo(() => {
+    const order: Season[] = ['Fall', 'Winter', 'Spring/Summer']
+    const from = order.indexOf(currentSeason)
+    const seasons = [...order.slice(from), ...order.slice(0, from)]
+    return seasons
+      .map((season) => ({ season, courses: inProgressCourses.filter((c) => (courseTerms[c] ?? currentSeason) === season) }))
+      .filter((group) => group.courses.length > 0)
+  }, [inProgressCourses, courseTerms, currentSeason])
+
+  function setCourseTerm(code: string, season: Season) {
+    haptic.selection()
+    setCourseTerms((prev) => ({ ...prev, [code]: season }))
+  }
+
+  // Whether the courses changed since the results were last worked out. Only then is "Update my
+  // results" worth offering; otherwise the results already reflect every course on the list.
+  const resultsKey = JSON.stringify([[...completed].sort(), [...inProgressCourses].sort()])
+  const [revealedKey, setRevealedKey] = useState<string | null>(null)
+  useEffect(() => {
+    // A session restored already revealed counts as up to date with what it restored.
+    if (revealed && revealedKey === null) setRevealedKey(resultsKey)
+  }, [revealed, revealedKey, resultsKey])
+  const resultsStale = revealed && revealedKey !== null && revealedKey !== resultsKey
 
   // --- term-by-term path to the closest specialization ---
   const [coursesPerTerm, setCoursesPerTerm] = useState(2)
@@ -1223,6 +1257,7 @@ function useStudyMax() {
 
   function finishReveal() {
     setRevealed(true)
+    setRevealedKey(resultsKey)
     haptic.medium()
     go('results')
   }
@@ -1234,6 +1269,7 @@ function useStudyMax() {
     setMinorId(null)
     setConcentrationIds([])
     setGradYear(null)
+    setCourseTerms({})
     setRegistered([])
     setRegisteredQuery('')
     setSpringSummer(false)
@@ -1369,7 +1405,7 @@ function useStudyMax() {
 
   // Watching full USask sections for an open seat (the Class Tracker tab). Lives up here so an opening is
   // heard from any tab.
-  const classes = useClassTracker()
+  const classes = useClassTracker({ phone, callEnabled: features.call })
 
   return {
     features,
@@ -1437,8 +1473,12 @@ function useStudyMax() {
     foundCount,
     handleTranscriptFile,
     // results
+    currentByTerm,
+    setCourseTerm,
+    resultsStale,
     matches,
     credentials,
+    planningSpecs,
     hero,
     heroKind,
     kindOf,
