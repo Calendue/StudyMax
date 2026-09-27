@@ -1,10 +1,10 @@
 import type { Specialization } from '../data/specializations.js'
-import type { Degree } from '../data/programs/types.js'
+import type { Degree } from '../data/degrees/types.js'
 import { courseInfo } from '../data/prereqs.js'
 import { creditPrereqs } from '../data/creditPrereqs.js'
 import { offerings as scrapedOfferings } from '../data/offerings.js'
 import { computeCourseOverlap, computeMatches, type SpecializationMatch } from './match.js'
-import { cuOf, FREE_ELECTIVE, levelOf, planDegree, type DegreeSlot } from './planDegree.js'
+import { cuOf, degreeTarget, FREE_ELECTIVE, levelOf, planDegree, type DegreeSlot } from './planDegree.js'
 
 // Sources for the load rules below: "Normally students register in a maximum of 30 credit units
 // (15 credit units per term) in Fall and Winter Terms" (programs.usask.ca/arts-and-science/
@@ -682,9 +682,10 @@ export function buildStudentPlan(
   const done = new Set([...completed, ...inProgress])
   // With the degree mapped, the plan is the whole degree: the targets and the degree's own slots
   // together, so every pick has to fit the degree too, and its open slots become unnamed electives.
-  const open = computeMatches(degree ? [...targets, degree] : targets, done).filter((m) => m.remaining > 0)
+  const whole = degree ? degreeTarget(degree) : null
+  const open = computeMatches(whole ? [...targets, whole] : targets, done).filter((m) => m.remaining > 0)
   if (!degree && open.length === 0) return []
-  return buildPlan(open, degree ? [...allSpecializations, degree] : allSpecializations, done, coursesPerTerm, start, options)
+  return buildPlan(open, whole ? [...allSpecializations, whole] : allSpecializations, done, coursesPerTerm, start, options)
 }
 
 /** `count` consecutive terms from `start`, for a start-term picker. */

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useModel } from '../model.ts'
 import { termLabel } from '../lib/currentTerms.ts'
-import { currentTermOf, treeTargets, type TreeDegreeProgress, type TreeNode, type TreeStatus, type TreeTargetKind } from '../lib/skillTree.ts'
+import { currentTermOf, treeTargets, type TreeNode, type TreeStatus, type TreeTargetKind } from '../lib/skillTree.ts'
 
 export type PlanView = 'tree' | 'roadmap'
 
@@ -47,15 +47,10 @@ export function statusLabel(node: TreeNode): string {
   return node.status === 'inProgress' && !node.current ? 'Registered' : STATUS_LABEL[node.status]
 }
 
-// Model fields other tracks add (the transcript's completed-course terms, the degree audit's
-// progress). Read if present, so the tree picks them up the moment they're wired.
-type Optional = { completedTerms?: Record<string, string>; treeDegree?: TreeDegreeProgress }
-
 /** The tree's inputs from the model: the leaves, the terms and loads, the beacon. */
 export function useTreeInputs() {
   const model = useModel()
-  const { hero, targets, credentials, today, topOverlap, currentByTerm, coursesPerTerm, summerPerTerm } = model
-  const { completedTerms, treeDegree } = model as Optional
+  const { hero, targets, credentials, today, topOverlap, currentByTerm, coursesPerTerm, summerPerTerm, completedTerms, treeDegree } = model
   const terms = useMemo(
     () => ({
       // Each in-progress or registered course in its own term, as the Courses page groups them.
