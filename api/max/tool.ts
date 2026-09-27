@@ -30,6 +30,7 @@ import { maxSkills } from '../../src/lib/max/skills.generated.js'
 import { planOptions, type OptionTopic } from '../../src/lib/max/options.js'
 import { programName, regenerate, speakableCourse, specializationName, underWayByTerm } from '../../src/lib/max/planningAdapter.js'
 import { computeMatches } from '../../src/lib/match.js'
+import { electiveOptions } from '../../src/lib/max/catalogue.js'
 import { programs } from '../../src/data/programs/index.js'
 import { currentTermOf, upcomingTerm, type TermStart } from '../../src/lib/plan.js'
 import { getTerms, searchCourse } from '../_banner.js'
@@ -198,6 +199,9 @@ async function overviewFromCall(call: ResolvedCall, p: CallPlanInputs): Promise<
       // Every term to graduation, so "what's in Winter 2028" is read from here, never guessed.
       allTerms: Object.fromEntries(terms.map((t) => [t.label, t.courses.map((c) => speakableCourse(c.code))])),
     },
+    // Real catalogue courses for each open elective slot (the app's elective picker rules): suggest and
+    // add only from these, by their exact code, never a code from memory.
+    electiveOptions: electiveOptions(terms, degree, p.completed, p.programId === 'computer-science' ? ['CMPT', 'MATH', 'STAT'] : []),
     preferences: { coursesPerTerm: s.coursesPerTerm, springSummer: s.springSummer, summerCoursesPerTerm: s.summerPerTerm },
     // What Max may switch to, with how much each has left — for get_plan_options and a spoken name.
     availableSpecializations: computeMatches(program?.specializations ?? [], new Set(s.completed), degree)
