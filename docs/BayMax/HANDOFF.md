@@ -123,6 +123,15 @@ values. `npm run build`, `npm run lint`, and `check-plan.ts`/`check-planning-ada
 
 ## Known gaps / not yet done
 
+- **⚠️ Phone-ownership OTP verification is currently disabled** — `OTP_GATE_ENABLED = false` at the
+  top of `src/screens/PingMaxScreen.tsx`, added 2026-09-27 because Firebase Phone Auth was failing on
+  this project (Phone provider / Blaze plan still being sorted — authorized domains were already
+  correct). "Send code" currently just saves whatever number was typed as verified and moves straight
+  to consent, with no proof the person setting it up actually owns that number. **This is the exact
+  thing spec `11` calls out**: "Phone ownership verified by SMS OTP before the first call. Prevents
+  using Max to harass a third party." Flip `OTP_GATE_ENABLED` back to `true` once Firebase Phone Auth
+  actually works — do this before anyone outside the team can reach "Ping Max" unsupervised, not just
+  before the demo.
 - **No real phone call has actually been placed and completed end-to-end yet** (see Status above) —
   do this next, on the live site, not localhost.
 - **Vapi phone number is a US number** (`+1 314 661 9879`, imported from Twilio), not Canadian —
