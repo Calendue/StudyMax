@@ -65,7 +65,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (resolved.isGuest) {
     if (req.method === 'GET') {
       const settings = await db().maxSettings.findUnique({ where: { userId: user.userId } })
-      res.status(200).json({ ...shape(user.firstName, null), isGuest: true, hasMetMax: settings?.hasMetMax === true })
+      // No name either: "Demo" (or whatever the last guest was called) isn't this guest's.
+      res.status(200).json({ ...shape(null, null), isGuest: true, hasMetMax: settings?.hasMetMax === true })
       return
     }
     if (req.method !== 'POST') {
@@ -79,7 +80,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return
     }
     res.status(200).json({
-      ...shape(user.firstName, null),
+      ...shape(null, null),
       isGuest: true,
       phoneVerified: phone !== undefined && body.verified === true,
       phoneHint: phone ? phone.replace(/\D/g, '').slice(-4) : null,

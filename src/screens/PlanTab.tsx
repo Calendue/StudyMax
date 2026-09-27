@@ -1,7 +1,6 @@
 import { useModel } from '../model.ts'
 import { MAX_COURSES_PER_TERM, MAX_SUMMER_COURSES } from '../lib/cloudSession.ts'
 import { KIND_LABEL, plural } from '../format.ts'
-import { hasSavedRun } from '../lib/mockRegistration.ts'
 import { ScreenTitle } from '../ui/chrome.tsx'
 import { Icon } from '../ui/Icon.tsx'
 import { Appear, Button, Group, Ring, Row, SectionLabel } from '../ui/primitives.tsx'
@@ -82,17 +81,17 @@ export function PlanTargets() {
 
 /**
  * Registering for the plan's next term with Max, on its own row under the targets. Hidden until that
- * term has something to register (a named course, or an elective slot Max can fill).
+ * term has something to register (a named course, or an elective slot Max can fill). Secondary: the
+ * plan's one primary is copying it for an advisor.
  */
 export function RegisterEntry() {
   const m = useModel()
   const request = useRegistrationRequest()
   if (!request) return null
-  const practised = hasSavedRun(m.account?.uid ?? null, request.termLabel)
   return (
     <Appear index={1} className="plan-register">
-      <Button icon="calendar" onClick={() => m.go('register')}>
-        {practised ? `View ${request.termLabel} registration` : `Register for ${request.termLabel} with Max`}
+      <Button variant="secondary" icon="calendar" onClick={() => m.go('register')}>
+        Register for {request.termLabel} with Max
       </Button>
     </Appear>
   )
