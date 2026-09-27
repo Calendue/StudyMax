@@ -1,10 +1,10 @@
 .landing {
   /* This page was written against the earlier theme's variable names; they're mapped here, scoped
-     to the landing page, onto tokens.css. Colours use the tokens directly. The display sizes a
-     marketing page needs beyond the app's type scale (text-sm/lg/2xl, space-2xl) are its own. */
+     to the landing page, onto tokens.css, including the larger marketing sizes. Labels that were
+     monospace now use the brand face, tracked, like the app's own section labels. */
   --font-display: var(--font-brand);
   --font-body: var(--font-text);
-  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --font-mono: var(--font-brand);
   --space-3xs: var(--s1);
   --space-2xs: var(--s2);
   --space-xs: var(--s3);
@@ -12,17 +12,17 @@
   --space-md: var(--s5);
   --space-lg: var(--s6);
   --space-xl: var(--s7);
-  --space-2xl: 4.5rem;
+  --space-2xl: var(--s8);
   --text-xs: var(--fs-section);
-  --text-sm: 0.875rem;
-  --text-md: 1.125rem;
-  --text-lg: 1.375rem;
-  --text-2xl: 2.25rem;
+  --text-sm: var(--fs-small);
+  --text-md: var(--fs-lead);
+  --text-lg: var(--fs-lede);
+  --text-2xl: var(--fs-headline);
   --ease-out: var(--settle);
   --ease-snap: var(--settle);
   --dur-short: var(--d-fast);
   --dur-med: var(--d-med);
-  --radius-pill: 999px;
+  --radius-pill: var(--r-pill);
 
   background: var(--bg);
   color: var(--ink);
@@ -47,6 +47,12 @@
 .landing__wordmark {
   display: block;
   color: var(--accent);
+}
+
+.landing__topbar-end {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
 }
 
 .landing__skip {
@@ -76,7 +82,7 @@
 .landing__headline {
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: clamp(2.25rem, 4.4vw + 1rem, 3.5rem);
+  font-size: var(--fs-hero);
   line-height: 1.05;
   letter-spacing: -0.02em;
   max-width: 14ch;
@@ -109,7 +115,7 @@
 }
 
 .landing__cta:hover {
-  background: var(--accent);
+  background: var(--accent-fill);
   border-color: var(--accent);
   transform: translateY(-1px);
 }
@@ -151,6 +157,8 @@
 
 .landing__audit-code {
   font-family: var(--font-mono);
+  font-weight: 600;
+  letter-spacing: 0.02em;
   font-size: var(--text-xs);
   color: var(--ink-2);
   white-space: nowrap;
@@ -210,8 +218,8 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  background: var(--accent);
-  color: var(--bg);
+  background: var(--accent-fill);
+  color: var(--on-accent);
   padding: var(--space-sm);
   margin-top: var(--space-sm);
 }
@@ -219,8 +227,10 @@
 .landing__audit-reveal-label {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
-  text-transform: lowercase;
-  opacity: 0.8;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.85;
 }
 
 .landing__audit-reveal-value {
@@ -253,8 +263,8 @@
 }
 
 .landing__band--rose {
-  background: var(--ink);
-  color: var(--bg);
+  background: var(--band);
+  color: var(--on-band);
 }
 
 .landing__lede {
@@ -262,7 +272,7 @@
   margin: 0 auto;
   font-family: var(--font-display);
   font-weight: 500;
-  font-size: clamp(1.25rem, 1.4vw + 1rem, 1.75rem);
+  font-size: var(--fs-lede-fluid);
   line-height: 1.45;
   letter-spacing: -0.01em;
 }
@@ -306,10 +316,13 @@
 }
 
 .landing__step-index {
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--r2);
+  background: var(--selected);
   color: var(--accent);
-  padding-top: 0.2em;
 }
 
 .landing__step-title {
@@ -406,9 +419,14 @@
 }
 
 .landing__qa-icon {
-  font-family: var(--font-mono);
+  display: grid;
   color: var(--accent);
   flex-shrink: 0;
+  transition: transform var(--dur-short) var(--ease-out);
+}
+
+.landing__qa-icon--open {
+  transform: rotate(45deg);
 }
 
 .landing__qa-answer {

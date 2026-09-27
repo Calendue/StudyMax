@@ -1,5 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { Wordmark } from '../../ui/Brand.tsx'
+import { Icon, type IconName } from '../../ui/Icon.tsx'
+import { ThemeSwitch } from '../../ui/ThemeSwitch.tsx'
 import './landing.css'
 
 interface LandingPageProps {
@@ -8,6 +10,9 @@ interface LandingPageProps {
   /** Bypass onboarding: straight to a sample student's courses, the fastest path for a demo. */
   onSkip: () => void
 }
+
+// Each step's line icon, in the app's own stroke set: no numbered labels.
+const STEP_ICONS: IconName[] = ['upload', 'target', 'plan', 'phone']
 
 const STEPS = [
   {
@@ -81,9 +86,12 @@ export function LandingPage({ onGetStarted, onSkip }: LandingPageProps) {
     <div className="landing">
       <div className="landing__topbar">
         <Wordmark height={40} className="landing__wordmark" />
-        <button type="button" className="landing__skip" onClick={onSkip}>
-          Skip to a sample student
-        </button>
+        <div className="landing__topbar-end">
+          <button type="button" className="landing__skip" onClick={onSkip}>
+            Skip to a sample student
+          </button>
+          <ThemeSwitch />
+        </div>
       </div>
 
       <Hero onGetStarted={onGetStarted} />
@@ -103,7 +111,9 @@ export function LandingPage({ onGetStarted, onSkip }: LandingPageProps) {
         <ol className="landing__steps">
           {STEPS.map((step, i) => (
             <li key={step.title} className="landing__step">
-              <span className="landing__step-index">{String(i + 1).padStart(2, '0')}</span>
+              <span className="landing__step-index" aria-hidden="true">
+                <Icon name={STEP_ICONS[i] ?? 'check'} size={20} />
+              </span>
               <div>
                 <h3 className="landing__step-title">{step.title}</h3>
                 <p className="landing__step-body">{step.body}</p>
@@ -235,8 +245,8 @@ function QAItem({ q, a }: QA) {
     <div className="landing__qa-item">
       <button type="button" className="landing__qa-question" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
         <span>{q}</span>
-        <span className="landing__qa-icon" aria-hidden="true">
-          {open ? '−' : '+'}
+        <span className={`landing__qa-icon${open ? ' landing__qa-icon--open' : ''}`} aria-hidden="true">
+          <Icon name="plus" size={18} />
         </span>
       </button>
       {open && <p className="landing__qa-answer">{a}</p>}

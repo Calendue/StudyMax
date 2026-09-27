@@ -123,15 +123,18 @@ export function RowIcon({ name, tone = 'accent' }: { name: IconName; tone?: 'acc
 export function Appear({
   index = 0,
   className,
+  id,
   children,
 }: {
   index?: number
   className?: string
+  id?: string
   children: ReactNode
 }) {
   const reduce = useReducedMotion()
   return (
     <motion.div
+      id={id}
       className={className}
       initial={reduce ? false : { opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}

@@ -58,6 +58,17 @@ The app is a screen flow, not one page. `src/App.tsx` owns the state in one `use
 - A new piece of UI gets its own file with clearly typed props (or reads the model), not another inline block in `App.tsx`. Logic that isn't UI (matching, planning, credentials) stays in `src/lib/`.
 - `src/platform.ts` wraps everything native (haptics, Android back button, splash, keyboard, the API base URL); `src/auth.ts` is the one sign-in module for native and web.
 
+## Layout and theming
+
+One model, three layouts, chosen by width (`useLayoutMode()` in `src/ui/layout.ts`). Resizing never loses your place: every layout reads the same `screen` and `tab`, and moves with `navigate(destination)`.
+
+- **Below 768px (phones):** the screen flow. Results use CalenDue's tab bar (`src/ui/TabBar.tsx`): a glass capsule behind the active tab springs between tabs, a long press arms it for a drag across the bar, and the last button opens the account and settings sheet (`AccountSheet`).
+- **768–1199px:** the rail (`Rail` in `src/shell/Sidebar.tsx`) beside the same header and pages as the desktop.
+- **1200px and up:** TandemTeach's dashboard (`src/shell/AppShell.tsx`): a 256px sidebar in the brand colour whose active item is a notch of the page colour (`.sidebar__notch`, slid with a shared `layoutId`), and a header with search (Cmd/Ctrl+K), notifications, the theme switch and the account menu (`src/shell/Header.tsx`, data in `src/shell/useShellData.ts`). Pages live in `src/pages/` and reuse the pieces the phone tabs export.
+- Before the first reveal, wide screens show onboarding as a split wizard (`Wizard`) and the courses as the desktop page (`CoursesFocus`). The shell's styles are `src/shell/shell.css`.
+- **Dark mode:** `:root[data-theme='dark']` in `tokens.css`, derived from the brand (page #0B1619, surfaces #12262B/#1A3238, Old Lace text). `--accent` is text, icons and strokes (a lifted rose in dark, since Cherry Rose is 2.4:1 there); `--accent-fill` is a filled control with `--on-accent` on it. Inside `.card` the tonal surfaces step up a tone. The preference (System, Light, Dark) is `src/theme.ts`, set before first paint by the inline script in `index.html`. The launch splash (`.theme-light`) and the native widgets stay light.
+- **Adding a destination:** add it to `DESTINATIONS` in `src/ui/layout.ts` (and to `Destination`), give it a page in `PAGES` in `src/shell/AppShell.tsx` and a tab screen in `ResultsScreen.tsx`, and teach `navigate()` in `src/App.tsx` if it isn't a results tab.
+
 ## OpenAI helper
 
 Every AI route (`api/parse-transcript.ts`, `api/why-you.ts`, `api/scholarship-guidance.ts`) calls `respond()` in `api/_openai.ts` and answers failures with `sendFailure()`. Don't add a route that calls OpenAI directly.

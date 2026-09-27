@@ -14,6 +14,23 @@ function checkedAt(ms: number) {
 }
 
 export function ClassesTab() {
+  const c = useModel().classes
+  return (
+    <>
+      {c.alert && <OpeningAlert watch={c.alert} onDismiss={c.dismissAlert} />}
+
+      <ScreenTitle lead="Watch a full section and StudyMax tells you the moment a seat opens, live from USask's class search. Registering still happens in PAWS.">
+        Grab a seat
+      </ScreenTitle>
+
+      <ClassFinder />
+      <Watching />
+    </>
+  )
+}
+
+/** Terms, the plan's next courses, the course search and its sections. */
+export function ClassFinder() {
   const m = useModel()
   const c = m.classes
   const [query, setQuery] = useState('')
@@ -34,12 +51,6 @@ export function ClassesTab() {
 
   return (
     <>
-      {c.alert && <OpeningAlert watch={c.alert} onDismiss={c.dismissAlert} />}
-
-      <ScreenTitle lead="Watch a full section and StudyMax tells you the moment a seat opens, live from USask's class search. Registering still happens in PAWS.">
-        Grab a seat
-      </ScreenTitle>
-
       {c.terms.state === 'loading' && <Skeleton lines={1} />}
       {c.terms.state === 'error' && (
         <div className="notice">
@@ -105,8 +116,6 @@ export function ClassesTab() {
           <Sections />
         </>
       )}
-
-      <Watching />
     </>
   )
 }
@@ -184,7 +193,7 @@ function SectionRow({ section, index }: { section: Section; index: number }) {
   )
 }
 
-function Watching() {
+export function Watching() {
   const c = useModel().classes
   if (c.watches.length === 0) return null
   const lastChecked = Math.max(...c.watches.map((w) => w.checkedAt))
@@ -238,7 +247,7 @@ function Watching() {
   )
 }
 
-function OpeningAlert({ watch, onDismiss }: { watch: Watch; onDismiss: () => void }) {
+export function OpeningAlert({ watch, onDismiss }: { watch: Watch; onDismiss: () => void }) {
   return (
     <Appear className="spotlight classes__alert">
       <Chip tone="urgent" icon="clock">
