@@ -1250,6 +1250,14 @@ function useStudyMax() {
         if (callStatus === 'calling') return true
         go('results', -1)
         return true
+      case 'courses':
+        // Once there are results, Courses is a destination beside them, not a step of onboarding.
+        if (revealed) {
+          go('results', 1)
+          return true
+        }
+        go(flowIndex > 0 ? flow[flowIndex - 1] : 'student', -1)
+        return true
       default:
         // Welcome and the onboarding steps: one step back, and out of the app from the first.
         if (flowIndex === 0) return false
