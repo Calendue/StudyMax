@@ -16,6 +16,8 @@
 // Run: node --experimental-strip-types --experimental-loader ./scripts/_resolve-ts-loader.mjs scripts/check-plan-properties.ts [--verbose]
 import { readFileSync } from 'node:fs'
 import { courseInfo } from '../src/data/prereqs.ts'
+import { applyOverrides } from '../src/lib/overrides.ts'
+import { defaultCatalog } from '../src/lib/catalog.ts'
 import { buildCase, graduationOrd, matrixCases, parseTerm, planKey, SPECS, termOrd, type MatrixCase } from './_plan-matrix.ts'
 import { isElective, electiveLabel, runsIn } from './_degree-rules.ts'
 import type { CourseOverride } from '../src/lib/overrides.ts'
@@ -30,7 +32,7 @@ const brk = (prop: string, msg: string) => {
   if (!breaks.has(prop)) breaks.set(prop, [])
   breaks.get(prop)!.push(msg)
 }
-const stats = { improved: 0, same: 0, replanChecked: 0, replanSkipped: 0, prefixChecked: 0 }
+const stats = { improved: 0, same: 0, replanChecked: 0, replanSkipped: 0, prefixChecked: 0, freed: 0 }
 const times: { ms: number; key: string }[] = []
 const ordLabel = (o: number) => `${['Winter', 'Spring/Summer', 'Fall'][o % 10]} ${Math.floor(o / 10)}`
 const showOrd = (o: number) => (o > 0 ? ordLabel(o) : 'nothing')
@@ -97,8 +99,14 @@ for (const c of matrixCases()) {
   // overrides: never earlier; a block leaves the prefix
   for (const [kind, o] of overridesFor(c, b.plan)) {
     const r = buildCase(c, { extra: { currentTerm: CURRENT, overrides: [o] } })
-    const og = graduationOrd(r.plan, r.booked)
-    if (og < g) brk(`monotone-${kind}`, `${c.key} [${o.kind} ${o.code} ${o.term}]: ${showOrd(og)}, earlier than the base's ${showOrd(g)}`)
+    // A failed/withdrawn course whose cascade un-books a course registered at or after the start term
+    // frees that seat (and its senior-CMPT room): finishing earlier is then legitimate, not a break.
+    const applied = applyOverrides({ completed: r.completed, inProgress: r.inProgress, booked: r.booked }, [o], defaultCatalog(), `${CURRENT.season} ${CURRENT.year}`)
+    const startOrd = termOrd(`${c.stage.start.season} ${c.stage.start.year}`)
+    const freed = Object.entries(r.booked).some(([label, codes]) => termOrd(label) >= startOrd && (applied.booked[label]?.length ?? 0) < codes.length)
+    const og = graduationOrd(r.plan, applied.booked)
+    if (freed) stats.freed++
+    else if (og < g) brk(`monotone-${kind}`, `${c.key} [${o.kind} ${o.code} ${o.term}]: ${showOrd(og)}, earlier than the base's ${showOrd(g)}`)
     if (kind === 'block') {
       stats.prefixChecked++
       const x = termOrd(o.term)
@@ -125,6 +133,11 @@ for (const c of matrixCases()) {
     const start = nextTerm(parseTerm(first.label)!, c.summer)
     const r = buildCase(c, { completed: done, inProgress: c.stage.inProgress.filter((x) => !done.includes(x)), start })
     const rest = b.plan.slice(firstIdx + 1)
+    // Gated: doing what the plan said never moves graduation. Reported: whether every later term is
+    // identical (a re-optimising planner may re-pick among equally early plans).
+    const restG = graduationOrd(rest, {})
+    const againG = graduationOrd(r.plan, {})
+    if (restG !== againG) brk('replan-graduation', `${c.key} (passed ${first.label}): graduation ${showOrd(restG)} → ${showOrd(againG)}`)
     if (slotKey(r.plan) !== slotKey(rest)) {
       const diff = [...r.plan, ...rest].map((t) => t.label).sort((x, y) => termOrd(x) - termOrd(y)).find((l) => slotKey(r.plan.filter((t) => t.label === l)) !== slotKey(rest.filter((t) => t.label === l)))
       brk('replan', `${c.key} (passed ${first.label}): the rest changed${diff ? `, first at ${diff}` : ''}`)
@@ -152,7 +165,12 @@ if (wall >= 60) brk('runtime', `suite ${wall.toFixed(1)} s (budget 60)`)
 console.log(`${times.length} cases · per plan p50 ${p(0.5).toFixed(1)} ms · p95 ${p(0.95).toFixed(1)} ms · max ${slowest.ms.toFixed(1)} ms (${slowest.key}) · suite ${wall.toFixed(1)} s`)
 console.log(`baseline: ${stats.improved} earlier than the greedy planner, ${stats.same} the same`)
 console.log(`replan checked on ${stats.replanChecked} (skipped ${stats.replanSkipped}: first term holds an elective slot); prefix checked on ${stats.prefixChecked}`)
-const PROPS = ['determinism', 'monotone-load', 'monotone-summer', 'monotone-fail', 'monotone-block', 'monotone-drop', 'monotone-completed', 'booked', 'prefix', 'replan', 'baseline', 'runtime']
+const PROPS = ['determinism', 'monotone-load', 'monotone-summer', 'monotone-fail', 'monotone-block', 'monotone-drop', 'monotone-completed', 'booked', 'replan-graduation', 'prefix', 'replan', 'baseline', 'runtime']
+// Report-only: exact prefix and replan identity. The planner re-optimises from its inputs alone (no
+// incremental state), so an equally early plan may re-pick future, unregistered terms; what's gated
+// is that graduation never moves (replan-graduation, monotone-block) and registered courses never do.
+const REPORT_ONLY = new Set(['prefix', 'replan'])
+console.log(`freed-seat override cases (monotonicity n/a): ${stats.freed}`)
 console.log(PROPS.map((k) => `${k} ${breaks.get(k)?.length ?? 0}`).join(' · '))
 for (const k of PROPS) {
   const list = breaks.get(k)
@@ -160,7 +178,7 @@ for (const k of PROPS) {
   console.log(`\n${k}:`)
   for (const m of VERBOSE ? list : list.slice(0, 5)) console.log(`  ${m}`)
 }
-const total = [...breaks.values()].reduce((n, l) => n + l.length, 0)
+const total = [...breaks.entries()].filter(([k]) => !REPORT_ONLY.has(k)).reduce((n, [, l]) => n + l.length, 0)
 if (total > 0) {
   console.error(`\ncheck-plan-properties: ${total} break(s)`)
   process.exit(1)

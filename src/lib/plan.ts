@@ -47,6 +47,8 @@ export interface PlannedCourse {
   group?: string
   /** The advising year (1-4) it's recommended in. */
   year?: number
+  /** A full-year course (CMPT 400): listed in its Fall, it also holds a seat in the next Winter. */
+  fullYear?: boolean
 }
 
 export interface PlannedTerm {
@@ -581,7 +583,8 @@ function runPlan(
     if (result.at) {
       built.core.items.forEach((item, i) => {
         const t = result.at![i]
-        placed.set(t, [...(placed.get(t) ?? []), byCode.get(item.id)!])
+        const course = byCode.get(item.id)!
+        placed.set(t, [...(placed.get(t) ?? []), item.fullYear ? { ...course, fullYear: true } : course])
       })
     } else if (built.core.items.length > 0) {
       for (const item of built.core.items) diagnostics.push({ level: 'error', code: 'HORIZON', course: item.id, message: `${isElective(item.id) ? electiveLabel(item.id) : spaced(item.id)} can't be scheduled within ${built.labels.length} terms.` })
@@ -590,7 +593,8 @@ function runPlan(
 
     // Graduation: the last term holding a planned or booked course.
     const bookedLast = Object.entries(booked).filter(([, v]) => v.length > 0).map(([l]) => termFromLabel(l)).filter((t): t is TermStart => t !== null).sort((a, b) => termOrder(a) - termOrder(b)).at(-1)
-    const plannedLast = terms.at(-1) ? termFromLabel(terms.at(-1)!.label) : null
+    // A full-year course in the last Fall runs on into the Winter after it.
+    const plannedLast = result.at && result.graduation >= 0 && built.labels[result.graduation] ? termFromLabel(built.labels[result.graduation]) : null
     const last = [bookedLast, plannedLast].filter((t): t is TermStart => Boolean(t)).sort((a, b) => termOrder(a) - termOrder(b)).at(-1)
     const graduation = last ? `${last.season} ${last.year}` : null
 

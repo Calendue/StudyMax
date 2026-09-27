@@ -89,7 +89,12 @@ export function buildCase(c: Pick<MatrixCase, 'stage' | 'specId' | 'variant' | '
 }
 
 /** The graduation term: the last term holding a planned or booked course, as termOrd. */
+/** The graduation term: the last term holding a planned or booked course (a full-year course in a Fall holds the next Winter too), as termOrd. */
 export const graduationOrd = (plan: PlannedTerm[], booked: Record<string, string[]>) =>
-  Math.max(0, ...plan.filter((t) => t.courses.length).map((t) => termOrd(t.label)), ...Object.entries(booked).filter(([, v]) => v.length).map(([l]) => termOrd(l)))
+  Math.max(
+    0,
+    ...plan.filter((t) => t.courses.length).map((t) => (t.courses.some((x) => x.fullYear) && parseTerm(t.label)?.season === 'Fall' ? (parseTerm(t.label)!.year + 1) * 10 : termOrd(t.label))),
+    ...Object.entries(booked).filter(([, v]) => v.length).map(([l]) => termOrd(l)),
+  )
 
 export const planKey = (p: PlannedTerm[]) => JSON.stringify(p.map((t) => [t.label, t.courses.map((x) => x.code)]))
