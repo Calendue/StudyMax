@@ -2150,7 +2150,15 @@ function App() {
       <ModelContext.Provider value={model}>
         <div className="app app--wide">
           <main className="screen__body">
-            <LandingPage onGetStarted={() => model.setShowLanding(false)} onSkip={() => model.setShowLanding(false)} />
+            <LandingPage
+              onGetStarted={() => {
+                model.setShowLanding(false)
+                // Get started from the pitch means sign up: a guest goes to the sign-in screen, not
+                // straight back into the app they were in. Someone signed in just returns to it.
+                if (isAuthConfigured && !model.account) model.go('welcome')
+              }}
+              onSkip={() => model.setShowLanding(false)}
+            />
           </main>
         </div>
         <AccountSheet />

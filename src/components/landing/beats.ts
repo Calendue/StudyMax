@@ -94,6 +94,21 @@ export const TEAM = {
   headline: 'Built by the four of us.',
   names: ['Ayo Ogunade', 'Sam Lafiaji', 'Tobi Salam', 'Ibraheem Arif'],
   close: 'For the students we were on day one.',
+  /** What it's built with, as a quiet line of small print under the names. */
+  stack: [
+    'React 19',
+    'TypeScript',
+    'Vite',
+    'Capacitor (iOS + Android)',
+    'SwiftUI widgets',
+    'Vercel',
+    'Supabase Postgres',
+    'Prisma',
+    'Firebase Auth',
+    'OpenAI',
+    'Vapi',
+    'Bland',
+  ],
 }
 
 export const CANOPY = {
