@@ -4,9 +4,9 @@ import { useModel } from '../model.ts'
 import { courseCode, KIND_LABEL, plural } from '../format.ts'
 import { courseInfo } from '../data/prereqs.ts'
 import { haptic } from '../platform.ts'
-import type { SkillTreeLayout, TreeNode } from '../lib/skillTree.ts'
+import { laneSeason, type SkillTreeLayout, type TreeNode } from '../lib/skillTree.ts'
 import { Button, Ring } from '../ui/primitives.tsx'
-import { STATUS_LABEL, type TreeSelection } from './planView.ts'
+import { statusLabel, type TreeSelection } from './planView.ts'
 
 export function Swatch({ kind, hue }: { kind?: string; hue?: number }) {
   return (
@@ -119,9 +119,13 @@ export function TreeDetail({
   const statusKind = node.elective && node.status !== 'next' ? 'elective' : node.status
   const when =
     node.status === 'completed'
-      ? `Year ${node.year}, ${node.lane === 'fall' ? 'Fall' : 'Winter'} side. Placed by course level: the transcript has no term dates.`
+      ? node.termKnown
+        ? `Done in ${node.term}.`
+        : `Year ${node.year}, ${laneSeason(node.lane)} side. Placed by course level: the transcript has no date for it.`
       : node.status === 'inProgress'
-        ? `Now, ${node.term}`
+        ? node.current
+          ? `Now, ${node.term}`
+          : `Registered for ${node.term}`
         : node.term
   const done = m.completed.has(node.code)
   return (
@@ -129,10 +133,10 @@ export function TreeDetail({
       {title && <p className="lead tree-detail__lead">{title}</p>}
       <p className="tree-detail__status">
         <Swatch kind={statusKind} />
-        {node.elective && node.status !== 'next' ? 'Elective' : STATUS_LABEL[node.status]}
+        {node.elective && node.status !== 'next' ? 'Elective' : statusLabel(node)}
       </p>
       <p className="tree-detail__when">{when}</p>
-      {info && info.creditUnits > 0 && <p className="footnote">{plural(info.creditUnits, 'credit unit')}</p>}
+      {(info?.creditUnits ?? 0) > 0 || isElective(node.code) ? <p className="footnote">{plural(node.cu, 'credit unit')}</p> : null}
       {node.status === 'next' && (
         <p className="footnote">Of everything still to take, this one counts toward the most credentials at once.</p>
       )}
@@ -178,10 +182,18 @@ export function TreeDetail({
         </section>
       )}
 
-      {node.creds.length > 0 && (
+      {(node.creds.length > 0 || node.degreeGroup) && (
         <section className="tree-detail__section">
           <h3>Counts toward</h3>
           <ul className="tree-detail__creds">
+            {node.degreeGroup && (
+              <li>
+                <span className="tree-detail__degree">
+                  <Swatch kind="planned" />
+                  {node.degreeGroup}
+                </span>
+              </li>
+            )}
             {node.creds.map((c) => (
               <li key={c}>
                 <button type="button" className="inline-link" onClick={() => onSelect({ kind: 'leaf', index: c })}>
