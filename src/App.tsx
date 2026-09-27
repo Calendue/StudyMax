@@ -10,9 +10,19 @@ import type { School } from './data/schools/types.ts'
 import { computerScience } from './data/programs/computerScience.ts'
 import type { Program } from './data/programs/types.ts'
 import { buildCallScript, type CallContext } from './lib/callScript.ts'
-import { buildStudentPlan, DEFAULT_SUMMER_COURSES, isElective, termsFrom, upcomingTerm, type Season, type TermStart } from './lib/plan.ts'
+import {
+  buildStudentPlan,
+  DEFAULT_COURSES_PER_TERM,
+  DEFAULT_SUMMER_COURSES,
+  isElective,
+  nextFall,
+  termsFrom,
+  upcomingTerm,
+  type Season,
+  type TermStart,
+} from './lib/plan.ts'
 import { computeCredentials } from './lib/credentials.ts'
-import { bookedByTerm, seasonNow, withCurrentCourses } from './lib/currentTerms.ts'
+import { bookedByTerm, seasonNow, takingNow, termLabels, termsAfterUpload, withCurrentCourses } from './lib/currentTerms.ts'
 import { searchCourses, catalogueTitle } from './lib/courseSearch.ts'
 import { courseInfo } from './data/prereqs.ts'
 import { artsAndScienceSubjects, catalogueCourses } from './data/courses.ts'
@@ -159,13 +169,22 @@ interface SavedState {
   springSummer?: boolean
   /** The most courses the plan puts in a Fall/Winter term, and in a Spring/Summer term. */
   coursesPerTerm?: number
+  /** Whether the student picked coursesPerTerm; older saves hold the old default of 2 without it. */
+  coursesPerTermChosen?: boolean
   summerPerTerm?: number
   /** The term each in-progress course is in, from the transcript or set by the student. */
   courseTerms?: Record<string, Season>
+  /** The term ("Fall 2024") each completed course was passed in, where the transcript dates it. Device-only. */
+  completedTerms?: Record<string, string>
 }
 
 
 const CATALOGUE_CODES = new Set(catalogueCourses.map((c) => c.code))
+
+/** The courses-per-term a saved session's student picked themselves, or null for the default. */
+function chosenLoad(state: Partial<SavedState>): number | null {
+  return state.coursesPerTermChosen && state.coursesPerTerm ? state.coursesPerTerm : null
+}
 
 /** Saved registered courses, keeping only real catalogue codes (older saves held typed text). */
 function registeredFrom(saved?: string[]): string[] {
@@ -230,8 +249,9 @@ function useStudyMax() {
   const [gradYear, setGradYear] = useState<number | null>(saved.gradYear ?? null)
   const [registered, setRegistered] = useState<string[]>(() => registeredFrom(saved.registered))
   const [springSummer, setSpringSummer] = useState(saved.springSummer ?? false)
-  // The plan's load limits: the most courses per Fall/Winter term, and per Spring/Summer term.
-  const [coursesPerTerm, setCoursesPerTerm] = useState(saved.coursesPerTerm ?? 2)
+  // The plan's load limits: the most courses per Fall/Winter term, and per Spring/Summer term. Only a
+  // load the student picked is kept; otherwise it's the program's (see coursesPerTerm below).
+  const [chosenPerTerm, setCoursesPerTerm] = useState<number | null>(() => chosenLoad(saved))
   const [summerPerTerm, setSummerPerTerm] = useState(saved.summerPerTerm ?? DEFAULT_SUMMER_COURSES)
 
   const selectedSchool = universityId === 'usask' ? usask : null
@@ -252,6 +272,8 @@ function useStudyMax() {
       : universityId === 'other'
         ? OTHER_PROGRAM
         : null
+  // A full load (15 credit units, five courses) unless the student chose otherwise.
+  const coursesPerTerm = chosenPerTerm ?? selectedProgram?.coursesPerTerm ?? DEFAULT_COURSES_PER_TERM
 
   const programOptions = useMemo<ProgramOption[]>(() => {
     const fromSchool = availablePrograms
@@ -340,6 +362,9 @@ function useStudyMax() {
   const [uploadInProgress, setUploadInProgress] = useState<string[]>(saved.inProgress ?? [])
   // Which term each in-progress course is in. A course without one is taken to be in the current term.
   const [courseTerms, setCourseTerms] = useState<Record<string, Season>>(saved.courseTerms ?? {})
+  // When each completed course was passed ("Fall 2024"), where the last transcript said; the tree places
+  // an undated one by its level.
+  const [completedTerms, setCompletedTerms] = useState<Record<string, string>>(saved.completedTerms ?? {})
   const completedRef = useRef(completed)
   completedRef.current = completed
 
@@ -363,7 +388,9 @@ function useStudyMax() {
     registered,
     springSummer,
     courseTerms,
+    completedTerms,
     coursesPerTerm,
+    coursesPerTermChosen: chosenPerTerm !== null,
     summerPerTerm,
   }
   const snapshotJson = JSON.stringify(snapshot)
@@ -407,7 +434,7 @@ function useStudyMax() {
   }, [accountUid, cloudUid, cloudJson])
 
   const matches = useMemo(
-    () => computeMatches(selectedProgram?.specializations ?? [], completed),
+    () => computeMatches(selectedProgram?.specializations ?? [], completed, selectedProgram?.degree),
     [selectedProgram, completed],
   )
 
@@ -450,10 +477,10 @@ function useStudyMax() {
     if (prevRemaining.current !== null && prevRemaining.current > 0 && hero.remaining === 0) {
       const doneHeroId = hero.spec.id
       const promoteId = setTimeout(() => {
-        const freshMatches = computeMatches(selectedProgram?.specializations ?? [], completedRef.current)
-        const next = freshMatches
-          .filter((m) => m.spec.id !== doneHeroId && m.remaining > 0)
-          .sort((a, b) => a.remaining - b.remaining || a.spec.name.localeCompare(b.spec.name))[0]
+        // Already in the hero order (computeMatches: available first, fewest left, most shared with the degree).
+        const next = computeMatches(selectedProgram?.specializations ?? [], completedRef.current, selectedProgram?.degree).filter(
+          (m) => m.spec.id !== doneHeroId && m.remaining > 0,
+        )[0]
         if (next) setHeroId(next.spec.id)
       }, 1800)
       return () => clearTimeout(promoteId)
@@ -565,10 +592,11 @@ function useStudyMax() {
   }
 
   // Courses the student said they're registered in count exactly like a transcript's in-progress
-  // ones: not done yet, but never planned again, and already unlocking what they lead to.
+  // ones: not done yet, but never planned again, and already unlocking what they lead to. A course
+  // that's also completed is completed, never both.
   const inProgressCourses = useMemo(
-    () => [...new Set([...uploadInProgress, ...registered])],
-    [uploadInProgress, registered],
+    () => takingNow(uploadInProgress, registered, completed),
+    [uploadInProgress, registered, completed],
   )
 
   function chooseMinor(id: string | null) {
@@ -654,6 +682,10 @@ function useStudyMax() {
     setCompleted(new Set(computerScience.sampleTranscript ?? []))
     setUploadInProgress(computerScience.sampleInProgress ?? [])
     setCourseTerms(computerScience.sampleInProgressTerms ?? {})
+    setCompletedTerms({})
+    // The sample's own seven are the whole of what it's taking: onboarding's picks don't join them.
+    setRegistered([])
+    setRegisteredQuery('')
     // A sample student is an existing one. Targets picked in onboarding still lead the plan.
     setStudentType('existing')
     if (programId !== computerScience.id) setConcentrationIds([])
@@ -697,8 +729,8 @@ function useStudyMax() {
 
     const token = ++uploadToken.current
     const live = () => uploadToken.current === token
-    // A transcript adds to courses entered by hand (transfer credit, outside the program), but
-    // replaces the sample student, whose courses aren't the student's own.
+    // A transcript's completed courses add to those entered by hand (transfer credit, outside the
+    // program), but replace the sample student, whose courses aren't the student's own.
     const replacing = uploadStatus === 'sample'
     setUploadStatus('uploading')
     setUploadError(null)
@@ -744,9 +776,13 @@ function useStudyMax() {
       }
 
       setCompleted((prev) => new Set(replacing ? codes : [...prev, ...codes]))
-      setUploadInProgress((prev) => (replacing ? inProgressCodes : [...new Set([...prev, ...inProgressCodes])]))
+      // What it's taking, and when, is the newest transcript's word: a re-upload replaces the last one's.
+      setUploadInProgress(inProgressCodes)
       const terms: Record<string, Season> = data.inProgressTerms ?? {}
-      setCourseTerms((prev) => (replacing ? terms : { ...prev, ...terms }))
+      setCourseTerms((prev) => termsAfterUpload(prev, terms, registered))
+      // Completed courses add up across uploads, and so do the terms that date them.
+      const passed: Record<string, string> = data.completedTerms ?? {}
+      setCompletedTerms((prev) => (replacing ? passed : { ...prev, ...passed }))
       setFoundCount(codes.length)
       setStatedProgram({ major: data.major ?? null, minor: data.minor ?? null })
       if (!early) seedTargets(targetSeed)
@@ -809,6 +845,17 @@ function useStudyMax() {
     setCourseTerms((prev) => ({ ...prev, [code]: season }))
   }
 
+  /** Takes a course off "Taking now", whether the transcript listed it or the student added it. */
+  function removeInProgress(code: string) {
+    haptic.selection()
+    setUploadInProgress((codes) => codes.filter((c) => c !== code))
+    setRegistered((codes) => codes.filter((c) => c !== code))
+    setCourseTerms((prev) => Object.fromEntries(Object.entries(prev).filter(([c]) => c !== code)))
+  }
+
+  // Each course under way with its term as the tree and the plan write it ("Winter 2027").
+  const inProgressTerms = useMemo(() => termLabels(currentByTerm, today), [currentByTerm, today])
+
   // Whether the courses changed since the results were last worked out. Only then is "Update my
   // results" worth offering; otherwise the results already reflect every course on the list.
   const resultsKey = JSON.stringify([[...completed].sort(), [...inProgressCourses].sort()])
@@ -836,9 +883,11 @@ function useStudyMax() {
       (m) => m.remaining > 0,
     )
   }, [hero, matches, credentials, extraTargetIds])
-  // The plan starts in a term the student picks; in-progress courses count as passed by then.
+  // The plan starts in a term the student picks; in-progress courses count as passed by then. Until
+  // they pick, it's the upcoming term, or the next Fall for someone with nothing taken or under way.
   const startChoices = useMemo(() => termsFrom(upcomingTerm(today), 6), [today])
-  const [startTerm, setStartTerm] = useState<TermStart>(startChoices[0])
+  const [chosenStart, setStartTerm] = useState<TermStart | null>(null)
+  const startTerm = chosenStart ?? (completed.size === 0 && inProgressCourses.length === 0 ? nextFall(today) : startChoices[0])
   // What the student is already taking, by term: it fills part of each term's courses-per-term.
   const booked = useMemo(() => bookedByTerm(currentByTerm, today), [currentByTerm, today])
   const plan = useMemo(
@@ -850,10 +899,7 @@ function useStudyMax() {
         inProgressCourses,
         coursesPerTerm,
         startTerm,
-        springSummer,
-        summerPerTerm,
-        selectedProgram?.degree,
-        booked,
+        { springSummer, summerPerTerm, degree: selectedProgram?.degree, booked },
       ),
     [targets, planningSpecs, completed, inProgressCourses, coursesPerTerm, startTerm, springSummer, summerPerTerm, selectedProgram, booked],
   )
@@ -1057,6 +1103,8 @@ function useStudyMax() {
     setProgramId(state.programId ?? '')
     setCompleted(new Set(state.completed ?? []))
     setUploadInProgress(state.inProgress ?? [])
+    setCourseTerms(state.courseTerms ?? {})
+    setCompletedTerms(state.completedTerms ?? {})
     setRevealed(state.revealed ?? false)
     setStudentType(state.studentType ?? null)
     setDegree(state.degree ?? '')
@@ -1065,7 +1113,7 @@ function useStudyMax() {
     setGradYear(state.gradYear ?? null)
     setRegistered(registeredFrom(state.registered))
     setSpringSummer(state.springSummer ?? false)
-    setCoursesPerTerm(state.coursesPerTerm ?? 2)
+    setCoursesPerTerm(chosenLoad(state))
     setSummerPerTerm(state.summerPerTerm ?? DEFAULT_SUMMER_COURSES)
     setUploadStatus('idle')
     seedTargets(seedOf(state))
@@ -1338,10 +1386,12 @@ function useStudyMax() {
     setConcentrationIds([])
     setGradYear(null)
     setCourseTerms({})
+    setCompletedTerms({})
     setRegistered([])
     setRegisteredQuery('')
     setSpringSummer(false)
-    setCoursesPerTerm(2)
+    setCoursesPerTerm(null)
+    setStartTerm(null)
     setSummerPerTerm(DEFAULT_SUMMER_COURSES)
     setUniversityId('')
     setProgramId('')
@@ -1563,6 +1613,9 @@ function useStudyMax() {
     // results
     currentByTerm,
     setCourseTerm,
+    removeInProgress,
+    inProgressTerms,
+    completedTerms,
     roadmap,
     resultsStale,
     matches,
