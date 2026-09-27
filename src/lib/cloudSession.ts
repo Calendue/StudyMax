@@ -21,6 +21,21 @@ export interface CloudSession {
   springSummer: boolean
   coursesPerTerm: number
   summerPerTerm: number
+  /**
+   * The internship question: the year of the degree the plan keeps free, not sure, or none; null
+   * when never answered. Omitted by app builds from before it, which leaves a stored answer as is.
+   */
+  internship?: CloudInternship | null
+}
+
+/** The internship question's answers, as the app keeps them (App.tsx's Internship). */
+export type CloudInternship = 3 | 4 | 'unsure' | 'no'
+
+/** "3" → 3, "unsure" → 'unsure': a stored answer or a sent one, anything else null. */
+export function internshipFrom(value: unknown): CloudInternship | null {
+  if (value === 3 || value === '3') return 3
+  if (value === 4 || value === '4') return 4
+  return value === 'unsure' || value === 'no' ? value : null
 }
 
 /** The choices the app offers; anything outside them is stored as the default instead. */
@@ -72,5 +87,6 @@ export function cleanCloudSession(raw: unknown): CloudSession | null {
     coursesPerTerm: count(s.coursesPerTerm, MAX_COURSES_PER_TERM, DEFAULT_PER_TERM),
     summerPerTerm: count(s.summerPerTerm, MAX_SUMMER_COURSES, DEFAULT_SUMMER),
     ...(typeof s.phone === 'string' && PHONE_RE.test(s.phone.trim()) ? { phone: s.phone.trim() } : {}),
+    ...(s.internship !== undefined ? { internship: internshipFrom(s.internship) } : {}),
   }
 }
