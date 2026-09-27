@@ -518,26 +518,35 @@ export function SkillTree({
 
       <div className="tree__float" aria-hidden={peek ? undefined : !awayFromRoots}>
         {peek}
-        <div className={`tree__float-inner${awayFromRoots && !peek ? ' is-on' : ''}`} hidden={peek !== null}>
-          <button type="button" className="tree__float-btn" tabIndex={awayFromRoots ? 0 : -1} onClick={toRoots}>
-            <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden>
-              <path d="M6 2v8M2.5 6.5 6 10l3.5-3.5" />
-            </svg>
-            Back to roots
-          </button>
+        {/* Two round buttons stacked on the trunk: the one strip of the board no card ever sits on. */}
+        <div
+          className={`tree__float-inner${awayFromRoots && !peek ? ' is-on' : ''}`}
+          hidden={peek !== null}
+          style={layout ? { left: layout.trunkX - layout.width / 2 } : undefined}
+        >
           {layout && (
             <button
               type="button"
               className="tree__float-btn"
               tabIndex={awayFromRoots ? 0 : -1}
+              aria-label="Jump to now"
+              title="Jump to now"
               onClick={() => {
                 const band = layout.bands.find((b) => b.current)
                 if (band) scrollToY(band.y + band.h / 2)
               }}
             >
-              Jump to now
+              <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden>
+                <circle cx="8" cy="8" r="5.5" />
+                <circle cx="8" cy="8" r="1.6" />
+              </svg>
             </button>
           )}
+          <button type="button" className="tree__float-btn" tabIndex={awayFromRoots ? 0 : -1} aria-label="Back to roots" title="Back to roots" onClick={toRoots}>
+            <svg viewBox="0 0 12 12" width="14" height="14" aria-hidden>
+              <path d="M6 2v8M2.5 6.5 6 10l3.5-3.5" />
+            </svg>
+          </button>
         </div>
       </div>
 
