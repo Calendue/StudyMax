@@ -30,6 +30,7 @@ import { maxSkills } from '../../src/lib/max/skills.generated.js'
 import { planOptions, type OptionTopic } from '../../src/lib/max/options.js'
 import { programName, regenerate, scheduleByTerm, speakableCourse, specializationName, underWayByTerm } from '../../src/lib/max/planningAdapter.js'
 import { computeMatches } from '../../src/lib/match.js'
+import { electiveOptions } from '../../src/lib/max/catalogue.js'
 import { programs } from '../../src/data/programs/index.js'
 import { currentTermOf, termFromLabel, termOrder, upcomingTerm, type TermStart } from '../../src/lib/plan.js'
 import { getTerms, searchCourse } from '../_banner.js'
@@ -190,11 +191,18 @@ async function overviewFromCall(call: ResolvedCall, p: CallPlanInputs): Promise<
     currentCourses: s.enrolled,
     // Term by term: "what am I taking in Fall" is answered from its own term, never the whole year's list.
     currentCoursesByTerm: underWayByTerm(adapterInput(s)),
+    // Already passed: never "add" one of these; "have I done X" is answered from here.
+    completedCourses: [...p.completed].sort(),
     ...(s.droppedCourses.length > 0 ? { droppedInSavedPlan: s.droppedCourses } : {}),
     roadmap: {
       projectedGraduation: terms[terms.length - 1]?.label ?? null,
       nextTerms: terms.slice(0, 3).map((t) => ({ term: t.label, courses: t.courses.map((c) => speakableCourse(c.code)) })),
+      // Every term to graduation, so "what's in Winter 2028" is read from here, never guessed.
+      allTerms: Object.fromEntries(terms.map((t) => [t.label, t.courses.map((c) => speakableCourse(c.code))])),
     },
+    // Real catalogue courses for each open elective slot (the app's elective picker rules): suggest and
+    // add only from these, by their exact code, never a code from memory.
+    electiveOptions: electiveOptions(terms, degree, p.completed, p.programId === 'computer-science' ? ['CMPT', 'MATH', 'STAT'] : []),
     preferences: { coursesPerTerm: s.coursesPerTerm, springSummer: s.springSummer, summerCoursesPerTerm: s.summerPerTerm },
     // What Max may switch to, with how much each has left — for get_plan_options and a spoken name.
     availableSpecializations: computeMatches(program?.specializations ?? [], new Set(s.completed), degree)

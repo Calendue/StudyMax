@@ -18,6 +18,7 @@ import { isSharedGuest } from './_demoUser.js'
 import { publishedAbsences } from './_published.js'
 import { planVersionWrites, type PlanSnapshot } from '../_planVersion.js'
 import { isActiveCourse } from '../../src/data/activeCourses.js'
+import { resolveCourse } from '../../src/lib/max/catalogue.js'
 import { programs } from '../../src/data/programs/index.js'
 import { computeCredentials } from '../../src/lib/credentials.js'
 import { computeMatches } from '../../src/lib/match.js'
@@ -482,7 +483,13 @@ function applyProgramOp(s: Snapshot, op: ScenarioOp): Snapshot | ToolError {
     case 'ADD_COURSE':
     case 'MOVE_COURSE':
     case 'PIN_COURSE': {
-      const code = op.courseCode
+      // A misheard or colloquial code ("ENGL 110", "comp sci 214") resolves to the catalogue's own.
+      const found = resolveCourse(op.courseCode)
+      if ('suggestions' in found) {
+        const near = found.suggestions.length > 0 ? ` Did you mean ${found.suggestions.join(', or ')}?` : ''
+        return err('UNKNOWN_COURSE', `${spoken(op.courseCode)} isn't in the USask catalogue.${near || ' Could you say the code again?'}`)
+      }
+      const code = found.code
       const term = op.op === 'ADD_COURSE' ? op.term : op.op === 'MOVE_COURSE' ? op.toTerm : op.term
       if (!isActiveCourse(code)) return err('UNKNOWN_COURSE', `I can't find ${spoken(code)} in the catalogue — could you say the code again?`)
       if (s.completed.includes(code)) return err('ALREADY_TAKEN', `You've already taken ${spoken(code)}.`)

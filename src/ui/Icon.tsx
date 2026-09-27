@@ -13,6 +13,30 @@ const PATHS = {
       <path d="M12 17v-5.5M9.5 14L12 11.5l2.5 2.5" />
     </>
   ),
+  // Onboarding's first question: a sprout (just starting), an open book (taking courses), and a
+  // transcript page with an arrow going up (upload it).
+  sprout: (
+    <>
+      <path d="M12 20.5V12" />
+      <path d="M12 12.5C12 8.9 9.6 6.5 5.5 6.5c0 3.9 2.5 6 6.5 6z" />
+      <path d="M12 14.5c0-3.3 2.3-5.5 6.5-5.5 0 3.6-2.6 5.5-6.5 5.5z" />
+      <path d="M7.5 20.5h9" />
+    </>
+  ),
+  book: (
+    <>
+      <path d="M12 6.8C10.2 5.4 7.7 4.8 4 5v13c3.7-.2 6.2.4 8 1.8 1.8-1.4 4.3-2 8-1.8V5c-3.7-.2-6.2.4-8 1.8z" />
+      <path d="M12 6.8v13" />
+    </>
+  ),
+  transcript: (
+    <>
+      <path d="M11.5 3.5H6A1.5 1.5 0 0 0 4.5 5v14A1.5 1.5 0 0 0 6 20.5h8a1.5 1.5 0 0 0 1.5-1.5V7.5z" />
+      <path d="M11.5 3.5v4h4" />
+      <path d="M7.5 11.5h5M7.5 14.5h5M7.5 17.5h3" />
+      <path d="M19.5 20.5v-8M17.3 14.7l2.2-2.2 2.2 2.2" />
+    </>
+  ),
   search: (
     <>
       <circle cx="11" cy="11" r="6.5" />

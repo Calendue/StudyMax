@@ -4,6 +4,8 @@ import {
   buildTranscriptParsePrompt,
   parseTermLabel,
   parseTranscriptProgram,
+  parseTranscriptProfile,
+  schoolOf,
   parseTranscriptResponse,
   parseTranscriptTimeline,
 } from '../src/lib/transcriptParse.ts'
@@ -162,5 +164,18 @@ const sampleLabels = termLabels(sampleByTerm, new Date(2026, 8, 26))
 assert.equal(Object.keys(sampleLabels).length, 7, 'the sample takes seven courses')
 for (const code of ['CMPT332', 'CMPT360', 'CMPT370', 'MATH266']) assert.equal(sampleLabels[code], 'Fall 2026', `${code} runs in Fall 2026`)
 for (const code of ['CMPT340', 'CMPT353', 'CMPT434']) assert.equal(sampleLabels[code], 'Winter 2027', `${code} runs in Winter 2027`)
+
+// The school and expected graduation, so onboarding can skip those questions.
+assert.deepEqual(parseTranscriptProfile('{"completed":[],"institution":" University of Saskatchewan ","expectedGraduation":2028}'), {
+  institution: 'University of Saskatchewan',
+  expectedGraduation: 2028,
+})
+assert.deepEqual(parseTranscriptProfile('{"institution":{"x":1},"expectedGraduation":"soon"}'), { institution: null, expectedGraduation: null })
+assert.deepEqual(parseTranscriptProfile('not json'), { institution: null, expectedGraduation: null })
+assert.equal(schoolOf('University of Saskatchewan'), 'usask')
+assert.equal(schoolOf('USask'), 'usask')
+assert.equal(schoolOf('University of Regina'), 'other')
+assert.equal(schoolOf(null), null)
+assert.equal(schoolOf('  '), null)
 
 console.log('check-transcript-parse.ts: all assertions passed')
