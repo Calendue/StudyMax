@@ -524,6 +524,7 @@ function runPlan(
       year,
       group: named.length + turn,
       loose: isLoose(slot.label),
+      free: slot.free,
       // No 300- or 400-level CMPT course ran in a Spring/Summer term in 2025-27 (USask's class search).
       summerOk: !/410 or higher|senior cmpt/i.test(slot.label),
     })
