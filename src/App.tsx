@@ -822,6 +822,14 @@ function useStudyMax() {
     setCourseTerms((prev) => ({ ...prev, [code]: season }))
   }
 
+  /** Takes a course off "Taking now", whether the transcript listed it or the student added it. */
+  function removeInProgress(code: string) {
+    haptic.selection()
+    setUploadInProgress((codes) => codes.filter((c) => c !== code))
+    setRegistered((codes) => codes.filter((c) => c !== code))
+    setCourseTerms((prev) => Object.fromEntries(Object.entries(prev).filter(([c]) => c !== code)))
+  }
+
   // Each course under way with its term as the tree and the plan write it ("Winter 2027").
   const inProgressTerms = useMemo(() => termLabels(currentByTerm, today), [currentByTerm, today])
 
@@ -1582,6 +1590,7 @@ function useStudyMax() {
     // results
     currentByTerm,
     setCourseTerm,
+    removeInProgress,
     inProgressTerms,
     completedTerms,
     roadmap,
