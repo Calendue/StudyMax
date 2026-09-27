@@ -4,6 +4,7 @@ import { Wordmark } from '../../ui/Brand.tsx'
 import { Button } from '../../ui/primitives.tsx'
 import { ThemeSwitch } from '../../ui/ThemeSwitch.tsx'
 import { CanopyBeat, GuideBeat, HowBeat, MoreBeat, ProblemBeat, RootsBeat, ScatteredBeat, ShowcaseBeat, TeamBeat } from './Beats.tsx'
+import { BEATS } from './beats.ts'
 import { ClimbOwl } from './ClimbOwl.tsx'
 import { Links, Wood, Zones } from './StoryTree.tsx'
 import { useClimb } from './useClimb.ts'
@@ -42,6 +43,9 @@ export function LandingPage({ onGetStarted, onSkip }: LandingPageProps) {
 
   const g = climb.geometry
   const props = { grown: climb.grown, live: climb.live }
+  // On a phone the tree is drawn whole from the start: growing it repaints a page-tall SVG every
+  // frame of the scroll (measured: over half the GPU work). The cards and Max still arrive as you climb.
+  const treeGrown = g?.compact ? BEATS.length - 1 : climb.grown
   return (
     <div className={`landing landing--${zone}${g ? ' is-ready' : ''}${g?.compact ? ' landing--compact' : ''}`}>
       <div className="landing__bar-dock">
@@ -64,8 +68,8 @@ export function LandingPage({ onGetStarted, onSkip }: LandingPageProps) {
       <div ref={stageRef} className="climb">
         {g && <Zones g={g} />}
         <motion.div className="climb__world" style={{ x: pan }}>
-          {g && <Wood g={g} grown={climb.grown} reduce={reduce} />}
-          {g && <Links g={g} grown={climb.grown} live={climb.live} />}
+          {g && <Wood g={g} grown={treeGrown} reduce={reduce || g.compact} />}
+          {g && <Links g={g} grown={treeGrown} live={climb.live} />}
           <div className="climb__beats">
             <RootsBeat {...props} onGetStarted={onGetStarted} onSkip={onSkip} />
             <ProblemBeat {...props} />

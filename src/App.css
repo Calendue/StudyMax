@@ -2077,3 +2077,8 @@
   .phone-roadmap .roadmap__cell .roadmap__node { padding-right: var(--s7); }
   .phone-roadmap .roadmap__remove { width: var(--touch-target); height: var(--touch-target); }
 }
+
+@media (max-width: 767px) {
+  .term-select { min-height: var(--touch-target); }
+  .max-live__close { min-width: var(--touch-target); min-height: var(--touch-target); }
+}
