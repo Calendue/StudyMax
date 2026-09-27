@@ -8,6 +8,7 @@ import { ActionBar, ScreenBody, ScreenTitle, TopBar } from '../ui/chrome.tsx'
 import { Icon } from '../ui/Icon.tsx'
 import { Appear, Button, Chip, Group, IconButton, Row, RowIcon, SectionLabel } from '../ui/primitives.tsx'
 import { Sheet } from '../ui/Sheet.tsx'
+import { InProgressChanges } from '../ui/WhatChanged.tsx'
 
 // Arts & Science courses only, grouped by subject: the college this app's programs live in. The rest
 // of USask's catalogue stays reachable through search, not this list.
@@ -190,7 +191,12 @@ export function InProgressList({ label = true }: { label?: boolean }) {
                 key={code}
                 index={index++}
                 title={courseCode(code)}
-                subtitle={m.courseTitle(code)}
+                subtitle={
+                  <>
+                    {m.courseTitle(code)}
+                    <InProgressChanges code={code} term={termLabel(group.season, m.today)} />
+                  </>
+                }
                 trailing={
                   <>
                     <select
