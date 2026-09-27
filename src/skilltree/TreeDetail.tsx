@@ -119,9 +119,13 @@ export function TreeDetail({
   const statusKind = node.elective && node.status !== 'next' ? 'elective' : node.status
   const when =
     node.status === 'completed'
-      ? `Year ${node.year}, ${node.lane === 'fall' ? 'Fall' : 'Winter'} side. Placed by course level: the transcript has no term dates.`
+      ? node.termKnown
+        ? `Passed in ${node.term}.`
+        : `Year ${node.year}, ${node.lane === 'fall' ? 'Fall' : 'Winter'} side. Placed by course level: no term was given for it.`
       : node.status === 'inProgress'
-        ? `Now, ${node.term}`
+        ? node.later
+          ? `Registered for ${node.term}`
+          : `Now, ${node.term}`
         : node.term
   const done = m.completed.has(node.code)
   return (

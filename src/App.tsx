@@ -162,6 +162,8 @@ interface SavedState {
   summerPerTerm?: number
   /** The term each in-progress course is in, from the transcript or set by the student. */
   courseTerms?: Record<string, Season>
+  /** The term each completed course was passed in ("Spring/Summer 2025"), where the transcript says. */
+  completedTerms?: Record<string, string>
 }
 
 
@@ -340,6 +342,7 @@ function useStudyMax() {
   const [uploadInProgress, setUploadInProgress] = useState<string[]>(saved.inProgress ?? [])
   // Which term each in-progress course is in. A course without one is taken to be in the current term.
   const [courseTerms, setCourseTerms] = useState<Record<string, Season>>(saved.courseTerms ?? {})
+  const [completedTerms, setCompletedTerms] = useState<Record<string, string>>(saved.completedTerms ?? {})
   const completedRef = useRef(completed)
   completedRef.current = completed
 
@@ -363,6 +366,7 @@ function useStudyMax() {
     registered,
     springSummer,
     courseTerms,
+    completedTerms,
     coursesPerTerm,
     summerPerTerm,
   }
@@ -654,6 +658,7 @@ function useStudyMax() {
     setCompleted(new Set(computerScience.sampleTranscript ?? []))
     setUploadInProgress(computerScience.sampleInProgress ?? [])
     setCourseTerms(computerScience.sampleInProgressTerms ?? {})
+    setCompletedTerms({})
     // A sample student is an existing one. Targets picked in onboarding still lead the plan.
     setStudentType('existing')
     if (programId !== computerScience.id) setConcentrationIds([])
@@ -747,6 +752,8 @@ function useStudyMax() {
       setUploadInProgress((prev) => (replacing ? inProgressCodes : [...new Set([...prev, ...inProgressCodes])]))
       const terms: Record<string, Season> = data.inProgressTerms ?? {}
       setCourseTerms((prev) => (replacing ? terms : { ...prev, ...terms }))
+      const passed: Record<string, string> = data.completedTerms ?? {}
+      setCompletedTerms((prev) => (replacing ? passed : { ...prev, ...passed }))
       setFoundCount(codes.length)
       setStatedProgram({ major: data.major ?? null, minor: data.minor ?? null })
       if (!early) seedTargets(targetSeed)
@@ -1338,6 +1345,7 @@ function useStudyMax() {
     setConcentrationIds([])
     setGradYear(null)
     setCourseTerms({})
+    setCompletedTerms({})
     setRegistered([])
     setRegisteredQuery('')
     setSpringSummer(false)
@@ -1563,6 +1571,7 @@ function useStudyMax() {
     // results
     currentByTerm,
     setCourseTerm,
+    completedTerms,
     roadmap,
     resultsStale,
     matches,

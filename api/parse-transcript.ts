@@ -1,4 +1,4 @@
-import { buildTranscriptParsePrompt, parseTranscriptProgram, parseTranscriptResponse, parseTranscriptTerms } from '../src/lib/transcriptParse.js'
+import { buildTranscriptParsePrompt, parseTranscriptProgram, parseTranscriptResponse, parseTranscriptTermLabels, parseTranscriptTerms } from '../src/lib/transcriptParse.js'
 import { catalogueCourses } from '../src/data/courses.js'
 import { openAIKey, respond, sendFailure } from './_openai.js'
 import { allow, clientIp } from './_rateLimit.js'
@@ -60,8 +60,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const allTerms = parseTranscriptTerms(text)
   // Only for courses that made it into the in-progress list.
   const inProgressTerms = Object.fromEntries(inProgress.filter((c) => allTerms[c]).map((c) => [c, allTerms[c]]))
+  // The term each completed course was passed in ("Spring/Summer 2025"), so the skill tree can place
+  // it where it happened instead of guessing from its level.
+  const labels = parseTranscriptTermLabels(text)
+  const completedTerms = Object.fromEntries(completed.filter((c) => labels[c]).map((c) => [c, labels[c]]))
 
   // A readable PDF with no recognisable courses is a different problem from an unreadable one, and
   // the student needs to be told which.
-  res.status(200).json({ completed, inProgress, inProgressTerms, major, minor, sawText: text.trim().length > 0 })
+  res.status(200).json({ completed, inProgress, inProgressTerms, completedTerms, major, minor, sawText: text.trim().length > 0 })
 }

@@ -35,12 +35,15 @@ export function buildTranscriptParsePrompt(): string {
       '"B.Comm. - Accounting"), or null if the document does not state one. Never guess it from the courses.',
     '- "minor": a declared minor exactly as written, or null if none is stated.',
     '',
-    'For every "inProgress" course, also report the term the document lists it under, exactly as written ' +
-      '(e.g. "2026 Fall Term", "Winter 2027", "Spring 2027"), in "inProgressTerms". Omit a course whose term ' +
-      'is not stated. Never guess a term.',
+    'For every course, completed or in progress, also report the single term the document lists it under, ' +
+      'exactly as written (e.g. "2024 Fall Term", "Winter 2027", "2025 Spring Term"), in "terms". A completed ' +
+      'course passed in a Spring or Summer term keeps that term. Leave a course out of "terms" when no single ' +
+      'term is stated for it, such as transfer or advanced-placement credit listed under a range of years ' +
+      '(e.g. "2023-PRESENT"). That only affects "terms": transfer credit with a real course code still goes ' +
+      'in "completed". Never guess a term.',
     '',
     'Respond with ONLY a JSON object of this exact shape, nothing else:',
-    '{"completed":["CODE123","CODE456"],"inProgress":["CODE789"],"inProgressTerms":{"CODE789":"2026 Fall Term"},"major":"Computer Science","minor":null}',
+    '{"completed":["CODE123","CODE456"],"inProgress":["CODE789"],"terms":{"CODE123":"2024 Fall Term","CODE456":"2025 Spring Term","CODE789":"2026 Fall Term"},"major":"Computer Science","minor":null}',
     'Course codes: uppercase subject letters directly followed by the number, no space, no period, no credit-' +
       'unit suffix. Example: "MATH 110.3" becomes "MATH110".',
     'If a bucket is empty, use an empty array for it — never omit a bucket.',
@@ -79,26 +82,53 @@ export function seasonOf(label: string): 'Fall' | 'Winter' | 'Spring/Summer' | n
   return null
 }
 
-/**
- * Which term each in-progress course is in, where the document says. Kept apart from
- * parseTranscriptResponse, like the program, so the course lists keep their exact shape.
- */
-export function parseTranscriptTerms(text: string): Record<string, 'Fall' | 'Winter' | 'Spring/Summer'> {
+/** "2025 Spring Term", "Winter 2027" → "Spring/Summer 2025", "Winter 2027"; null without one clear year. */
+export function termLabelOf(label: string): string | null {
+  const season = seasonOf(label)
+  const years = label.match(/\b(19|20)\d{2}\b/g) ?? []
+  // A range ("2023-PRESENT", "2021-2023") is transfer credit, not a term.
+  if (!season || years.length !== 1 || /present|-\s*\d/i.test(label)) return null
+  return `${season} ${years[0]}`
+}
+
+/** The raw `terms` (every course) and older `inProgressTerms` objects from a model response. */
+function rawTerms(text: string): [string, string][] {
   const start = text.indexOf('{')
   const end = text.lastIndexOf('}')
-  if (start === -1 || end < start) return {}
+  if (start === -1 || end < start) return []
   try {
-    const raw = JSON.parse(text.slice(start, end + 1))?.inProgressTerms
-    if (!raw || typeof raw !== 'object') return {}
-    const out: Record<string, 'Fall' | 'Winter' | 'Spring/Summer'> = {}
-    for (const [code, label] of Object.entries(raw)) {
-      const season = typeof label === 'string' && label.length <= 60 ? seasonOf(label) : null
-      if (season) out[normalizeCode(code)] = season
-    }
-    return out
+    const parsed = JSON.parse(text.slice(start, end + 1))
+    return [parsed?.inProgressTerms, parsed?.terms].flatMap((raw) =>
+      raw && typeof raw === 'object'
+        ? Object.entries(raw).flatMap(([code, label]) => (typeof label === 'string' && label.length <= 60 ? [[normalizeCode(code), label] as [string, string]] : []))
+        : [],
+    )
   } catch {
-    return {}
+    return []
   }
+}
+
+/**
+ * The term each course is listed under, where the document says, as "Fall 2024". Kept apart from
+ * parseTranscriptResponse, like the program, so the course lists keep their exact shape.
+ */
+export function parseTranscriptTermLabels(text: string): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const [code, label] of rawTerms(text)) {
+    const term = termLabelOf(label)
+    if (term) out[code] = term
+  }
+  return out
+}
+
+/** Which season each course is in, where the document says (the in-progress courses' terms). */
+export function parseTranscriptTerms(text: string): Record<string, 'Fall' | 'Winter' | 'Spring/Summer'> {
+  const out: Record<string, 'Fall' | 'Winter' | 'Spring/Summer'> = {}
+  for (const [code, label] of rawTerms(text)) {
+    const season = seasonOf(label)
+    if (season) out[code] = season
+  }
+  return out
 }
 
 function normalizeCode(raw: string): string {

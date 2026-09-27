@@ -86,12 +86,14 @@ export function SkillTree({
             inProgress: m.inProgressCourses,
             plan: m.plan,
             currentTerm: inputs.currentTerm,
+            completedTerms: m.completedTerms,
+            booked: m.booked,
             targets: inputs.targets,
             bestNext: inputs.bestNext,
             width,
           })
         : null,
-    [m.completed, m.inProgressCourses, m.plan, inputs, width],
+    [m.completed, m.inProgressCourses, m.plan, m.completedTerms, m.booked, inputs, width],
   )
 
   const [selection, setSelection] = useState<TreeSelection | null>(null)
@@ -391,9 +393,15 @@ export function SkillTree({
                   <span className="tree__lane-head tree__lane-head--fall" style={{ right: layout.width - layout.trunkX + layout.trunkWidth / 2 + 14 }}>
                     Fall
                   </span>
+                  {/* Spring/Summer courses sit above the Winter ones on the same side, under their own head. */}
                   <span className="tree__lane-head tree__lane-head--winter" style={{ left: layout.trunkX + layout.trunkWidth / 2 + 14 }}>
-                    Winter
+                    {b.summer ? 'Spring/Summer' : 'Winter'}
                   </span>
+                  {b.winterLabelY !== null && (
+                    <span className="tree__lane-head tree__lane-head--winter" style={{ left: layout.trunkX + layout.trunkWidth / 2 + 14, top: b.winterLabelY - b.y - 9 }}>
+                      Winter
+                    </span>
+                  )}
                 </div>
               ))}
             <div className="tree__band-sentinel" style={{ top: 0, height: layout.trunkTop }} data-band="canopy" aria-hidden />
@@ -584,8 +592,8 @@ function NodeCard({
   const label = [
     courseCode(node.code),
     title,
-    `${node.lane === 'fall' ? 'Fall' : 'Winter'} ${node.termKnown ? node.term : `Year ${node.year}`}`,
-    status === 'inProgress' ? 'in progress' : status === 'next' ? 'best next course' : status,
+    node.termKnown ? node.term : `${node.lane === 'fall' ? 'Fall' : 'Winter'}, Year ${node.year}`,
+    status === 'inProgress' ? (node.later ? 'registered' : 'in progress') : status === 'next' ? 'best next course' : status,
     isElective(node.code) ? 'your choice of course' : node.elective ? `elective, ${node.elective.need} of ${node.elective.of} choices` : '',
     creds.length > 0 ? `counts toward ${creds.join(', ')}` : '',
   ]
@@ -625,7 +633,7 @@ function NodeCard({
       <span className="tree-node__head">
         <span className="tree-node__code">{courseCode(node.code)}</span>
         {status === 'next' && <span className="tree-node__tag">Next</span>}
-        {status === 'inProgress' && <span className="tree-node__tag tree-node__tag--now">Now</span>}
+        {status === 'inProgress' && <span className="tree-node__tag tree-node__tag--now">{node.later ? node.term.split(' ')[0].replace('Spring/Summer', 'Summer') : 'Now'}</span>}
         {status === 'completed' && (
           <svg className="tree-node__glyph" viewBox="0 0 12 12" aria-hidden>
             <path d="M2.5 6.3 5 8.7l4.6-5" />

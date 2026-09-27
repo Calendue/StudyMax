@@ -33,8 +33,12 @@ export interface SkillTreeInput {
   /** Registered now, not finished. A course that's also completed counts as completed. */
   inProgress: Iterable<string>
   plan: PlannedTerm[]
-  /** The term being sat right now: where the in-progress courses go. */
+  /** The term being sat right now: where in-progress courses without a known term go. */
   currentTerm: TermStart
+  /** The term each completed course was passed in ("Spring/Summer 2025"), where the transcript says. */
+  completedTerms?: Record<string, string>
+  /** In-progress courses by the term they're in ("Winter 2027": [...]), as the plan books them. */
+  booked?: Record<string, string[]>
   /** Leaves, in order: the hero first. Only the first MAX_LEAVES are drawn. */
   targets: SkillTreeTarget[]
   /** The best next course (the app's top-overlap course), when it's in the plan and unlocked. */
@@ -52,6 +56,10 @@ export interface TreeBand {
   y: number
   h: number
   current: boolean
+  /** The year has Spring/Summer courses: they sit on the Winter side above its Winter courses, and
+   *  this is where the "Winter" label goes between them (null when there's no Winter row under them). */
+  summer: boolean
+  winterLabelY: number | null
 }
 
 export interface TreeNode {
@@ -67,8 +75,12 @@ export interface TreeNode {
   h: number
   /** "Winter 2027", "Fall 2026" (now), or "Year 2" for a completed course (see termKnown). */
   term: string
-  /** False for completed courses: the transcript has no term dates, so their place is approximate. */
+  /** False for a completed course the transcript gave no term for: its place is approximate. */
   termKnown: boolean
+  /** A Spring/Summer course: drawn on the Winter side, above that year's Winter courses. */
+  summer: boolean
+  /** In progress, but in a term after the one running now (registered ahead). */
+  later: boolean
   /** Leaf indexes this course counts toward. */
   creds: number[]
   /** A requirement slot where any `need` of `of` courses count: drawn as a dashed elective. */
@@ -193,6 +205,8 @@ interface Draft {
   lane: TreeLane | null
   term: string
   termKnown: boolean
+  summer: boolean
+  later: boolean
   creds: number[]
   elective: TreeNode['elective']
   order: number
@@ -213,17 +227,38 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
   const current = input.currentTerm
   const targets = input.targets.slice(0, MAX_LEAVES)
 
+  // ── the terms the transcript gives ──
+  const datedDone = new Map<string, TermStart>()
+  for (const code of completed) {
+    const t = parseTerm(input.completedTerms?.[code] ?? '')
+    if (t) datedDone.set(code, t)
+  }
+  const nowTerm = new Map<string, TermStart>()
+  for (const [label, codes] of Object.entries(input.booked ?? {})) {
+    const t = parseTerm(label)
+    if (t) for (const code of codes) if (inProgress.includes(code)) nowTerm.set(code, t)
+  }
+  const currentAY = academicYear(current)
+
   // ── which year is "now" ──
-  // The transcript carries no term dates, so this is an approximation, and says so: a full-time
-  // year is about ten courses, and nobody is in an earlier year than their highest completed level
-  // (one year later when they're sitting a Fall term: that year's Fall has only just started).
+  // With dated courses, Year 1 is the academic year of the earliest one. Without (a sample student,
+  // courses added by hand) it's an approximation, and says so: a full-time year is about ten courses,
+  // and nobody is in an earlier year than their highest completed level (one year later when they're
+  // sitting a Fall term: that year's Fall has only just started).
+  const firstAY = datedDone.size > 0 ? Math.min(currentAY, ...[...datedDone.values(), ...nowTerm.values()].map(academicYear)) : null
   const levels = [...completed].map((c) => Math.min(4, Math.max(1, courseLevel(c))))
   const topLevel = levels.length > 0 ? Math.max(...levels) : 0
-  const currentYear = Math.max(
-    1,
-    Math.min(4, Math.floor(completed.size / 10) + 1),
-    topLevel + (current.season === 'Fall' && topLevel > 0 ? 1 : 0),
-  )
+  const currentYear =
+    firstAY !== null
+      ? currentAY - firstAY + 1
+      : Math.max(
+          1,
+          Math.min(4, Math.floor(completed.size / 10) + 1),
+          topLevel + (current.season === 'Fall' && topLevel > 0 ? 1 : 0),
+        )
+  const yearOf = (t: TermStart) => Math.max(1, currentYear + academicYear(t) - currentAY)
+  const laneOf = (t: TermStart): TreeLane => (t.season === 'Fall' ? 'fall' : 'winter')
+  const termOrder = (t: TermStart) => t.year * 10 + (t.season === 'Winter' ? 0 : t.season === 'Spring/Summer' ? 1 : 2)
   // Completed courses sit in a year that's already over (or in this year's Fall, when it's Winter).
   const lastDoneYear = Math.max(1, current.season === 'Fall' ? currentYear - 1 : currentYear)
 
@@ -232,53 +267,46 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
   const credsOf = (code: string) =>
     targets.flatMap((t, i) => (t.groups.some((grp) => grp.courses.includes(code)) ? [i] : []))
   let order = 0
-  const add = (code: string, d: Omit<Draft, 'code' | 'creds' | 'order' | 'tier' | 'row' | 'col' | 'elective'>) => {
+  const add = (code: string, d: Omit<Draft, 'code' | 'creds' | 'order' | 'tier' | 'row' | 'col' | 'elective' | 'summer' | 'later'> & { later?: boolean }) => {
     if (drafts.has(code)) return
-    drafts.set(code, { code, ...d, creds: credsOf(code), elective: null, order: order++, tier: 0, row: 0, col: 0 })
+    const summer = d.termKnown && d.term.startsWith('Spring/Summer')
+    drafts.set(code, { code, later: false, ...d, summer, creds: credsOf(code), elective: null, order: order++, tier: 0, row: 0, col: 0 })
   }
+  const dated = (status: TreeStatus, t: TermStart, later = false) => ({
+    status,
+    year: yearOf(t),
+    lane: laneOf(t),
+    term: `${t.season} ${t.year}`,
+    termKnown: true,
+    later,
+  })
 
-  // By course level, but a year holds two full terms at most: a student who took many 100-level
-  // courses took some of them later, so the rest move up a year (never past the last finished one).
+  // A course the transcript dates goes in its own term, Spring/Summer included.
+  for (const [code, t] of datedDone) add(code, dated('completed', t))
+  // The rest by course level, but a year holds two full terms at most: a student who took many
+  // 100-level courses took some of them later, so the rest move up a year (never past the last
+  // finished one).
   const perYear = new Map<number, number>()
-  for (const code of [...completed].sort((a, b) => courseLevel(a) - courseLevel(b) || a.localeCompare(b))) {
+  for (const d of drafts.values()) perYear.set(d.year, (perYear.get(d.year) ?? 0) + 1)
+  const undated = [...completed].filter((c) => !datedDone.has(c))
+  for (const code of undated.sort((a, b) => courseLevel(a) - courseLevel(b) || a.localeCompare(b))) {
     let year = Math.min(lastDoneYear, Math.max(1, courseLevel(code)))
-    while (year < lastDoneYear && (perYear.get(year) ?? 0) >= 2 * TERM_LOAD) year++
+    // Beside dated terms an undated course is transfer credit, which came first: no spilling up.
+    while (firstAY === null && year < lastDoneYear && (perYear.get(year) ?? 0) >= 2 * TERM_LOAD) year++
     perYear.set(year, (perYear.get(year) ?? 0) + 1)
-    add(code, {
-      status: 'completed',
-      year,
-      lane: null,
-      term: '',
-      termKnown: false,
-    })
+    add(code, { status: 'completed', year, lane: null, term: `Year ${year}`, termKnown: false })
   }
+  // In progress: the term it's registered in, which can be a later one than today's.
   for (const code of inProgress) {
-    add(code, {
-      status: 'inProgress',
-      year: currentYear,
-      lane: current.season === 'Fall' ? 'fall' : 'winter',
-      term: `${current.season} ${current.year}`,
-      termKnown: true,
-    })
+    const t = nowTerm.get(code) ?? current
+    add(code, dated('inProgress', t, termOrder(t) > termOrder(current)))
   }
-  const currentAY = academicYear(current)
   for (const term of input.plan) {
     const t = parseTerm(term.label) ?? current
     for (const course of term.courses) {
       if (drafts.has(course.code)) continue
-      add(course.code, {
-        status: 'planned',
-        year: Math.max(1, currentYear + academicYear(t) - currentAY),
-        // Spring/Summer has no lane of its own yet (a thin centre lane later): it sits on the Winter
-        // side of its academic year, and the card keeps its real term.
-        lane: t.season === 'Fall' ? 'fall' : 'winter',
-        term: `${t.season} ${t.year}`,
-        termKnown: true,
-      })
+      add(course.code, dated('planned', t))
     }
-  }
-  for (const d of drafts.values()) {
-    if (d.status === 'completed') d.term = `Year ${d.year}`
   }
 
   // ── prerequisite links: one per AND-group, the option actually on the tree ──
@@ -379,11 +407,16 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
       : Math.round(trunkX + trunkWidth / 2 + g.innerGap + col * (nodeW + g.colGap))
 
   const rowsInYear = new Map<number, number>()
+  const regularRows = new Map<number, number>()
+  const hasSummer = new Map<number, boolean>()
+  // The room between a year's Winter rows and the Spring/Summer rows above them, for their label.
+  const summerGap = 22
   for (let year = 1; year <= maxYear; year++) {
     const inYear = [...drafts.values()]
       .filter((d) => d.year === year)
       .sort(
         (a, b) =>
+          Number(a.summer) - Number(b.summer) ||
           a.tier - b.tier ||
           STATUS_RANK[a.status] - STATUS_RANK[b.status] ||
           Number(!!a.elective) - Number(!!b.elective) ||
@@ -397,10 +430,12 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
       return taken[lane].get(row)!
     }
     let rows = 0
+    let regular = 0
     for (const d of inYear) {
       const lane = d.lane!
+      // Spring/Summer comes after Winter, so its courses sit above every Fall and Winter row.
       let row = Math.max(
-        0,
+        d.summer ? rows : 0,
         ...links
           .filter((l) => l.sequencing && l.to === d.code && drafts.get(l.from)!.year === year)
           .map((l) => drafts.get(l.from)!.row + 1),
@@ -416,8 +451,11 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
         break
       }
       rows = Math.max(rows, d.row + 1)
+      if (!d.summer) regular = rows
     }
     rowsInYear.set(year, rows)
+    regularRows.set(year, regular)
+    hasSummer.set(year, inYear.some((d) => d.summer))
   }
 
   // ── the canopy: the hero crowns the trunk, the rest branch off in pairs below it ──
@@ -440,20 +478,25 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
 
   // ── bands, top to bottom: canopy, the years from the last down to Year 1, the roots ──
   const bands: TreeBand[] = []
-  bands.push({ key: 'canopy', kind: 'canopy', year: 0, label: 'Canopy', y: 0, h: canopyH, current: false })
+  bands.push({ key: 'canopy', kind: 'canopy', year: 0, label: 'Canopy', y: 0, h: canopyH, current: false, summer: false, winterLabelY: null })
   let y = canopyH
   const bandY = new Map<number, { y: number; h: number }>()
   for (let year = maxYear; year >= 1; year--) {
     const rows = rowsInYear.get(year) ?? 0
-    const h = rows === 0 ? g.emptyBand : g.bandTop + rows * g.nodeH + (rows - 1) * g.rowGap + g.bandBottom
-    bands.push({ key: `year-${year}`, kind: 'year', year, label: `Year ${year}`, y, h, current: year === currentYear })
+    const summer = hasSummer.get(year) ?? false
+    const regular = regularRows.get(year) ?? 0
+    const gap = summer && regular > 0 ? summerGap : 0
+    const h = rows === 0 ? g.emptyBand : g.bandTop + rows * g.nodeH + (rows - 1) * g.rowGap + gap + g.bandBottom
+    const bottom = y + h - g.bandBottom
+    const winterLabelY = gap > 0 ? Math.round(bottom - regular * (g.nodeH + g.rowGap) - summerGap / 2 + g.rowGap / 2) : null
+    bands.push({ key: `year-${year}`, kind: 'year', year, label: `Year ${year}`, y, h, current: year === currentYear, summer, winterLabelY })
     bandY.set(year, { y, h })
     y += h
   }
   const trunkBase = y
   // A sapling (nothing completed yet) gets a line of encouragement under its roots.
   const rootsH = g.rootsH + (completed.size === 0 ? 44 : 0)
-  bands.push({ key: 'roots', kind: 'roots', year: 0, label: 'Roots', y, h: rootsH, current: false })
+  bands.push({ key: 'roots', kind: 'roots', year: 0, label: 'Roots', y, h: rootsH, current: false, summer: false, winterLabelY: null })
   const height = y + rootsH
   const trunkTop = canopyH
 
@@ -461,7 +504,8 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
     .sort((a, b) => a.year - b.year || a.row - b.row || (a.lane === b.lane ? a.col - b.col : a.lane === 'fall' ? -1 : 1))
     .map((d) => {
       const band = bandY.get(d.year)!
-      const bottom = band.y + band.h - g.bandBottom
+      const lift = d.summer && (regularRows.get(d.year) ?? 0) > 0 ? summerGap : 0
+      const bottom = band.y + band.h - g.bandBottom - lift
       return {
         code: d.code,
         status: d.status,
@@ -475,6 +519,8 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
         h: g.nodeH,
         term: d.term,
         termKnown: d.termKnown,
+        summer: d.summer,
+        later: d.later,
         creds: d.creds.filter((c) => c < leafCount),
         elective: d.elective,
         prereqs: [],
