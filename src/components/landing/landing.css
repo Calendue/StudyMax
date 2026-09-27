@@ -1162,3 +1162,97 @@
     display: none;
   }
 }
+
+/* ── Ayo's Drake meme: ten seconds after the canopy, it rides a thin rail across the screen ── */
+.drake-rail {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 67%;
+  z-index: 25;
+  height: 0;
+  pointer-events: none;
+}
+
+.drake-rail::before {
+  content: '';
+  position: absolute;
+  inset: -0.75px 0 auto;
+  height: 1.5px;
+  background: linear-gradient(to right, transparent, var(--accent) 14%, var(--accent) 86%, transparent);
+  opacity: 0;
+  animation: drake-rail-line 6.8s linear forwards;
+}
+
+.drake-rail__card {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: clamp(150px, 17vw, 250px);
+  margin: 0;
+  padding: 8px;
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: var(--shadow-float), 0 0 0 1px var(--hairline);
+  transform: translate(-110%, -50%);
+  animation: drake-pass 6.8s forwards;
+}
+
+.drake-rail__img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+
+/* In from the left, a slow drift through the middle while the room reads it, then out the right. */
+@keyframes drake-pass {
+  0% {
+    transform: translate(-110%, -50%) rotate(-5deg);
+    animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  32% {
+    transform: translate(calc(50vw - 56%), -50%) rotate(-1.5deg);
+    animation-timing-function: linear;
+  }
+  66% {
+    transform: translate(calc(50vw - 44%), -50%) rotate(1.5deg);
+    animation-timing-function: cubic-bezier(0.7, 0, 0.84, 0);
+  }
+  100% {
+    transform: translate(calc(100vw + 10%), -50%) rotate(5deg);
+  }
+}
+
+@keyframes drake-rail-line {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  12%,
+  82% {
+    opacity: 0.45;
+  }
+}
+
+/* Reduced motion: no ride, it just appears in the middle for a moment. */
+.drake-rail--still::before {
+  display: none;
+}
+
+.drake-rail--still .drake-rail__card {
+  transform: translate(calc(50vw - 50%), -50%);
+  animation-name: drake-pass-still;
+  animation-duration: 4.5s;
+}
+
+@keyframes drake-pass-still {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  12%,
+  85% {
+    opacity: 1;
+  }
+}
