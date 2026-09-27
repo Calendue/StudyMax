@@ -35,7 +35,7 @@ import { currentDeadlineWatch, startDeadlineWatch, stopDeadlineWatch, syncWidget
 import { useClassTracker } from './useClassTracker.ts'
 import { currentAccount, isAuthConfigured, signIn, signInErrorMessage, signOut, type Account, type Provider } from './auth.ts'
 import { loadCloudSession, saveCloudSession } from './cloudSync.ts'
-import type { CloudSession } from './lib/cloudSession.ts'
+import type { CloudInternship, CloudSession } from './lib/cloudSession.ts'
 import { ModelContext } from './model.ts'
 import { useTheme } from './theme.ts'
 import type { Destination } from './ui/layout.ts'
@@ -91,7 +91,7 @@ type UniversityChoice = '' | 'usask' | 'other'
  * last step.
  */
 /** The internship question's answers: the year of the degree it takes, or no year to set aside. */
-export type Internship = 3 | 4 | 'unsure' | 'no'
+export type Internship = CloudInternship
 
 export type Screen =
   | 'landing'
@@ -440,6 +440,7 @@ function useStudyMax() {
     springSummer,
     coursesPerTerm,
     summerPerTerm,
+    internship,
     ...(phone.trim() ? { phone: phone.trim() } : {}),
   } satisfies CloudSession)
   const accountUid = account?.uid ?? null
@@ -1159,6 +1160,8 @@ function useStudyMax() {
     setDegreeVariant(state.degreeVariant ?? DEFAULT_DEGREE_VARIANT)
     setRegistered(registeredFrom(state.registered))
     setSpringSummer(state.springSummer ?? false)
+    // A session from an app build before the question has no answer: keep this device's.
+    if (state.internship !== undefined) setInternship(state.internship)
     setCoursesPerTerm(chosenLoad(state))
     setSummerPerTerm(state.summerPerTerm ?? DEFAULT_SUMMER_COURSES)
     setUploadStatus('idle')

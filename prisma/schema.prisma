@@ -58,6 +58,9 @@ model StudentProfile {
   springSummer       Boolean  @default(false)
   maxCoursesPerTerm  Int      @default(2)
   maxSummerCourses   Int      @default(2)
+  // Onboarding's internship question: "3" | "4" (the year of the degree the plan keeps free),
+  // "unsure" | "no", or null when never answered. Validated app-side, no DB enum.
+  internship         String?  @db.VarChar
   createdAt          DateTime @default(now()) @db.Timestamp(6)
   updatedAt          DateTime @updatedAt @db.Timestamp(6)
 
