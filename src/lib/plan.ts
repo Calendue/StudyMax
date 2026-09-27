@@ -323,11 +323,12 @@ export function withPrerequisites(
 
   while (queue.length > 0) {
     const code = queue.shift()!
-    // Antirequisite credit stands in for a prerequisite only when it's already earned: a planned
-    // CMPT 270 (an antirequisite of CMPT 145) doesn't excuse the CMPT 145 it needs.
+    // Antirequisite credit stands in for a prerequisite (a planned MATH 110 for MATH 133), but never
+    // the course being expanded itself: CMPT 270 is an antirequisite of CMPT 145 and still needs it.
+    const credit = new Set([...satisfied].filter((x) => x !== code))
     const unmet = prerequisiteGroups(code)
       .map((g) => g.options)
-      .filter((options) => !options.some((o) => satisfied.has(o) || barred(o, completed)))
+      .filter((options) => !options.some((o) => satisfied.has(o) || barred(o, credit)))
     for (const options of unmet) {
       // An option the student's credit rules out isn't planned; with none left, it's the
       // department's call (CME 331 standing in for CMPT 215), not a course to add.
@@ -549,7 +550,7 @@ function runPlan(
       maxCu,
       maxSeniorCmpt,
       ignoreMissing: !includePrerequisites,
-      namedCreditOnly: true,
+      namedCreditOnly: false,
       ...(degree ? {} : { assumedCuPerTerm: 3 * perTerm }),
       ...(nodeBudget !== undefined ? { nodeBudget } : {}),
       cuOf,

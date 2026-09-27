@@ -62,7 +62,8 @@ const isBooked = (r: ReturnType<typeof run>, code: string) => Object.values(r.bo
   assert(r.blocked.CMPT434?.join() === 'Winter 2027', 'not-offered blocks CMPT434 in Winter 2027')
   assert(!isBooked(r, 'CMPT434') && !r.inProgress.includes('CMPT434'), 'not-offered un-books CMPT434 in Winter 2027')
   const later = run([{ code: 'CMPT370', term: 'Fall 2027', kind: 'later' }, { code: 'CMPT370', term: 'Winter 2028', kind: 'later' }])
-  assert(later.blocked.CMPT370?.join() === 'Fall 2027,Winter 2028', 'later accumulates blocked terms in order')
+  // "Later than T" blocks T and every term before it from the current one on, so the course can't land early.
+  assert(later.blocked.CMPT370?.join() === 'Fall 2026,Winter 2027,Spring/Summer 2027,Fall 2027,Winter 2028', 'later blocks every term up to T, in order')
   assert(later.inProgress.includes('CMPT370'), 'later in a future term leaves the current registration alone')
 }
 
