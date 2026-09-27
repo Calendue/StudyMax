@@ -119,6 +119,8 @@ export interface CoreItem {
   subject: string
   /** Optional (additive): a loose slot (free, senior or breadth elective) the list scheduler places after the degree's own slots of the same year. */
   loose?: boolean
+  /** Optional (additive): a free or senior elective (C5); a term is never filled with nothing else when a real requirement could go. */
+  free?: boolean
 }
 
 export interface CoreInput {

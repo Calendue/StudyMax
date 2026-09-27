@@ -20,6 +20,8 @@ export interface ModelCourse {
   year: number
   group: number
   loose: boolean
+  /** Free or senior elective (C5). */
+  free?: boolean
   /** Slots only: may go in a Spring/Summer term. */
   summerOk?: boolean
 }
@@ -239,6 +241,7 @@ export function buildModel(m: ModelInput): Model {
       group: c.group,
       subject: c.named ? subjectOf(c.id) : '',
       ...(c.loose ? { loose: true } : {}),
+      ...(c.free ? { free: true } : {}),
     })
   }
   const bookedOut = bookedAt.map((b) => ({ code: b.code, term: b.term, cu: m.cuOf(b.code), level: m.levelOf(b.code), subject: subjectOf(b.code) }))

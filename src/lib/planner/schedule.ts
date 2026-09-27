@@ -361,6 +361,12 @@ function listSchedule(c: Ctx, H: number, dl: number[], prio: Prio, missed?: { it
         if (s.at[i] >= 0) continue
         if (s.seats[t] >= c.cap[t]) break
         if (!fits(c, s, i, t) || !eligible(c, s, i, t, g)) continue
+        // The last seat: not a term of nothing but free electives while a requirement could go.
+        if (c.items[i].free && s.seats[t] + 1 === c.cap[t] && s.seats[t] > 0 && dl[i] > t) {
+          let allFree = true
+          for (let j = 0; j < c.n && allFree; j++) if (s.at[j] === t && !c.items[j].free) allFree = false
+          if (allFree && order.some((j) => s.at[j] < 0 && !c.items[j].free && fits(c, s, j, t) && eligible(c, s, j, t, g))) continue
+        }
         place(c, s, i, t, 1)
         grew = true
       }
@@ -536,6 +542,8 @@ function exact(c: Ctx, H: number, dl: number[], budget: number): Dfs {
       const inner = (j: number): boolean => {
         if (exhausted) return false
         if (j === cands.length) {
+          // Every subset tried counts toward the budget, so one wide term can't run away.
+          if (++nodes >= budget) { exhausted = true; return false }
           const ok0 = valid()
           let ok = ok0
           if (ok) {
@@ -600,7 +608,7 @@ function solveAt(c: Ctx, H: number, earliest: number[], budget: { left: number }
   // Template order, tightening the deadline of whatever misses (and its prerequisites) and trying
   // again: a senior CMPT slot squeezed out of the last term moves up a term, and so on.
   const dl = [...chainDl]
-  for (let round = 0; round < 3 * c.n; round++) {
+  for (let round = 0; round < Math.min(3 * c.n, 30); round++) {
     const missed: { item: number; before?: number } = { item: -1 }
     const at = listSchedule(c, H, dl, 'template', missed)
     if (at) return { at, proven: true }
@@ -614,6 +622,12 @@ function solveAt(c: Ctx, H: number, earliest: number[], budget: { left: number }
   const r = exact(c, H, chainDl, budget.left)
   budget.left -= r.nodes
   return { at: r.at, proven: r.proven }
+}
+
+/** The lower bound on the graduation term index alone (-1 with nothing to place; a huge number when unreachable). */
+export function coreLowerBound(input: CoreInput): number {
+  const c = makeCtx(input)
+  return c.n === 0 ? -1 : lowerBound(c).lb
 }
 
 export function scheduleCore(input: CoreInput): CoreResult {
@@ -647,7 +661,7 @@ export function scheduleCore(input: CoreInput): CoreResult {
       const tb = lowerBound(tc)
       tc.earliest = tb.earliest
       if (tb.lb > G) continue
-      const r = solveAt(tc, G, tb.earliest, { left: Math.min(budget.left, 2000) })
+      const r = solveAt(tc, G, tb.earliest, { left: Math.min(budget.left, 200) })
       if (r.at) { capNow[u] = 0; found = r.at }
     }
   }
