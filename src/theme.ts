@@ -45,6 +45,11 @@ function apply(theme: Theme, fade: boolean) {
 /** Status bar and Android navigation bar icons follow the theme: light icons on dark, dark on light. */
 function syncSystemBars(theme: Theme) {
   if (!isNative) return
+  // The launch splash is Old Lace in both themes, so its icons stay dark until it has dissolved.
+  if (document.querySelector('.prism')) {
+    window.setTimeout(() => syncSystemBars(theme), 250)
+    return
+  }
   // Style.Dark is "light text for dark backgrounds" in both plugins.
   void StatusBar.setStyle({ style: theme === 'dark' ? Style.Dark : Style.Light }).catch(() => {})
   void SystemBars.setStyle({ style: theme === 'dark' ? SystemBarsStyle.Dark : SystemBarsStyle.Light }).catch(() => {})
