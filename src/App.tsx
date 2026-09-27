@@ -24,6 +24,7 @@ import {
   type TermStart,
 } from './lib/plan.ts'
 import { computeCredentials } from './lib/credentials.ts'
+import { placementProblem } from './lib/placement.ts'
 import { applyOverrides, sameOverride, sortOverrides, type CourseOverride } from './lib/overrides.ts'
 import { defaultCatalog } from './lib/catalog.ts'
 import { diffPlans } from './lib/planner/explain.ts'
@@ -305,6 +306,9 @@ function useStudyMax() {
   const [pinned, setPinned] = useState<Record<string, string[]>>(saved.pinned ?? {})
   const [addedCourses, setAddedCourses] = useState<string[]>(saved.addedCourses ?? [])
   const [preferredName, setPreferredName] = useState<string | null>(saved.preferredName ?? null)
+  // Whether a signed-in student's own session is back on screen yet (it loads just after launch). Max's
+  // live follow waits for it: a save taken on before it would be overwritten by the restore.
+  const [sessionRestored, setSessionRestored] = useState(!isAuthConfigured)
 
   const selectedSchool = universityId === 'usask' ? usask : null
   const availablePrograms = useMemo(() => selectedSchool?.programs ?? [], [selectedSchool])
@@ -1013,6 +1017,64 @@ function useStudyMax() {
   )
   const plan = planResult.terms
 
+  // --- moving a course on the Skill Tree: it's pinned in the term it's dropped in, if the rules allow ---
+  /** The plan with `code` fixed in `label` instead of wherever it is now, and whether that breaks a rule. */
+  function placementFor(code: string, label: string) {
+    const kept = Object.entries(pinned)
+      .map(([l, codes]) => [l, codes.filter((c) => c !== code)] as const)
+      .filter(([, codes]) => codes.length > 0)
+    const trial: Record<string, string[]> = Object.fromEntries(kept)
+    trial[label] = [...(trial[label] ?? []), code]
+    const terms = buildStudentPlanResult(targets.map((t) => t.spec), planningSpecs, completed, inProgressCourses, coursesPerTerm, startTerm, {
+      springSummer: summerLoad > 0,
+      summerPerTerm: summerLoad,
+      degree: activeDegree,
+      booked,
+      away: internshipAY,
+      overrides,
+      currentTerm,
+      pinned: trial,
+      added: addedCourses.filter((c) => c !== code),
+    }).terms
+    const problem = placementProblem({
+      code,
+      label,
+      terms,
+      completed: planCompleted,
+      inProgress: planInProgress,
+      booked,
+      start: startTerm,
+      springSummer: summerLoad > 0,
+      perTerm: coursesPerTerm,
+      perSummer: Math.max(1, summerLoad),
+    })
+    return { problem, trial }
+  }
+  /** While dragging: null if it can go there, else why not (the tree shows it under the card). */
+  function checkPlacement(code: string, label: string): string | null {
+    return placementFor(code, label).problem
+  }
+  /** Hands a course back to the planner: it goes wherever the plan would put it. */
+  function unpinCourse(code: string) {
+    setPinned((prev) =>
+      Object.fromEntries(
+        Object.entries(prev)
+          .map(([l, codes]) => [l, codes.filter((c) => c !== code)] as const)
+          .filter(([, codes]) => codes.length > 0),
+      ),
+    )
+    haptic.light()
+  }
+  /** On drop: pins it there and returns null, or leaves the plan alone and returns why not. */
+  function placeCourse(code: string, label: string): string | null {
+    const { problem, trial } = placementFor(code, label)
+    if (problem) return problem
+    setPinned(trial)
+    setAddedCourses((codes) => codes.filter((c) => c !== code))
+    haptic.light()
+    return null
+  }
+
   // --- Max live on the Skill Tree (src/maxLive/) ---
   // The plan above as inputs, sent when placing a Max call so Max plans exactly what's on screen.
   const maxPlanInputs = useMemo<CallPlanInputs | null>(() => {
@@ -1085,7 +1147,7 @@ function useStudyMax() {
     setPreferredName(name)
     if (!account) updateGuestCall({ name })
   }
-  const maxLive = useMaxLive({ onCommitted: adoptMaxPlan, onAction: runMaxAction, onName: adoptMaxName })
+  const maxLive = useMaxLive({ onCommitted: adoptMaxPlan, onAction: runMaxAction, onName: adoptMaxName, ready: sessionRestored })
 
   // The plan as the roadmap draws it: what's left, plus the courses already under way in their terms.
   const roadmap = useMemo(() => withCurrentCourses(plan, planByTerm, today), [plan, planByTerm, today])
@@ -1343,7 +1405,11 @@ function useStudyMax() {
     if (!isAuthConfigured) return
     let live = true
     void currentAccount().then(async (existing) => {
-      if (!live || !existing) return
+      if (!live) return
+      if (!existing) {
+        setSessionRestored(true)
+        return
+      }
       const key = saveKeyFor(existing.uid)
       // Nothing saved on this phone yet: their session from another device, if there is one.
       const cloud = hasSaved(key) ? null : await loadCloudSession()
@@ -1360,8 +1426,12 @@ function useStudyMax() {
       if (cloud) phoneFrom(cloud.session)
       else void loadCloudSession().then((c) => live && phoneFrom(c?.session))
       setAccount(existing)
+      setSessionRestored(true)
       setDirection(1)
       setScreen(resumeScreen(state))
+    }).catch(() => {
+      // No account to restore after all: the session on screen is the one to follow Max into.
+      if (live) setSessionRestored(true)
     })
     return () => {
       live = false
@@ -1780,6 +1850,10 @@ function useStudyMax() {
     // The name to greet them by: the one they picked (Settings or Max), else their account's first name.
     displayName: preferredName ?? firstName(account),
     setPreferredName,
+    checkPlacement,
+    placeCourse,
+    unpinCourse,
+    pinned,
     authBusy,
     authError,
     signInWith,

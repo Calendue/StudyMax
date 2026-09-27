@@ -135,6 +135,20 @@ function activeDegree(program: Program, variant: string | null | undefined) {
   return program.degrees?.find((d) => d.variant === variant) ?? program.degree
 }
 
+/** What they're taking now, by term label ("Fall 2026": [...], "Winter 2027": [...]), for Max to say term by term. */
+export function underWayByTerm(input: AdapterInput): Record<string, string[]> {
+  return bookedNow(input)
+}
+
+/** "Fall 2026: CMPT 332, CMPT 340; Winter 2027: CMPT 353" — one line Max can read term by term. */
+export function termLine(byTerm: Record<string, string[]>): string {
+  const spoken = (code: string) => code.replace(/^([A-Z]+)(\d)/, '$1 $2')
+  return Object.entries(byTerm)
+    .filter(([, codes]) => codes.length > 0)
+    .map(([label, codes]) => `${label}: ${codes.map(spoken).join(', ')}`)
+    .join('; ')
+}
+
 /** A plan as one string ("Winter 2027:CMPT371,CMPT470|…") — equal plans, equal hashes. */
 export function planHash(terms: PlannedTerm[]): string {
   return terms.map((t) => `${t.label}:${t.courses.map((c) => c.code).join(',')}`).join('|')

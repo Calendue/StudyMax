@@ -1,4 +1,5 @@
 import { useModel } from '../model.ts'
+import { MaxNudge } from '../screens/MaxNudge.tsx'
 import { KIND_LABEL, courseCode, plural } from '../format.ts'
 import { daysUntil } from '../lib/resources.ts'
 import { heroNextCourse } from '../lib/widgetSnapshot.ts'
@@ -234,6 +235,7 @@ export function DashboardPage() {
         <WelcomeCard />
         <Stats />
       </section>
+      <MaxNudge index={0} />
 
       <section className="dash__grid">
         <WhatsLeft />

@@ -4,6 +4,8 @@
 import { useModel } from '../model.ts'
 import { Button } from '../ui/primitives.tsx'
 import { Icon } from '../ui/Icon.tsx'
+import { MaxOwl } from '../ui/MaxOwl.tsx'
+import { livePose } from '../ui/owlPose.ts'
 import './maxLive.css'
 
 const CALL_LINE: Record<string, string> = {
@@ -24,6 +26,7 @@ export function TalkToMax() {
   if (!m.features.max || !m.features.live || m.maxLive.active || m.plan.length === 0) return null
   return (
     <div className="max-live-entry">
+      <MaxOwl pose="idle" size={44} />
       <Button variant="secondary" icon="phone" onClick={() => m.go('ping-max')}>
         Talk it through with Max
       </Button>
@@ -58,7 +61,7 @@ export function MaxLiveBar({ compact = false }: { compact?: boolean }) {
       aria-label="Max, live on your plan"
     >
       <div className="max-live__row">
-        <span className={`max-live__dot${ended ? '' : ' is-on'}`} aria-hidden />
+        <MaxOwl pose={ended ? 'idle' : livePose(live)} size={compact ? 30 : 40} className="max-live__owl" />
         <span className="max-live__state" aria-live="polite">
           {s?.status === 'committed' && !open && <Icon name="check" size={16} />} {state}
         </span>

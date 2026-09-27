@@ -1377,3 +1377,93 @@
 .tree--contained .tree__year-label {
   top: 10px;
 }
+
+/* ── Moving a course to another term (useCourseDrag.ts) ── */
+.tree-node.is-movable {
+  cursor: grab;
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+
+/* The held card follows the pointer, lifted above the rest; it goes back to its slot on release. */
+.tree-node.is-dragging,
+.tree-node.is-dragging:active {
+  z-index: 20;
+  cursor: grabbing;
+  border-color: var(--accent);
+  box-shadow: var(--shadow-float);
+  transform: translate(var(--drag-x, 0), var(--drag-y, 0)) scale(1.04);
+  transition: none;
+}
+
+.tree-node.is-dragging.is-blocked {
+  border-style: dashed;
+  border-color: var(--ink);
+  opacity: 0.9;
+}
+
+/* The year the card is over: a rose wash where it can land, a neutral one where it can't. */
+.tree__band.is-drop {
+  background: var(--accent-tint);
+}
+
+.tree__band.is-drop-blocked {
+  background: var(--surface-2);
+}
+
+/* "Move to Winter 2028", or why not, riding just above the pointer. */
+.tree-drag-tag {
+  position: absolute;
+  z-index: 30;
+  max-width: 240px;
+  padding: 6px 12px;
+  border-radius: var(--r2);
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  font-size: var(--fs-small);
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: center;
+  box-shadow: var(--shadow-float);
+  transform: translate(-50%, calc(-100% - 36px));
+  pointer-events: none;
+}
+
+.tree-drag-tag.is-blocked {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+/* After a drop: what moved, or why it snapped back. Floats above the tab bar, wherever the tree is scrolled. */
+.tree-notice {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--tabbar-height, 64px) + var(--sab, 0px) + var(--s4));
+  z-index: 60;
+  max-width: min(420px, calc(100vw - 2 * var(--s4)));
+  padding: var(--s2) var(--s4);
+  border-radius: var(--r2);
+  background: var(--ink);
+  color: var(--bg);
+  font-size: var(--fs-small);
+  box-shadow: var(--shadow-float);
+  transform: translateX(-50%);
+  animation: tree-notice-in var(--d-med) var(--settle);
+}
+
+.tree-notice.is-blocked {
+  border-left: 3px solid var(--accent);
+}
+
+@keyframes tree-notice-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tree-notice {
+    animation: none;
+  }
+}

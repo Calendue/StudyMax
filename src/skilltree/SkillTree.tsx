@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { electiveLabel, isElective } from '../lib/plan.ts'
 import { useElectivePicks } from '../lib/electivePicks.ts'
 import { createPortal } from 'react-dom'
@@ -11,6 +11,7 @@ import { Icon } from '../ui/Icon.tsx'
 import { Sheet } from '../ui/Sheet.tsx'
 import { useTreeSource, type TreeSelection } from './planView.ts'
 import { useTreeTransition } from './useTreeTransition.ts'
+import { movable, useCourseDrag, type DropResult } from './useCourseDrag.ts'
 import { DegreeReadout } from './DegreeReadout.tsx'
 import { PlanIssues } from '../ui/WhatChanged.tsx'
 import { TreeDetail } from './TreeDetail.tsx'
@@ -105,6 +106,23 @@ export function SkillTree({
   // Phones fold the key away: the cards already say Done, Now, Next, Needs and Elective.
   const [keyOpen, setKeyOpen] = useState(false)
   const [credFilter, setCredFilter] = useState<number | null>(null)
+  // Dragging a planned course to another term (useCourseDrag): only on the student's own plan, never a Max frame.
+  const [notice, setNotice] = useState<{ text: string; ok: boolean } | null>(null)
+  useEffect(() => {
+    if (!notice) return
+    const t = setTimeout(() => setNotice(null), 4500)
+    return () => clearTimeout(t)
+  }, [notice])
+  const courseDrag = useCourseDrag({
+    boardRef,
+    layout,
+    enabled: source.liveKey === null,
+    check: m.checkPlacement,
+    place: m.placeCourse,
+    onDrop: ({ code, label, problem }: DropResult) =>
+      setNotice(problem ? { text: problem, ok: false } : { text: `Moved ${courseCode(code)} to ${label}.`, ok: true }),
+  })
+  const dragging = courseDrag.drag
   // A selection that stops resolving (the course was un-ticked, a target dropped) clears itself.
   const selectedNode = selection?.kind === 'node' ? layout?.nodes.find((n) => n.code === selection.code) : undefined
   const selectedLeaf = selection?.kind === 'leaf' ? layout?.leaves[selection.index] : undefined
@@ -367,6 +385,13 @@ export function SkillTree({
       style={{ '--tree-sticky-top': `${stickyTop}px` } as CSSProperties}
     >
       <PlanIssues />
+      {notice &&
+        createPortal(
+          <div className={`tree-notice${notice.ok ? '' : ' is-blocked'}`} role="status" aria-live="polite">
+            {notice.text}
+          </div>,
+          document.body,
+        )}
       <div className="tree__bar">
         {(!compact || keyOpen) && (
           <ul id="tree-key" className="tree__legend" aria-label="Key">
@@ -429,7 +454,7 @@ export function SkillTree({
               .map((b) => (
                 <div
                   key={b.key}
-                  className={`tree__band${b.current ? ' tree__band--now' : ''}${b.internship ? ' tree__band--internship' : ''}`}
+                  className={`tree__band${b.current ? ' tree__band--now' : ''}${b.internship ? ' tree__band--internship' : ''}${dragging?.bandKey === b.key ? (dragging.problem ? ' is-drop-blocked' : ' is-drop') : ''}`}
                   style={{ top: b.y, height: b.h }}
                   data-band={b.key}
                   aria-hidden
@@ -517,7 +542,11 @@ export function SkillTree({
                 shown={bandShown(`year-${n.year}`)}
                 on={focus ? focus.codes.has(n.code) : null}
                 selected={live?.kind === 'node' && live.code === n.code}
+                canMove={source.liveKey === null && movable(n)}
+                drag={dragging?.code === n.code ? dragging : null}
+                onPointerDown={(e) => courseDrag.onCardPointerDown(e, n)}
                 onSelect={() => {
+                  if (courseDrag.swallowsClick()) return
                   setCredFilter(null)
                   select(live?.kind === 'node' && live.code === n.code ? null : { kind: 'node', code: n.code })
                 }}
@@ -571,6 +600,19 @@ export function SkillTree({
                 </button>
               )
             })}
+
+            {/* While a card is held: where it would land, or why it can't. */}
+            {dragging && (
+              <div
+                className={`tree-drag-tag${dragging.problem ? ' is-blocked' : ''}`}
+                style={{ left: dragging.x, top: dragging.y }}
+                aria-hidden
+              >
+                {!dragging.label
+                  ? 'Drop it on a term'
+                  : dragging.problem ?? (layout.nodes.find((n) => n.code === dragging.code)?.term === dragging.label ? 'Its term now' : `Move to ${dragging.label}`)}
+              </div>
+            )}
 
             <div className="tree__roots" style={{ top: layout.trunkBase + (layout.compact ? 88 : 104) }}>
               <p className="tree__plate">
@@ -656,6 +698,9 @@ function NodeCard({
   shown,
   on,
   selected,
+  canMove = false,
+  drag = null,
+  onPointerDown,
   onSelect,
 }: {
   node: TreeNode
@@ -665,6 +710,11 @@ function NodeCard({
   shown: boolean
   on: boolean | null
   selected: boolean
+  /** It can be dragged to another term (useCourseDrag). */
+  canMove?: boolean
+  /** Set while this card is the one being dragged. */
+  drag?: { dx: number; dy: number; problem: string | null } | null
+  onPointerDown?: (e: ReactPointerEvent<HTMLButtonElement>) => void
   onSelect: () => void
 }) {
   const m = useModel()
@@ -677,6 +727,8 @@ function NodeCard({
   if (on === false) classes.push('is-dim')
   if (on === true) classes.push('is-on')
   if (shown) classes.push('is-in')
+  if (canMove) classes.push('is-movable')
+  if (drag) classes.push(drag.problem ? 'is-dragging is-blocked' : 'is-dragging')
   const creds = node.creds.map((c) => layout.leaves[c]?.name).filter(Boolean)
   const where = node.termKnown ? node.term : `${node.term}, placed by course level`
   const registered = status === 'inProgress' && !node.current
@@ -721,11 +773,13 @@ function NodeCard({
           width: node.w,
           height: node.h,
           '--i': index % 12,
+          ...(drag ? { '--drag-x': `${drag.dx}px`, '--drag-y': `${drag.dy}px` } : {}),
         } as CSSProperties
       }
       title={`${courseCode(pick ?? node.code)}${pick ? ` · ${m.courseTitle(pick)}` : title ? ` · ${title}` : ''} · ${where}`}
       aria-label={label}
       aria-pressed={selected}
+      onPointerDown={onPointerDown}
       onClick={onSelect}
     >
       <span className="tree-node__head">

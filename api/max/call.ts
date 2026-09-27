@@ -12,7 +12,7 @@ import { resolveMaxUser } from '../_maxIdentity.js'
 import { adapterInput, snapshotFromCall } from './_scenarios.js'
 import { parseCallPlanInputs } from '../../src/lib/max/callInputs.js'
 import type { CallPlanInputs } from '../../src/lib/max/live.js'
-import { planHash, programName, regenerate } from '../../src/lib/max/planningAdapter.js'
+import { planHash, programName, regenerate, termLine, underWayByTerm } from '../../src/lib/max/planningAdapter.js'
 import { currentTermOf } from '../../src/lib/plan.js'
 
 // spec 11: "institution-configured, with a national fallback" — no Institution-level wellness field
@@ -140,6 +140,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let parity = false
   let graduation: string | null
   let currentCourses: string[]
+  // Term by term when the app said which term each is in; else one list (a saved plan has no seasons).
+  let currentLine: string | null = null
   let programId = profile.majorProgramId
   const parsed = body.planInputs === undefined ? null : parseCallPlanInputs(body.planInputs)
   if (parsed && 'inputs' in parsed) {
@@ -148,6 +150,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     parity = planHash(terms) === planInputs.planHash
     graduation = terms[terms.length - 1]?.label ?? null
     currentCourses = planInputs.inProgress
+    currentLine = termLine(underWayByTerm(adapterInput(snapshotFromCall(planInputs)))) || null
     programId = planInputs.programId
   } else {
     if (parsed && 'rejected' in parsed) console.error(`[Max] call planInputs rejected (${parsed.rejected}) — using the saved plan`)
@@ -217,7 +220,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           name: firstName ?? "not given yet — ask what they'd like to be called if you need it",
           programLine: [profile.degree, programName(programId)].filter(Boolean).join(', '),
           currentTerm: `${currentTerm.season} ${currentTerm.year}`,
-          currentCoursesLine: currentCourses.length > 0 ? currentCourses.join(', ') : 'none',
+          currentCoursesLine: currentLine ?? (currentCourses.length > 0 ? currentCourses.join(', ') : 'none'),
           roadmapVersion: plan.version,
           projectedGraduation: graduation ?? 'unknown',
           isFirstCall,

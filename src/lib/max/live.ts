@@ -105,6 +105,8 @@ export interface LiveSnapshot {
   parity: boolean
   baseline: { terms: PlannedTerm[]; inputs: LiveInputs } | null
   scenario: LiveScenario | null
+  /** The call's last saved change (may be older than `scenario`): what the app must have adopted. */
+  committed?: LiveScenario | null
   seq: number
 }
 

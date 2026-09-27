@@ -263,3 +263,12 @@
     opacity: 0;
   }
 }
+
+/* Max himself in the live bar, in place of a status dot: his pose says what the call is doing. */
+.max-live__owl {
+  margin: calc(-1 * var(--s1)) 0;
+}
+
+.max-live--ended .max-live__owl {
+  opacity: 0.6;
+}
