@@ -30,12 +30,75 @@ export function buildTranscriptParsePrompt(): string {
     '- Every attempt failed or was withdrawn with no pass on record: omit it entirely.',
     'Never list the same code twice within the same bucket.',
     '',
+    'Also report the program the document states, so the student is not asked again:',
+    '- "major": the declared major or program exactly as written (e.g. from "Major: Computer Science" or ' +
+      '"B.Comm. - Accounting"), or null if the document does not state one. Never guess it from the courses.',
+    '- "minor": a declared minor exactly as written, or null if none is stated.',
+    '',
+    'For every "inProgress" course, also report the term the document lists it under, exactly as written ' +
+      '(e.g. "2026 Fall Term", "Winter 2027", "Spring 2027"), in "inProgressTerms". Omit a course whose term ' +
+      'is not stated. Never guess a term.',
+    '',
     'Respond with ONLY a JSON object of this exact shape, nothing else:',
-    '{"completed":["CODE123","CODE456"],"inProgress":["CODE789"]}',
+    '{"completed":["CODE123","CODE456"],"inProgress":["CODE789"],"inProgressTerms":{"CODE789":"2026 Fall Term"},"major":"Computer Science","minor":null}',
     'Course codes: uppercase subject letters directly followed by the number, no space, no period, no credit-' +
       'unit suffix. Example: "MATH 110.3" becomes "MATH110".',
     'If a bucket is empty, use an empty array for it — never omit a bucket.',
   ].join('\n')
+}
+
+export interface TranscriptProgram {
+  major: string | null
+  minor: string | null
+}
+
+/**
+ * The major and minor the document states, as free text (mapped to a program id by the caller).
+ * Kept apart from parseTranscriptResponse so the course lists keep their exact shape.
+ */
+export function parseTranscriptProgram(text: string): TranscriptProgram {
+  const none: TranscriptProgram = { major: null, minor: null }
+  const start = text.indexOf('{')
+  const end = text.lastIndexOf('}')
+  if (start === -1 || end < start) return none
+  try {
+    const parsed = JSON.parse(text.slice(start, end + 1))
+    // Free text from a model: a short string or nothing, never an object or a paragraph.
+    const field = (v: unknown) => (typeof v === 'string' && v.trim() && v.length <= 120 ? v.trim() : null)
+    return { major: field(parsed?.major), minor: field(parsed?.minor) }
+  } catch {
+    return none
+  }
+}
+
+/** A term label as a document writes it, to the season the plan uses; null when it names none. */
+export function seasonOf(label: string): 'Fall' | 'Winter' | 'Spring/Summer' | null {
+  if (/fall|autumn/i.test(label)) return 'Fall'
+  if (/winter/i.test(label)) return 'Winter'
+  if (/spring|summer/i.test(label)) return 'Spring/Summer'
+  return null
+}
+
+/**
+ * Which term each in-progress course is in, where the document says. Kept apart from
+ * parseTranscriptResponse, like the program, so the course lists keep their exact shape.
+ */
+export function parseTranscriptTerms(text: string): Record<string, 'Fall' | 'Winter' | 'Spring/Summer'> {
+  const start = text.indexOf('{')
+  const end = text.lastIndexOf('}')
+  if (start === -1 || end < start) return {}
+  try {
+    const raw = JSON.parse(text.slice(start, end + 1))?.inProgressTerms
+    if (!raw || typeof raw !== 'object') return {}
+    const out: Record<string, 'Fall' | 'Winter' | 'Spring/Summer'> = {}
+    for (const [code, label] of Object.entries(raw)) {
+      const season = typeof label === 'string' && label.length <= 60 ? seasonOf(label) : null
+      if (season) out[normalizeCode(code)] = season
+    }
+    return out
+  } catch {
+    return {}
+  }
 }
 
 function normalizeCode(raw: string): string {

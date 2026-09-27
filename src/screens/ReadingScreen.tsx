@@ -56,7 +56,7 @@ export function ReadingScreen() {
           <p className="wait__hint" aria-live="polite">
             {found
               ? early
-                ? 'Next, a few questions about your program.'
+                ? 'Next, a couple of quick questions, then your results.'
                 : 'Taking you to the list so you can check it.'
               : slow
                 ? 'Still reading. Long audits take a little more time.'

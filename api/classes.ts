@@ -2,6 +2,7 @@
 //   GET /api/classes?op=terms
 //   GET /api/classes?op=search&term=202701&course=CMPT370
 //   GET /api/classes?op=seats&term=202701&courses=CMPT370,CMPT280
+//   GET /api/classes?op=offered&terms=202609,202701&course=CMPT280  (section count per term)
 // Banner is a public university service with no rate-limit contract, so answers are cached briefly
 // in the warm function and a seat check is capped at a handful of courses.
 
@@ -66,7 +67,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const op = param(req, 'op')
   const term = param(req, 'term')
-  if (op !== 'terms' && !/^\d{6}$/.test(term)) {
+  if (op !== 'terms' && op !== 'offered' && !/^\d{6}$/.test(term)) {
     res.status(400).json({ error: 'term required' })
     return
   }
@@ -86,6 +87,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const [, subject, number] = match
       const sections = await cached(`search:${term}:${subject}${number}`, 60_000, () => searchCourse(term, subject, number))
       res.status(200).json({ sections })
+      return
+    }
+
+    if (op === 'offered') {
+      const match = param(req, 'course').toUpperCase().match(COURSE_RE)
+      const terms = param(req, 'terms').split(',').filter((t) => /^\d{6}$/.test(t)).slice(0, 6)
+      if (!match || terms.length === 0) {
+        res.status(400).json({ error: 'course and terms required' })
+        return
+      }
+      const [, subject, number] = match
+      const counts = await mapLimited(terms, 2, async (t) => {
+        const read = () => cached(`search:${t}:${subject}${number}`, 60_000, () => searchCourse(t, subject, number))
+        try {
+          const first = await read()
+          if (first.length > 0) return first.length
+          // Banner throttles by answering empty, so "not offered" gets a second look first.
+          await new Promise((r) => setTimeout(r, 1200))
+          return (await read()).length
+        } catch {
+          return null
+        }
+      })
+      res.status(200).json({ offered: Object.fromEntries(terms.map((t, i) => [t, counts[i]])) })
       return
     }
 

@@ -11,13 +11,8 @@ export interface ProfileRow {
   empty: string
   /** The onboarding step that asks it: the review's Edit link. */
   step: Screen
-  /** Whether this path asks it at all (another university skips degree, major, goals, this term). */
+  /** Whether this path asks it at all (another university skips major, goals, this term). */
   shown: boolean
-}
-
-/** "Bachelor of Science (BSc)" → "BSc": what a student calls it. */
-export function shortDegree(degree: string) {
-  return degree.match(/\(([^)]+)\)/)?.[1] ?? degree
 }
 
 /**
@@ -68,7 +63,6 @@ export function profileRows(m: Model): ProfileRow[] {
       step: 'university',
       shown: true,
     },
-    { key: 'degree', label: 'Degree', value: m.degree ? shortDegree(m.degree) : null, empty: '', step: 'degree', shown: m.universityId !== 'other' },
     {
       key: 'major',
       label: 'Major',
@@ -84,7 +78,8 @@ export function profileRows(m: Model): ProfileRow[] {
       value: goalsValue ?? (past('goals') ? 'Open to anything' : null),
       empty: 'Open to anything',
       step: 'goals',
-      shown: steps.includes('goals'),
+      // The transcript path skips the step, but a minor or track the transcript named still shows.
+      shown: steps.includes('goals') || goalsValue !== null,
     },
     {
       key: 'term',

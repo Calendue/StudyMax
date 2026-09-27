@@ -1,6 +1,6 @@
 import { specializations } from '../specializations.ts'
 import { courseTitles } from '../courseTitles.ts'
-import { completedCourses, inProgressCourses } from '../transcript.ts'
+import { completedCourses, inProgressCourses, inProgressTerms } from '../transcript.ts'
 import type { Program } from './types.ts'
 
 export const computerScience: Program = {
@@ -10,4 +10,5 @@ export const computerScience: Program = {
   courseTitles,
   sampleTranscript: completedCourses,
   sampleInProgress: inProgressCourses,
+  sampleInProgressTerms: inProgressTerms,
 }

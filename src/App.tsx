@@ -10,7 +10,7 @@ import type { School } from './data/schools/types.ts'
 import { computerScience } from './data/programs/computerScience.ts'
 import type { Program } from './data/programs/types.ts'
 import { buildCallScript, type CallContext } from './lib/callScript.ts'
-import { buildStudentPlan, termsFrom, upcomingTerm, type TermStart } from './lib/plan.ts'
+import { buildStudentPlan, termsFrom, upcomingTerm, type Season, type TermStart } from './lib/plan.ts'
 import { computeCredentials } from './lib/credentials.ts'
 import { searchCourses, catalogueTitle } from './lib/courseSearch.ts'
 import { courseInfo } from './data/prereqs.ts'
@@ -21,6 +21,8 @@ import { buildWidgetSnapshot } from './lib/widgetSnapshot.ts'
 import { currentDeadlineWatch, startDeadlineWatch, stopDeadlineWatch, syncWidgets, watchFailureMessage } from './widgets.ts'
 import { useClassTracker } from './useClassTracker.ts'
 import { currentAccount, isAuthConfigured, signIn, signInErrorMessage, signOut, type Account, type Provider } from './auth.ts'
+import { loadCloudSession, saveCloudSession } from './cloudSync.ts'
+import type { CloudSession } from './lib/cloudSession.ts'
 import { ModelContext } from './model.ts'
 import { useTheme } from './theme.ts'
 import type { Destination } from './ui/layout.ts'
@@ -68,7 +70,9 @@ type UniversityChoice = '' | 'usask' | 'other'
 /**
  * The flow, in order. Onboarding is six short steps (where you are, school, degree with major and
  * graduation year, optional goals, this term's courses, and a review with the phone number);
- * existing students then add courses. Results is tabbed; the call is the last step.
+ * existing students then add courses. A transcript uploaded on the first question skips what it
+ * already answers (goals, this term's courses, the course list). Results is tabbed; the call is the
+ * last step.
  */
 export type Screen =
   | 'landing'
@@ -148,6 +152,8 @@ interface SavedState {
   registered?: string[]
   /** Whether the plan may use Spring/Summer terms. */
   springSummer?: boolean
+  /** The term each in-progress course is in, from the transcript or set by the student. */
+  courseTerms?: Record<string, Season>
 }
 
 
@@ -167,7 +173,7 @@ function seedOf(state: Pick<Partial<SavedState>, 'concentrationIds' | 'minorId'>
 }
 
 // Intake selections survive a refresh so a half-finished session isn't lost. The phone number is
-// deliberately excluded: it never touches storage. A signed-in student's state is kept under their
+// deliberately excluded: it never touches localStorage (a signed-in student's goes to their account). A signed-in student's state is kept under their
 // Firebase uid, so two people on one phone don't see each other's courses.
 function saveKeyFor(uid: string | null) {
   return uid ? `${SAVE_KEY}:${uid}` : SAVE_KEY
@@ -309,8 +315,18 @@ function useStudyMax() {
 
   const [completed, setCompleted] = useState<Set<string>>(() => new Set(saved.completed ?? []))
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'sample' | 'error'>('idle')
+  // Picked "Upload my transcript" on the first question: the transcript answers the major, minor and
+  // this term's courses, so onboarding skips those and ends on the dashboard, not the course list.
+  const [fromTranscript, setFromTranscript] = useState(false)
+  // The major and minor the transcript states, as written; mapped to program ids once USask is picked.
+  const [statedProgram, setStatedProgram] = useState<{ major: string | null; minor: string | null }>({
+    major: null,
+    minor: null,
+  })
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploadInProgress, setUploadInProgress] = useState<string[]>(saved.inProgress ?? [])
+  // Which term each in-progress course is in. A course without one is taken to be in the current term.
+  const [courseTerms, setCourseTerms] = useState<Record<string, Season>>(saved.courseTerms ?? {})
   const completedRef = useRef(completed)
   completedRef.current = completed
 
@@ -333,6 +349,7 @@ function useStudyMax() {
     gradYear,
     registered,
     springSummer,
+    courseTerms,
   }
   const snapshotJson = JSON.stringify(snapshot)
   useEffect(() => {
@@ -342,6 +359,34 @@ function useStudyMax() {
       // storage full or blocked (private mode): the app works fine without persistence
     }
   }, [saveKey, snapshotJson])
+
+  // Onboarding's phone number, for Max's call. Never in localStorage; a signed-in student's is saved
+  // to their account below, so it follows them to another phone.
+  const [phone, setPhone] = useState('')
+
+  // A signed-in student's session is also kept in the database, so another phone can pick it up.
+  // Saved a moment after the last change, not on every tick; a failed save is simply retried by the next.
+  const cloudJson = JSON.stringify({
+    universityId,
+    programId,
+    completed: snapshot.completed,
+    inProgress: uploadInProgress,
+    revealed,
+    studentType,
+    degree,
+    minorId,
+    concentrationIds,
+    registered,
+    ...(phone.trim() ? { phone: phone.trim() } : {}),
+  } satisfies CloudSession)
+  const accountUid = account?.uid ?? null
+  // Only once this phone's session is known to be theirs: their own save here, or the database answered.
+  const [cloudUid, setCloudUid] = useState<string | null>(null)
+  useEffect(() => {
+    if (!accountUid || accountUid !== cloudUid) return
+    const timer = setTimeout(() => void saveCloudSession(JSON.parse(cloudJson)), 1500)
+    return () => clearTimeout(timer)
+  }, [accountUid, cloudUid, cloudJson])
 
   const matches = useMemo(
     () => computeMatches(selectedProgram?.specializations ?? [], completed),
@@ -436,11 +481,14 @@ function useStudyMax() {
     }
     setUniversityId(id)
     setProgramId('')
-    setCompleted(new Set())
-    setUploadInProgress([])
+    // A transcript read from the first question is the student's, whichever school they then pick.
+    if (!fromTranscript) {
+      setCompleted(new Set())
+      setUploadInProgress([])
+      setUploadStatus('idle')
+    }
     setHeroId(null)
     setExtraTargetIds([])
-    setUploadStatus('idle')
     haptic.selection()
     requestAdvance()
   }
@@ -450,12 +498,15 @@ function useStudyMax() {
     haptic.selection()
     if (id === programId) return
     setProgramId(id)
-    setCompleted(new Set())
-    setUploadInProgress([])
+    // A transcript's courses are the student's whatever their major; only hand-picked ones reset.
+    if (!fromTranscript) {
+      setCompleted(new Set())
+      setUploadInProgress([])
+      setUploadStatus('idle')
+    }
     setHeroId(null)
     setExtraTargetIds([])
     setConcentrationIds([]) // they belong to the major they were picked from
-    setUploadStatus('idle')
   }
 
   function chooseStudentType(type: StudentType) {
@@ -463,6 +514,7 @@ function useStudyMax() {
     // A first-year has no transcript: one being read from the first question is dropped.
     if (type === 'first-year' && uploadStatus === 'uploading') cancelUpload()
     setStudentType(type)
+    setFromTranscript(false)
     requestAdvance()
   }
 
@@ -471,11 +523,6 @@ function useStudyMax() {
     haptic.selection()
     setStudentType('existing')
     void handleTranscriptFile(file, true)
-  }
-
-  function chooseDegree(value: string) {
-    haptic.selection()
-    setDegree(value)
   }
 
   function chooseGradYear(year: number) {
@@ -519,6 +566,28 @@ function useStudyMax() {
   const minorOptions = useMemo(() => availablePrograms.filter((p) => p.kind === 'minor'), [availablePrograms])
   // Only a major with specializations to pick from gets the concentration step.
   const concentrationOptions = universityId === 'usask' ? (selectedProgram?.specializations ?? []) : []
+
+  // The transcript's stated major and minor, matched to USask programs by name (or shorthand like
+  // "Accounting" for Commerce), longest name first so "Applied Mathematics" beats "Mathematics". A
+  // named track ("Mechanical Engineering") becomes the concentration, so the reveal leads with it.
+  useEffect(() => {
+    if (!fromTranscript || universityId !== 'usask') return
+    const says = (text: string | null, name: string) => !!text && text.toLowerCase().includes(name.toLowerCase())
+    // Shorthand is matched as a whole word: "COMM" must not find Commerce in "Communications".
+    const saysWord = (text: string | null, word: string) => !!text && new RegExp(`\\b${word}\\b`, 'i').test(text)
+    const { major, minor } = statedProgram
+    const byLength = [...programOptions].sort((a, b) => b.name.length - a.name.length)
+    const program =
+      byLength.find((o) => says(major, o.name)) ??
+      byLength.find((o) => o.aliases.some((alias) => alias.length > 3 && saysWord(major, alias)))
+    if (program) {
+      setProgramId((id) => id || program.id)
+      const track = availablePrograms.find((p) => p.id === program.id)?.specializations.find((s) => says(major, s.name))
+      if (track) setConcentrationIds((ids) => (ids.length > 0 ? ids : [track.id]))
+    }
+    const minorProgram = minorOptions.find((p) => says(minor, p.name.replace(/\s*minor\s*/i, '').trim()))
+    if (minorProgram) setMinorId((id) => id ?? minorProgram.id)
+  }, [fromTranscript, universityId, statedProgram, programOptions, availablePrograms, minorOptions])
   const targetSeed = seedOf({ concentrationIds, minorId })
 
   function seedTargets(ids: string[]) {
@@ -527,10 +596,12 @@ function useStudyMax() {
   }
 
   function loadSampleStudent() {
+    setFromTranscript(false)
     setUniversityId('usask')
     setProgramId(computerScience.id)
     setCompleted(new Set(computerScience.sampleTranscript ?? []))
     setUploadInProgress(computerScience.sampleInProgress ?? [])
+    setCourseTerms(computerScience.sampleInProgressTerms ?? {})
     // A sample student is an existing one. Targets picked in onboarding still lead the plan.
     setStudentType('existing')
     if (programId !== computerScience.id) setConcentrationIds([])
@@ -622,13 +693,20 @@ function useStudyMax() {
 
       setCompleted((prev) => new Set(replacing ? codes : [...prev, ...codes]))
       setUploadInProgress((prev) => (replacing ? inProgressCodes : [...new Set([...prev, ...inProgressCodes])]))
+      const terms: Record<string, Season> = data.inProgressTerms ?? {}
+      setCourseTerms((prev) => (replacing ? terms : { ...prev, ...terms }))
       setFoundCount(codes.length)
+      setStatedProgram({ major: data.major ?? null, minor: data.minor ?? null })
       if (!early) seedTargets(targetSeed)
       setReadPhase('found')
       setUploadStatus('success')
       haptic.light()
       await wait(1200)
-      if (live()) go(early ? 'university' : 'courses', early ? 1 : -1)
+      if (!live()) return
+      // Read on the first question: the transcript answers the program questions, so onboarding skips
+      // them from here on (see onboardingSteps) and ends on the dashboard.
+      if (early) setFromTranscript(true)
+      go(early ? 'university' : 'courses', early ? 1 : -1)
     } catch (err) {
       if (!live()) return
       setUploadStatus('error')
@@ -662,6 +740,32 @@ function useStudyMax() {
       document.removeEventListener('visibilitychange', refresh)
     }
   }, [])
+
+  // The courses the student is taking, grouped by term: this term first, then the ones after it.
+  const currentSeason: Season = today.getMonth() >= 8 ? 'Fall' : today.getMonth() >= 4 ? 'Spring/Summer' : 'Winter'
+  const currentByTerm = useMemo(() => {
+    const order: Season[] = ['Fall', 'Winter', 'Spring/Summer']
+    const from = order.indexOf(currentSeason)
+    const seasons = [...order.slice(from), ...order.slice(0, from)]
+    return seasons
+      .map((season) => ({ season, courses: inProgressCourses.filter((c) => (courseTerms[c] ?? currentSeason) === season) }))
+      .filter((group) => group.courses.length > 0)
+  }, [inProgressCourses, courseTerms, currentSeason])
+
+  function setCourseTerm(code: string, season: Season) {
+    haptic.selection()
+    setCourseTerms((prev) => ({ ...prev, [code]: season }))
+  }
+
+  // Whether the courses changed since the results were last worked out. Only then is "Update my
+  // results" worth offering; otherwise the results already reflect every course on the list.
+  const resultsKey = JSON.stringify([[...completed].sort(), [...inProgressCourses].sort()])
+  const [revealedKey, setRevealedKey] = useState<string | null>(null)
+  useEffect(() => {
+    // A session restored already revealed counts as up to date with what it restored.
+    if (revealed && revealedKey === null) setRevealedKey(resultsKey)
+  }, [revealed, revealedKey, resultsKey])
+  const resultsStale = revealed && revealedKey !== null && revealedKey !== resultsKey
 
   // --- term-by-term path to the closest specialization ---
   const [coursesPerTerm, setCoursesPerTerm] = useState(2)
@@ -861,7 +965,6 @@ function useStudyMax() {
   )
   const callFallbackScript = useMemo(() => buildCallScript(callContext), [callContext])
 
-  const [phone, setPhone] = useState('')
   const [callStatus, setCallStatus] = useState<'idle' | 'calling' | 'success' | 'error'>('idle')
 
   async function callMe() {
@@ -917,10 +1020,19 @@ function useStudyMax() {
   useEffect(() => {
     if (!isAuthConfigured) return
     let live = true
-    void currentAccount().then((existing) => {
+    void currentAccount().then(async (existing) => {
       if (!live || !existing) return
-      const state = loadSaved(saveKeyFor(existing.uid))
+      const key = saveKeyFor(existing.uid)
+      // Nothing saved on this phone yet: their session from another device, if there is one.
+      const cloud = hasSaved(key) ? null : await loadCloudSession()
+      const state = hasSaved(key) ? loadSaved(key) : (cloud?.session ?? {})
+      if (!live) return
+      if (hasSaved(key) || cloud) setCloudUid(existing.uid)
       applySavedRef.current(state)
+      // The phone number is only ever in the database, so it's fetched even when the rest is local.
+      const phoneFrom = (session?: CloudSession | null) => session?.phone && setPhone((p) => p || session.phone!)
+      if (cloud) phoneFrom(cloud.session)
+      else void loadCloudSession().then((c) => live && phoneFrom(c?.session))
       setAccount(existing)
       setDirection(1)
       setScreen(resumeScreen(state))
@@ -938,9 +1050,16 @@ function useStudyMax() {
       const signedIn = await signIn(provider)
       // Their own saved session if they have one on this phone; otherwise what they've done so far
       // carries over into their account.
+      // Failing that, their session from another device; failing that, what they've done here.
       const key = saveKeyFor(signedIn.uid)
-      const state = hasSaved(key) ? loadSaved(key) : snapshot
-      if (hasSaved(key)) applySaved(state)
+      const cloud = hasSaved(key) ? null : await loadCloudSession()
+      const stored = hasSaved(key) ? loadSaved(key) : cloud?.session
+      const state = stored ?? snapshot
+      if (stored) applySaved(stored)
+      if (hasSaved(key) || cloud) setCloudUid(signedIn.uid)
+      const phoneFrom = (session?: CloudSession | null) => session?.phone && setPhone((p) => p || session.phone!)
+      if (cloud) phoneFrom(cloud.session)
+      else void loadCloudSession().then((c) => phoneFrom(c?.session))
       setAccount(signedIn)
       haptic.light()
       go(resumeScreen(state))
@@ -967,6 +1086,8 @@ function useStudyMax() {
       // the local session ends regardless
     }
     setAccount(null)
+    // Their number came from their account; it doesn't stay behind for whoever uses the phone next.
+    setPhone('')
     applySaved(loadSaved(SAVE_KEY))
     go('welcome', -1)
   }
@@ -1030,8 +1151,12 @@ function useStudyMax() {
   // A question not answered yet assumes the longer USask path, so the dots and the button don't
   // promise an early finish.
   // Another university has no catalogue here, so it skips the goals and this term's courses; its
-  // degree step asks only the graduation year.
-  const onboardingSteps: Screen[] = [
+  // degree step asks only the graduation year. A transcript read on the first question answers the
+  // goals and this term's courses (and usually the major, which the degree step then shows filled in),
+  // so that path is just the school, the degree step and the review.
+  const onboardingSteps: Screen[] = fromTranscript
+    ? ['student', 'university', 'degree', 'review']
+    : [
     'student',
     'university',
     'degree',
@@ -1044,7 +1169,7 @@ function useStudyMax() {
   const flow: Screen[] = [
     ...(isAuthConfigured && !account ? (['welcome'] as const) : []),
     ...onboardingSteps,
-    ...(hasCourseStep ? (['courses'] as const) : []),
+    ...(hasCourseStep && !fromTranscript ? (['courses'] as const) : []),
   ]
   const flowIndex = flow.indexOf(screen)
   const nextIsReveal = flowIndex === flow.length - 1
@@ -1054,11 +1179,16 @@ function useStudyMax() {
 
   // Set by an Edit link on the review: the edited step's Continue goes straight back to the review.
   const returnToReview = useRef(false)
+  const EDITABLE_STEPS: Screen[] = ['student', 'university', 'degree', 'goals', 'registered']
 
   function next() {
-    if (returnToReview.current && screen !== 'review' && stepIndex >= 0) {
+    if (returnToReview.current && screen !== 'review' && EDITABLE_STEPS.includes(screen)) {
       returnToReview.current = false
       go('review')
+      return
+    }
+    if (fromTranscript && flowIndex === flow.length - 1) {
+      finishTranscriptPath()
       return
     }
     if (screen === onboardingSteps[onboardingSteps.length - 1]) completeOnboarding()
@@ -1114,6 +1244,18 @@ function useStudyMax() {
     seedTargets(targetSeed)
   }
 
+  /** End of the transcript path (the read already succeeded): straight to the dashboard. */
+  function finishTranscriptPath() {
+    // The transcript named no major StudyMax knows, and it was never picked: the degree step asks it.
+    if (universityId === 'usask' && !selectedProgram) {
+      returnToReview.current = true
+      go('degree', -1)
+      return
+    }
+    completeOnboarding()
+    startReveal()
+  }
+
   function startReveal() {
     setLookup(null)
     setCallStatus('idle')
@@ -1123,6 +1265,7 @@ function useStudyMax() {
 
   function finishReveal() {
     setRevealed(true)
+    setRevealedKey(resultsKey)
     haptic.medium()
     go('results')
   }
@@ -1134,6 +1277,7 @@ function useStudyMax() {
     setMinorId(null)
     setConcentrationIds([])
     setGradYear(null)
+    setCourseTerms({})
     setRegistered([])
     setRegisteredQuery('')
     setSpringSummer(false)
@@ -1275,9 +1419,9 @@ function useStudyMax() {
     if (screen === 'results' && lookup === null && universityId === 'usask') loadAwards.current()
   }, [screen, lookup, universityId])
 
-  // Watching full USask sections for an open seat (the Classes tab). Lives up here so an opening is
+  // Watching full USask sections for an open seat (the Class Tracker tab). Lives up here so an opening is
   // heard from any tab.
-  const classes = useClassTracker()
+  const classes = useClassTracker({ phone, callEnabled: features.call })
 
   return {
     features,
@@ -1310,7 +1454,6 @@ function useStudyMax() {
     chooseStudentType,
     chooseTranscript,
     degree,
-    chooseDegree,
     minorId,
     minorOptions,
     chooseMinor,
@@ -1346,8 +1489,12 @@ function useStudyMax() {
     foundCount,
     handleTranscriptFile,
     // results
+    currentByTerm,
+    setCourseTerm,
+    resultsStale,
     matches,
     credentials,
+    planningSpecs,
     hero,
     heroKind,
     kindOf,

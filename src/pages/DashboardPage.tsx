@@ -6,6 +6,8 @@ import { statusLabel } from '../lib/classTracker.ts'
 import { Icon } from '../ui/Icon.tsx'
 import { Appear, Button, Chip, CountUp, Group, OptionList, Ring, Row } from '../ui/primitives.tsx'
 import { TargetRow, TargetSheet } from '../screens/OverviewTab.tsx'
+import { WhatIfSheet } from '../screens/WhatIfSheet.tsx'
+import { ShareSheet } from '../screens/ShareSheet.tsx'
 import { Deadline } from '../screens/AwardsTab.tsx'
 import { Card, CardLink, StatCard } from './Card.tsx'
 
@@ -53,6 +55,17 @@ function WelcomeCard() {
           <Button icon="plan" onClick={() => m.navigate('plan')}>
             See your term-by-term plan
           </Button>
+          {/* The side doors travel together, so they wrap as a pair instead of stranding one. */}
+          <span className="welcome-card__more">
+            {!done && (
+              <Button variant="secondary" icon="compare" onClick={() => m.openSheet('whatif')}>
+                What if…
+              </Button>
+            )}
+            <Button variant="secondary" icon="share" onClick={() => m.openSheet('share')}>
+              Share
+            </Button>
+          </span>
         </div>
       </div>
       <Ring
@@ -266,6 +279,8 @@ export function DashboardPage() {
         credential before planning around it.
       </p>
       <TargetSheet />
+      <WhatIfSheet />
+      <ShareSheet />
     </div>
   )
 }

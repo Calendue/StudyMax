@@ -952,7 +952,27 @@ p.card__empty {
 }
 
 .welcome-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
   margin-top: var(--s3);
+}
+
+/* What if and Share: quiet glass on the ink, so the plan stays the one bright action. */
+.welcome-card__more {
+  display: flex;
+  gap: var(--s2);
+}
+
+.welcome-card__more .btn {
+  background: color-mix(in srgb, var(--on-welcome) 10%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--on-welcome) 18%, transparent);
+  color: var(--on-welcome);
+}
+
+.welcome-card__more .btn:hover {
+  background: color-mix(in srgb, var(--on-welcome) 16%, transparent);
 }
 
 .welcome-card__figure {
@@ -1204,6 +1224,14 @@ p.card__empty {
   align-items: start;
 }
 
+/* The student's own courses: the page's main column. */
+.courses-page__mine {
+  display: grid;
+  gap: var(--s4);
+  min-width: 0;
+}
+
+/* Finding more courses: the side column. */
 .courses-page__find {
   display: grid;
   gap: var(--s4);
@@ -1219,15 +1247,8 @@ p.card__empty {
   margin: 0 0 var(--s3);
 }
 
-.courses-page__mine {
-  position: sticky;
-  top: 0;
-  display: grid;
-  gap: var(--s4);
-}
-
 .courses-page__list {
-  max-height: calc(100vh - var(--header-height) - 200px);
+  max-height: 520px;
   overflow-y: auto;
 }
 
@@ -1498,6 +1519,7 @@ p.card__empty {
 
 .wizard__pane {
   min-width: 0;
+  min-height: 0;
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -1520,6 +1542,7 @@ p.card__empty {
 }
 
 .wizard__stage > .screen {
+  min-height: 0;
   width: 100%;
   max-width: 640px;
   margin: 0 auto;
@@ -1678,8 +1701,7 @@ p.card__empty {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .plan-page__side,
-  .courses-page__mine {
+  .plan-page__side {
     position: static;
   }
 

@@ -25,6 +25,25 @@ export function buildCallScript(ctx: CallContext): string {
   )
 }
 
+/** A watched section that just opened, for the Class Tracker's call. */
+export interface SeatCallContext {
+  /** "CMPT 280" */
+  course: string
+  /** "02" */
+  section: string
+  /** "2027 Winter Term" */
+  termDesc: string
+}
+
+/** The seat-open call: which section, which term, and where to go. Nothing else. */
+export function buildSeatCallScript(seat: SeatCallContext): string {
+  return (
+    `Hello. I am StudyMax. There is no need to answer, I will be brief. ` +
+    `A seat just opened in ${seat.course}, section ${seat.section}, for the ${seat.termDesc}. ` +
+    `Seats go fast, so please register in PAWS now. That is everything. Good luck.`
+  )
+}
+
 /**
  * Wraps the script in explicit one-way, no-conversation instructions for the call provider, plus
  * the delivery notes: a calm, gentle, unhurried caretaker voice rather than a telemarketer's.

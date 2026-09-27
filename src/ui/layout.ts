@@ -45,9 +45,9 @@ export interface DestinationInfo {
 export const DESTINATIONS: DestinationInfo[] = [
   { id: 'overview', label: 'Dashboard', short: 'Closest', title: 'Dashboard', icon: 'target' },
   { id: 'plan', label: 'Plan', short: 'Plan', title: 'Your plan', icon: 'plan' },
-  { id: 'awards', label: 'Awards', short: 'Awards', title: 'Awards', icon: 'award' },
-  { id: 'classes', label: 'Classes', short: 'Classes', title: 'Grab a seat', icon: 'seat' },
+  { id: 'classes', label: 'Class Tracker', short: 'Tracker', title: 'Class Tracker', icon: 'seat' },
   { id: 'courses', label: 'Courses', short: 'Courses', title: 'Your courses', icon: 'browse' },
+  { id: 'awards', label: 'Awards', short: 'Awards', title: 'Awards', icon: 'award' },
 ]
 
 export function destinationInfo(id: Destination): DestinationInfo {

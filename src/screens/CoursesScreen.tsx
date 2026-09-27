@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useModel } from '../model.ts'
 import { courseCode } from '../format.ts'
+import type { Season } from '../lib/plan.ts'
 import { catalogueCourses, artsAndScienceSubjects } from '../data/courses.ts'
 import { ActionBar, ScreenBody, ScreenTitle, TopBar } from '../ui/chrome.tsx'
 import { Icon } from '../ui/Icon.tsx'
@@ -46,8 +47,8 @@ export function CoursesScreen() {
             onClick={() => m.openSheet('browse')}
           />
         </Group>
-        <CompletedList />
         <InProgressList />
+        <CompletedList />
       </ScreenBody>
 
       <RevealBar count={count} />
@@ -163,18 +164,60 @@ export function CompletedList({ label = true }: { label?: boolean }) {
   )
 }
 
-export function InProgressList() {
+const SEASONS: Season[] = ['Fall', 'Winter', 'Spring/Summer']
+
+/** "Fall 2026": the season's next (or current) occurrence from today. */
+function termLabel(season: Season, today: Date) {
+  const year = today.getFullYear()
+  const month = today.getMonth()
+  const now: Season = month >= 8 ? 'Fall' : month >= 4 ? 'Spring/Summer' : 'Winter'
+  // Terms run Winter → Spring/Summer → Fall within a year; one that's already passed is next year's.
+  const rank = { Winter: 0, 'Spring/Summer': 1, Fall: 2 }
+  return `${season} ${rank[season] < rank[now] ? year + 1 : year}`
+}
+
+/**
+ * What the student is taking, grouped by term (this term first). The transcript says which term a
+ * course is in where it can; otherwise it's taken as this term, and the student can move it.
+ */
+export function InProgressList({ label = true }: { label?: boolean }) {
   const m = useModel()
-  const inProgress = m.uploadInProgress
-  if (inProgress.length === 0) return null
+  if (m.currentByTerm.length === 0) return null
+  let index = 0
   return (
     <>
-      <SectionLabel>Taking now</SectionLabel>
-      <Group>
-        {inProgress.map((code, i) => (
-          <Row key={code} index={i} title={courseCode(code)} subtitle={m.courseTitle(code)} trailing={<Chip>In progress</Chip>} />
-        ))}
-      </Group>
+      {label && <SectionLabel>Taking now</SectionLabel>}
+      {m.currentByTerm.map((group) => (
+        <div key={group.season} className="term-group">
+          <p className="term-group__label">
+            {termLabel(group.season, m.today)} <span className="section-label__count tnum">{group.courses.length}</span>
+          </p>
+          <Group>
+            {group.courses.map((code) => (
+              <Row
+                key={code}
+                index={index++}
+                title={courseCode(code)}
+                subtitle={m.courseTitle(code)}
+                trailing={
+                  <select
+                    className="term-select"
+                    value={group.season}
+                    aria-label={`Term for ${courseCode(code)}`}
+                    onChange={(e) => m.setCourseTerm(code, e.target.value as Season)}
+                  >
+                    {SEASONS.map((season) => (
+                      <option key={season} value={season}>
+                        {season}
+                      </option>
+                    ))}
+                  </select>
+                }
+              />
+            ))}
+          </Group>
+        </div>
+      ))}
       <p className="footnote">Courses in progress don&rsquo;t count yet. They&rsquo;re planned around, not planned again.</p>
     </>
   )
@@ -183,6 +226,17 @@ export function InProgressList() {
 /** The screen's one hero action: into the reveal, or back to it with the courses updated. */
 export function RevealBar({ count }: { count: number }) {
   const m = useModel()
+  // Results recompute as courses change; the reveal only needs replaying when the list has changed
+  // since the last one. With nothing changed, this just goes back to them.
+  if (m.revealed && !m.resultsStale) {
+    return (
+      <ActionBar note="Your results already include every course here.">
+        <Button block variant="secondary" onClick={() => m.go('results')}>
+          Back to my results
+        </Button>
+      </ActionBar>
+    )
+  }
   return (
     <ActionBar note={count === 0 ? 'Add at least one course to see what it opens up.' : undefined}>
       <Button block disabled={count === 0} onClick={m.startReveal}>

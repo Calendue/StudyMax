@@ -8,16 +8,7 @@ import { Icon, type IconName } from '../ui/Icon.tsx'
 import { useLayoutMode } from '../ui/layout.ts'
 import { DUR, INSTANT, SETTLE, appearTransition } from '../ui/motion.ts'
 import { Appear, Button, Group, Row } from '../ui/primitives.tsx'
-import { profileRows, shortDegree } from './profile.ts'
-
-// Degrees across the Arts & Science programs StudyMax covers. Descriptive: it doesn't change what
-// the matcher or the planner find.
-const DEGREE_OPTIONS = [
-  'Bachelor of Science (BSc)',
-  'Bachelor of Science, Honours (BSc Honours)',
-  'Bachelor of Arts (BA)',
-  'Bachelor of Arts, Honours (BA Honours)',
-]
+import { profileRows } from './profile.ts'
 
 /** The slim bar every step shares: how far through, never how many dots. */
 export function StepProgress({ compact = false }: { compact?: boolean }) {
@@ -460,30 +451,27 @@ export function DegreeScreen() {
   const other = m.universityId === 'other'
   const thisYear = m.today.getFullYear()
   const years = Array.from({ length: 7 }, (_, i) => thisYear + i)
-  const valid = other ? m.gradYear !== null : m.degree !== '' && m.selectedProgram !== null && m.programId !== '' && m.gradYear !== null
+  const valid = other ? m.gradYear !== null : m.selectedProgram !== null && m.programId !== '' && m.gradYear !== null
+  // A transcript read on the first question usually names the major: it arrives picked, to confirm.
+  const fromTranscript = !other && m.uploadStatus === 'success' && !m.onboardingSteps.includes('registered')
   return (
     <Step
       title={other ? 'When do you finish?' : 'Your degree'}
-      lead={other ? 'Awards often depend on your year, so this shapes what we look for.' : 'Three quick picks. Your major decides how much StudyMax can plan.'}
+      lead={
+        other
+          ? 'Awards often depend on your year, so this shapes what we look for.'
+          : fromTranscript && m.selectedProgram
+            ? 'Your major came from your transcript. Add when you expect to graduate.'
+            : 'Two quick picks. Your major decides how much StudyMax can plan.'
+      }
       canContinue={valid}
     >
       {!other && (
-        <Field label="Degree" index={0}>
-          <div className="opt-chips" role="radiogroup" aria-label="Degree" data-choices>
-            {DEGREE_OPTIONS.map((option) => (
-              <OptionChip key={option} title={option} selected={m.degree === option} onClick={() => m.chooseDegree(option)}>
-                {shortDegree(option)}
-              </OptionChip>
-            ))}
-          </div>
-        </Field>
-      )}
-      {!other && (
-        <Field label="Major" index={1}>
+        <Field label="Major" index={0}>
           <MajorPicker />
         </Field>
       )}
-      <Field label="Expected graduation" index={2}>
+      <Field label="Expected graduation" index={1}>
         <div className="opt-chips" role="radiogroup" aria-label="Expected graduation" data-choices>
           {years.map((year) => (
             <OptionChip key={year} selected={m.gradYear === year} onClick={() => m.chooseGradYear(year)}>
@@ -681,7 +669,11 @@ export function ReviewScreen() {
               aria-label="Your phone number"
             />
           </div>
-          <p className="onb-field__note">Max calls only when you ask, about the award closing soonest. Your number isn&rsquo;t saved.</p>
+          <p className="onb-field__note">
+            {m.account
+              ? 'Saved to your account so Max can reach you. Max calls only when you ask, about the award closing soonest.'
+              : 'Max calls only when you ask, about the award closing soonest. Your number isn\u2019t saved.'}
+          </p>
         </Field>
       )}
     </Step>
