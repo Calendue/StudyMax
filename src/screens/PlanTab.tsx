@@ -1,3 +1,4 @@
+import { useLayoutEffect } from 'react'
 import { useModel } from '../model.ts'
 import { KIND_LABEL, plural } from '../format.ts'
 import { ScreenTitle } from '../ui/chrome.tsx'
@@ -184,6 +185,7 @@ export function AddTargetSheet() {
 export function PlanTab() {
   const m = useModel()
   const [view, setView] = usePlanView()
+  useLayoutEffect(() => { window.scrollTo(0, 0) }, [view])
   if (view === 'tree') {
     // The tree opens at its roots and grows up; the plan's settings sit under the roots.
     return (

@@ -47,6 +47,8 @@ export interface SnapshotInput {
   topOverlap: CourseOverlap | null
   /** Courses under way or registered for: never offered as the next course. */
   inProgress?: string[]
+  /** Effective plan after overrides, in chronological order. */
+  planOrder?: string[]
   courseTitle: (code: string) => string | undefined
   now: Date
 }
@@ -70,7 +72,7 @@ export function buildWidgetSnapshot(input: SnapshotInput): WidgetSnapshot | null
           done: hero.doneCount,
           total: hero.totalRequired,
           left: hero.remaining,
-          nextCourse: nextCourseFor(hero, input.topOverlap, input.inProgress ?? [], input.courseTitle),
+          nextCourse: nextCourseFor(hero, input.topOverlap, input.inProgress ?? [], input.courseTitle, input.planOrder),
         }
       : null
 
@@ -87,8 +89,9 @@ function nextCourseFor(
   topOverlap: CourseOverlap | null,
   inProgress: string[],
   courseTitle: (code: string) => string | undefined,
+  planOrder?: string[],
 ): WidgetCredential['nextCourse'] {
-  const code = heroNextCourse(hero, topOverlap, [], inProgress)
+  const code = heroNextCourse(hero, planOrder ? null : topOverlap, planOrder ?? [], inProgress)
   if (!code) return null
   return { code: courseCode(code), title: courseTitle(code) ?? '' }
 }
