@@ -18,6 +18,8 @@ import {
 import { Appear, Chip } from '../ui/primitives.tsx'
 import { Icon } from '../ui/Icon.tsx'
 import { Sheet } from '../ui/Sheet.tsx'
+import { CourseChanges, CourseWarnings, PlanIssues } from '../ui/WhatChanged.tsx'
+import { termOrd } from '../lib/overrides.ts'
 
 /**
  * The visual node/edge view of the term-by-term plan: terms stacked top to bottom, each term's
@@ -94,6 +96,7 @@ export function PlanRoadmap({ selected, onSelect }: { selected?: string | null; 
 
   return (
     <Appear index={3} className="roadmap">
+      <PlanIssues />
       {completedRelevant.length > 0 && (
         <div className="roadmap__done">
           <button
@@ -176,7 +179,7 @@ export function PlanRoadmap({ selected, onSelect }: { selected?: string | null; 
 
       {!controlled && (
         <Sheet open={activeNode !== undefined} onClose={() => setActiveCode(null)} title={activeCode ? courseCode(activeCode) : ''}>
-          {activeNode && activeCode && <CourseDetail code={activeCode} node={activeNode} />}
+          {activeNode && activeCode && <CourseDetail code={activeCode} node={activeNode} onChanged={() => setActiveCode(null)} />}
         </Sheet>
       )}
     </Appear>
@@ -184,8 +187,12 @@ export function PlanRoadmap({ selected, onSelect }: { selected?: string | null; 
 }
 
 /** One planned course: its title, why it's there, what else it counts toward, and the catalogue. */
-export function CourseDetail({ code, node }: RoadmapSelection) {
+export function CourseDetail({ code, node, onChanged }: RoadmapSelection & { onChanged?: () => void }) {
   const m = useModel()
+  // The term the roadmap draws it in, for "Not running in Winter 2028" and the like.
+  const term = m.roadmap.find((t) => t.courses.some((c) => c.code === code))?.label
+  const state =
+    node.state === 'registered' ? (term && termOrd(term) > termOrd(m.currentTermLabel) ? 'registered' : 'now') : 'planned'
   return (
     <>
       <p className="lead">{m.courseTitle(code)}</p>
@@ -209,6 +216,8 @@ export function CourseDetail({ code, node }: RoadmapSelection) {
           Open in catalogue
         </a>
       )}
+      <CourseWarnings code={code} />
+      <CourseChanges code={code} term={term} state={state} onDone={onChanged} />
     </>
   )
 }

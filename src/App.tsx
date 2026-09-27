@@ -62,6 +62,7 @@ import {
   UniversityScreen,
 } from './screens/Onboarding.tsx'
 import { CoursesScreen } from './screens/CoursesScreen.tsx'
+import { WhatChangedSheet } from './ui/WhatChanged.tsx'
 import { ReadingScreen } from './screens/ReadingScreen.tsx'
 import { RevealScreen } from './screens/RevealScreen.tsx'
 import { ResultsScreen } from './screens/ResultsScreen.tsx'
@@ -1934,6 +1935,7 @@ function App() {
         {launched && (wizard ? <Wizard>{screens}</Wizard> : screens)}
       </div>
       <AccountSheet />
+      <WhatChangedSheet />
       <EditMajorSheet open={model.sheet === 'edit-major'} onClose={() => model.setSheet(null)} />
       <EditMinorSheet open={model.sheet === 'edit-minor'} onClose={() => model.setSheet(null)} />
       <EditConcentrationsSheet open={model.sheet === 'edit-concentrations'} onClose={() => model.setSheet(null)} />
