@@ -197,7 +197,9 @@ for (const code of ['CMPT332', 'CMPT360', 'CMPT370', 'MATH266']) {
   const n = node(code)
   assert.ok(n.term === 'Fall 2026' && n.lane === 'fall' && n.current, `${code} is taken now, Fall 2026: ${n.term} ${n.lane}`)
 }
-assert.ok(node('CMPT434').y < node('CMPT332').y, 'CMPT 434 (needs CMPT 332) grows above it')
+// CMPT 434 (Winter 2027) needs CMPT 332 (Fall 2026): the same year, so the link runs across the trunk.
+assert.ok(node('CMPT434').year === node('CMPT332').year && node('CMPT434').lane === 'winter', 'CMPT 434 sits in the Winter of CMPT 332\'s year')
+assert.ok(sample.links.some((l) => l.from === 'CMPT332' && l.to === 'CMPT434'), 'CMPT 332 links across to CMPT 434')
 // A final-year student is in Year 4 (84 cu done), not a Year 5 the level guess invented.
 assert.equal(sample.currentYear, 4, 'the sample student is in Year 4')
 const plannedYears = sample.nodes.filter((n) => n.status !== 'completed' && n.status !== 'inProgress').map((n) => n.year)
