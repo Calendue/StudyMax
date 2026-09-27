@@ -6,8 +6,6 @@ import { ThemeSwitch } from '../../ui/ThemeSwitch.tsx'
 import { CanopyBeat, GuideBeat, HowBeat, MoreBeat, ProblemBeat, RootsBeat, ScatteredBeat, ShowcaseBeat, TeamBeat } from './Beats.tsx'
 import { Links, Wood, Zones } from './StoryTree.tsx'
 import { useClimb } from './useClimb.ts'
-import { DrakeRail } from './DrakeRail.tsx'
-import { useDrakeCue } from './useDrakeCue.ts'
 import './landing.css'
 
 interface LandingPageProps {
@@ -40,9 +38,6 @@ export function LandingPage({ onGetStarted, onSkip }: LandingPageProps) {
     const max = scroller.scrollHeight - scroller.clientHeight
     setZone(y < climb.duskAt ? 'dusk' : y > max - scroller.clientHeight * 0.6 ? 'roots' : 'page')
   })
-
-  // Ten seconds at the canopy, then Ayo's Drake meme rides across (see DrakeRail).
-  const drake = useDrakeCue(zone === 'dusk')
 
   const g = climb.geometry
   const props = { grown: climb.grown, live: climb.live }
@@ -83,7 +78,6 @@ export function LandingPage({ onGetStarted, onSkip }: LandingPageProps) {
           </div>
         </motion.div>
       </div>
-      <DrakeRail run={drake} reduce={reduce} />
     </div>
   )
 }
