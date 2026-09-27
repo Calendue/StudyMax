@@ -11,7 +11,8 @@
 //
 // Sources (2026-27 catalogue, effective May 1 2026 to April 30 2027):
 //   https://programs.usask.ca/arts-and-science/computer-science/bsc-4-computer-science.php  C1-C5 lists
-//   https://programs.usask.ca/arts-and-science/policies.php  120 cu, 66 senior, 15 cu per Fall/Winter term
+//   https://programs.usask.ca/arts-and-science/policies.php  120 cu, 66 senior, 15 cu per Fall/Winter term,
+//     "Maximum Junior Credit Units by Subject" (printable PDF pp. 32-33)
 //   https://www.cs.usask.ca/documents/advising/2024-bsc-4y-advising.pdf  Y1/Y2/Y3-4 tags per slot
 //   https://www.cs.usask.ca/students/undergraduate/undergraduate-programs/templates/bsc-four-year.php
 //     "Never take 12cu of CMPT courses (or more) in a single term at 300- and 400-level"
@@ -84,6 +85,19 @@ const BUSINESS = codes('AREC230 COMM101 COMM105 COMM201 COMM203 COMM204 COMM205 
 const CORE_SENIOR = codes('CMPT317 CMPT332 CMPT340 CMPT353 CMPT360 CMPT370 CMPT381')
 const MATH_LIST = codes('MATH116 MATH134 MATH177 MATH211 MATH223 MATH225 MATH266 MATH276 MATH327 MATH328 MATH361 MATH362 MATH364 STAT241 STAT344 STAT345 STAT348 PHIL243')
 const CORE_200 = ['CMPT214', 'CMPT215|CME331', 'CMPT260|CMPT263', 'CMPT270', 'CMPT280']
+// "Maximum Junior Credit Units by Subject": 100-level credit past a subject's cap counts toward
+// nothing. ART, DRAM, INCC, INTS, MUS and MUAP are unlimited, as is any subject not listed; CTST's
+// "none" is 0. "May be taken in addition": ENG 120, BIOL 102, CHEM 142, GEOL 102, PHYS 152.
+const JUNIOR_CAP: Record<string, number> = {
+  ANTH: 9, ARBC: 6, ARTH: 6, ASTR: 9, BIOL: 12, BINF: 3, CTST: 0, CHEM: 9, CHIN: 6, CMRS: 6, CPSJ: 3, CLAS: 18,
+  CMPT: 12, CREE: 6, ECON: 6, ENG: 6, FREN: 21, GEOG: 12, GEOL: 8, GERM: 6, GRK: 6, HEB: 6, HIST: 9, HNDI: 6,
+  INDG: 3, IS: 3, JPNS: 6, LATN: 6, LING: 15, LIT: 6, MATH: 18, NRTH: 3, PHIL: 12, PHYS: 9, POLS: 9, PSY: 6,
+  RLST: 9, RUSS: 6, SOC: 6, SPAN: 6, STAT: 6, UKR: 6, GENS: 3,
+}
+const JUNIOR_EXTRA = new Set(codes('ENG120 BIOL102 CHEM142 GEOL102 PHYS152'))
+/** The junior cap a real course counts against, or undefined. */
+const juniorCapOf = (code: string) =>
+  isElective(code) || levelOf(code) >= 200 || JUNIOR_EXTRA.has(code) ? undefined : JUNIOR_CAP[subjectOf(code)]
 
 const humSoc = (code: string) =>
   HUMANITIES.includes(code) || SOCIAL.includes(code) || (levelOf(code) >= 200 && (breadthTypes[code] ?? []).some((t) => t === 'HUM' || t === 'SOCS'))
@@ -148,6 +162,10 @@ function ruleForSlot(label: string): Rule | null {
 }
 
 interface Audit {
+  /** Courses credited to some rule. */
+  credited: Set<string>
+  /** Subjects whose junior credit is past its cap. */
+  overJunior: Set<string>
   shortBy: Record<string, number>
   totalCu: number
   seniorCu: number
@@ -202,6 +220,13 @@ function auditPlan(named: string[], slots: string[]): Audit {
     const elsewhere = RULES.filter((x) => x.capped && !inWritingOrIL.includes(x)).some((x) => credit.get(x.id)!.some((c) => subjectOf(c) === subject))
     return after <= 9 && inWritingOrIL.includes(r) && !elsewhere
   }
+  // A rule only counts junior credit its subject's cap still allows (credit past the cap counts nowhere).
+  const juniorOk = (code: string) => {
+    const limit = juniorCapOf(code)
+    if (limit === undefined) return true
+    const inRules = [...credit.values()].flat().filter((c) => subjectOf(c) === subjectOf(code) && juniorCapOf(c) !== undefined)
+    return inRules.reduce((n, c) => n + cuOf(c), 0) + cuOf(code) <= limit
+  }
 
   for (const slot of slots) {
     const rule = ruleForSlot(electiveLabel(slot))
@@ -212,7 +237,7 @@ function auditPlan(named: string[], slots: string[]): Audit {
   const order = [...named].sort((a, b) => candidates(a).length - candidates(b).length || a.localeCompare(b))
   const place = (code: string, depth: number): boolean => {
     for (const r of candidates(code)) {
-      if (gain(r, code) > 0 && capOk(r, code)) {
+      if (gain(r, code) > 0 && capOk(r, code) && juniorOk(code)) {
         credit.get(r.id)!.push(code)
         return true
       }
@@ -223,9 +248,11 @@ function auditPlan(named: string[], slots: string[]): Audit {
           if (isElective(other)) continue
           const list = credit.get(r.id)!
           list.splice(list.indexOf(other), 1)
-          if (gain(r, code) > 0 && capOk(r, code) && place(other, depth - 1)) {
+          if (gain(r, code) > 0 && capOk(r, code) && juniorOk(code)) {
+            // Credited first, so the bumped course's new home sees it against the caps.
             list.push(code)
-            return true
+            if (place(other, depth - 1)) return true
+            list.splice(list.indexOf(code), 1)
           }
           list.push(other)
         }
@@ -250,9 +277,16 @@ function auditPlan(named: string[], slots: string[]): Audit {
   // Totals: 120 cu, at least 66 of them at the 200 level or higher (so at most 54 junior count).
   let junior = 0
   let senior = 0
+  const cappedJunior: Record<string, number> = {}
   for (const code of named) {
-    if (levelOf(code) >= 200) senior += cuOf(code)
+    if (juniorCapOf(code) !== undefined) cappedJunior[subjectOf(code)] = (cappedJunior[subjectOf(code)] ?? 0) + cuOf(code)
+    else if (levelOf(code) >= 200) senior += cuOf(code)
     else junior += cuOf(code)
+  }
+  const overJunior = new Set<string>()
+  for (const [subject, cu] of Object.entries(cappedJunior)) {
+    junior += Math.min(cu, JUNIOR_CAP[subject])
+    if (cu > JUNIOR_CAP[subject]) overJunior.add(subject)
   }
   for (const slot of slots) {
     if (SENIOR_SLOT.test(electiveLabel(slot))) senior += 3
@@ -261,7 +295,7 @@ function auditPlan(named: string[], slots: string[]): Audit {
   const totalCu = senior + Math.min(junior, 54)
   if (totalCu < 120) problems.push(`degree totals ${totalCu} cu that count (needs 120; ${junior} junior, of which at most 54 count)`)
   if (senior < 66) problems.push(`${senior} cu at the 200 level or higher (needs 66)`)
-  return { shortBy, totalCu, seniorCu: senior, problems }
+  return { credited: new Set([...credit.values()].flat()), overJunior, shortBy, totalCu, seniorCu: senior, problems }
 }
 
 // ───────────────────────── the plans, built as App.tsx builds them ─────────────────────────
@@ -442,6 +476,12 @@ function check(c: Case) {
   if (dup.length > 0) v.I5.push(`counted twice: ${[...new Set(dup)].join(', ')}`)
   const audit = auditPlan([...new Set(everything)], slots.map((x) => x.code))
   v.I5.push(...audit.problems)
+  // Never plan a 100-level course that its subject's junior cap leaves counting toward nothing.
+  for (const x of named) {
+    if (juniorCapOf(x.code) !== undefined && audit.overJunior.has(subjectOf(x.code)) && !audit.credited.has(x.code)) {
+      v.I5.push(`${x.code} planned, but 100-level ${subjectOf(x.code)} is past its ${JUNIOR_CAP[subjectOf(x.code)]}-cu cap: it counts toward nothing`)
+    }
+  }
 
   // I6: CS choices.
   const had = new Set([...completed, ...inProgress])
@@ -550,6 +590,19 @@ for (const spec of computerScience.specializations) {
   cases.push({ name: `B ${spec.id} +summer`, kind: 'B', spec, completed: [], inProgress: B_COURSES, terms: Object.fromEntries(B_COURSES.map((x) => [x, 'Fall'])), start: next, springSummer: true })
   cases.push({ name: `C ${spec.id}`, kind: 'C', spec, completed: C_COURSES, inProgress: [], terms: {}, start: next })
 }
+// Junior caps: 100-level credit past a subject's cap counts toward nothing, so the plan makes it up
+// with electives. Each case has a twin without the over-cap courses that must plan exactly as much.
+const specById = (id: string) => computerScience.specializations.find((s) => s.id === id)
+const SWITCHER = ['ENG111', 'ENG112', 'ENG113', 'ENG114', 'PSY120', 'PSY121', 'CMPT141', 'MATH110']
+const winter2027: TermStart = { season: 'Winter', year: 2027 }
+const twins: [string, string][] = [
+  ['Arts switcher software-dev', 'Arts switcher (ENG 6 cu)'],
+  ['C +ENG112 +ENG114', 'C (twin of +ENG112 +ENG114)'],
+]
+cases.push({ name: twins[0][0], kind: 'C', spec: specById('software-development'), completed: SWITCHER, inProgress: [], terms: {}, start: winter2027 })
+cases.push({ name: twins[0][1], kind: 'C', spec: specById('software-development'), completed: SWITCHER.filter((x) => x !== 'ENG113' && x !== 'ENG114'), inProgress: [], terms: {}, start: winter2027 })
+cases.push({ name: twins[1][0], kind: 'C', completed: [...C_COURSES, 'ENG112', 'ENG114'], inProgress: [], terms: {}, start: next })
+cases.push({ name: twins[1][1], kind: 'C', completed: C_COURSES, inProgress: [], terms: {}, start: next })
 
 // I10: the inputs, read from App.tsx's source (they're React state, not pure functions).
 const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
@@ -571,9 +624,19 @@ const pad = (s: string | number, n: number) => String(s).padEnd(n)
 rows.push(`${pad('case', 28)}${pad('hero', 26)}${pad('F/W', 5)}${pad('last', 13)}${pad('cu', 5)}${pad('senior', 7)}${INVS.map((i) => pad(i, 5)).join('')}`)
 const totals: Record<Inv, number> = Object.fromEntries(INVS.map((i) => [i, 0])) as unknown as Record<Inv, number>
 const samples: string[] = []
+const plannedCu = new Map<string, number>()
 for (const c of cases) {
   const { v, b, audit } = check(c)
   if (c.kind === 'sample') v.I10.push(...inputProblems)
+  plannedCu.set(c.name, b.plan.flatMap((t) => t.courses).reduce((n, x) => n + cuOf(x.code), 0))
+  // I5 (junior caps): over-cap credit buys nothing, so the case plans as much as its twin does.
+  const twin = twins.find(([name]) => name === c.name)?.[1]
+  if (twin) {
+    if (!audit.overJunior.has('ENG')) v.I5.push('the case was meant to be past the junior ENG cap')
+    const mine = plannedCu.get(c.name)!
+    const theirs = check(cases.find((x) => x.name === twin)!).b.plan.flatMap((t) => t.courses).reduce((n, x) => n + cuOf(x.code), 0)
+    if (mine < theirs) v.I5.push(`plans ${mine} cu, less than its twin's ${theirs}: over-cap junior credit was counted`)
+  }
   const fw = b.timeline.filter((t) => parse(t.label)?.season !== 'Spring/Summer')
   for (const i of INVS) totals[i] += v[i].length
   rows.push(

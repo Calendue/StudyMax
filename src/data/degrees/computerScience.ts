@@ -1,6 +1,7 @@
 import type { Degree } from './types.js'
 import { breadth } from '../breadth.js'
 import { catalogueCourses } from '../courses.js'
+import { juniorCaps } from './juniorCaps.js'
 
 // B.Sc. Four-year Computer Science, University Catalogue 2026-27 (effective May 1, 2026 to April 30,
 // 2027), in credit units: https://programs.usask.ca/arts-and-science/computer-science/bsc-4-computer-science.php
@@ -233,6 +234,8 @@ export const computerScienceBsc4: Degree = {
     groups: ['c1-writing', 'c1-indigenous', 'c1-qr', 'c2-breadth', 'c3-science'],
     exception: { cu: 9, groups: ['c1-writing', 'c1-indigenous'] },
   },
+  // The policy page's "Maximum Junior Credit Units by Subject" (CMPT 12, ENG 6 plus ENG 120, ...).
+  juniorCaps,
   milestones: [
     {
       id: 'cs-major-admission',
@@ -320,6 +323,7 @@ export const computerScienceHonours: Degree = {
     },
   ],
   subjectCap: computerScienceBsc4.subjectCap,
+  juniorCaps,
   milestones: computerScienceBsc4.milestones,
   sources: [
     'https://programs.usask.ca/arts-and-science/computer-science/bsc-honours-computer-science.php',

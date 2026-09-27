@@ -1,6 +1,7 @@
 // A degree's own requirements in credit units, as the University Catalogue writes them (C1-C5 for an
 // Arts & Science B.Sc.). This is the contract the degree data (src/data/degrees/*), the degree audit
 // (src/lib/degree.ts), the planner and the skill tree share.
+import type { JuniorCap } from './juniorCaps.js'
 
 /** Arts & Science program types and requirement attributes, from Banner's section attributes. */
 export type BreadthType = 'HUM' | 'SOCS' | 'FNAR' | 'SCIE' | 'ELWR' | 'ILRQ' | 'QRRQ'
@@ -72,6 +73,11 @@ export interface Degree {
    * Course Requirements in C3", except up to `exception.cu` in one subject across the ELW and IL groups.
    */
   subjectCap?: { cu: number; groups: string[]; exception?: { cu: number; groups: string[] } }
+  /**
+   * The college's "Maximum Junior Credit Units by Subject" (src/data/degrees/juniorCaps.ts): 100-level
+   * credit in a subject past its cap counts toward neither the total nor any requirement.
+   */
+  juniorCaps?: Record<string, JuniorCap>
   milestones?: DegreeMilestone[]
   /** Where every list and number came from (URLs). */
   sources: string[]
