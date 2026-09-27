@@ -52,12 +52,9 @@ export function outlook(match: SpecializationMatch, input: WhatIfInputs): Target
     input.inProgress,
     input.coursesPerTerm,
     input.start,
-    input.springSummer,
-    input.summerPerTerm,
     // No degree: a what-if weighs one credential against another, and the whole degree would pad
     // both to the same finish.
-    undefined,
-    input.booked,
+    { springSummer: input.springSummer, summerPerTerm: input.summerPerTerm, booked: input.booked },
   )
   const courses = plan.flatMap((t) => t.courses)
   return {

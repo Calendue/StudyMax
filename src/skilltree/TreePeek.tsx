@@ -3,7 +3,7 @@ import { courseCode, KIND_LABEL } from '../format.ts'
 import type { SkillTreeLayout } from '../lib/skillTree.ts'
 import { Icon } from '../ui/Icon.tsx'
 import { Ring } from '../ui/primitives.tsx'
-import { STATUS_LABEL, type TreeSelection } from './planView.ts'
+import { statusLabel, type TreeSelection } from './planView.ts'
 import { Swatch } from './TreeDetail.tsx'
 
 function Codes({ label, codes, onSelect, arrow }: { label: string; codes: string[]; onSelect: (code: string) => void; arrow?: boolean }) {
@@ -63,7 +63,8 @@ export function TreePeek({
             <p className="tree-peek__name">{courseCode(node.code)}</p>
             <p className="tree-peek__status">
               <Swatch kind={node.elective ? 'elective' : node.status} />
-              {node.elective ? `Elective · ${STATUS_LABEL[node.status]}` : STATUS_LABEL[node.status]}
+              {node.elective ? `Elective · ${statusLabel(node)}` : statusLabel(node)}
+              {node.status === 'inProgress' && !node.current && ` · ${node.term}`}
             </p>
           </div>
         ) : (

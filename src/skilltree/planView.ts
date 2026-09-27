@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useModel } from '../model.ts'
-import { currentTermOf, treeTargets, type TreeStatus, type TreeTargetKind } from '../lib/skillTree.ts'
+import { termLabel } from '../lib/currentTerms.ts'
+import { currentTermOf, treeTargets, type TreeDegreeProgress, type TreeNode, type TreeStatus, type TreeTargetKind } from '../lib/skillTree.ts'
 
 export type PlanView = 'tree' | 'roadmap'
 
@@ -41,10 +42,32 @@ export const STATUS_LABEL: Record<TreeStatus, string> = {
   locked: 'Locked',
 }
 
-/** The tree's inputs from the model: the leaves, the term being sat now, the beacon. */
+/** A card's status in words: a course registered for a later term is Registered, not Taking now. */
+export function statusLabel(node: TreeNode): string {
+  return node.status === 'inProgress' && !node.current ? 'Registered' : STATUS_LABEL[node.status]
+}
+
+// Model fields other tracks add (the transcript's completed-course terms, the degree audit's
+// progress). Read if present, so the tree picks them up the moment they're wired.
+type Optional = { completedTerms?: Record<string, string>; treeDegree?: TreeDegreeProgress }
+
+/** The tree's inputs from the model: the leaves, the terms and loads, the beacon. */
 export function useTreeInputs() {
-  const { hero, targets, credentials, today, topOverlap } = useModel()
-  return useMemo(() => {
+  const model = useModel()
+  const { hero, targets, credentials, today, topOverlap, currentByTerm, coursesPerTerm, summerPerTerm } = model
+  const { completedTerms, treeDegree } = model as Optional
+  const terms = useMemo(
+    () => ({
+      // Each in-progress or registered course in its own term, as the Courses page groups them.
+      inProgressTerms: Object.fromEntries(currentByTerm.flatMap((g) => g.courses.map((c) => [c, termLabel(g.season, today)]))),
+      completedTerms: completedTerms ?? {},
+      termLoad: coursesPerTerm,
+      summerLoad: summerPerTerm,
+      degree: treeDegree,
+    }),
+    [currentByTerm, today, completedTerms, coursesPerTerm, summerPerTerm, treeDegree],
+  )
+  const leaves = useMemo(() => {
     const kindOf = (id: string): TreeTargetKind => {
       const kind = credentials.find((c) => c.spec.id === id)?.program.kind
       return kind === 'certificate' || kind === 'minor' ? kind : 'specialization'
@@ -59,4 +82,5 @@ export function useTreeInputs() {
       bestNext: topOverlap?.course ?? null,
     }
   }, [hero, targets, credentials, today, topOverlap])
+  return useMemo(() => ({ ...leaves, ...terms }), [leaves, terms])
 }

@@ -89,7 +89,8 @@ async function load(uid: string): Promise<CloudSession | null> {
     ...(row.phoneNumber ? { phone: row.phoneNumber } : {}),
     // No profile yet: the columns' own defaults.
     springSummer: profile?.springSummer ?? false,
-    coursesPerTerm: profile?.maxCoursesPerTerm ?? 2,
+    // A full load when nothing's stored (the column's own default is the old 2).
+    coursesPerTerm: profile?.maxCoursesPerTerm ?? 5,
     summerPerTerm: profile?.maxSummerCourses ?? 2,
   }
 }

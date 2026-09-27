@@ -26,7 +26,9 @@ export interface CloudSession {
 /** The choices the app offers; anything outside them is stored as the default instead. */
 export const MAX_COURSES_PER_TERM = 5
 export const MAX_SUMMER_COURSES = 3
-const DEFAULT_PER_TERM = 2
+// A full Fall/Winter load (the college's 15 credit units); a light Spring/Summer one.
+const DEFAULT_PER_TERM = 5
+const DEFAULT_SUMMER = 2
 
 /** The one Institution row the app's `usask` choice maps to (seeded from scripts/). */
 export const USASK_INSTITUTION = 'University of Saskatchewan'
@@ -42,8 +44,8 @@ const codes = (value: unknown) =>
     ? [...new Set(value.filter((c): c is string => typeof c === 'string' && CODE_RE.test(c)))].slice(0, MAX_COURSES)
     : []
 
-const count = (value: unknown, max: number) =>
-  typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= max ? value : DEFAULT_PER_TERM
+const count = (value: unknown, max: number, fallback: number) =>
+  typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= max ? value : fallback
 
 const slug = (value: unknown) => (typeof value === 'string' && SLUG_RE.test(value) ? value : null)
 
@@ -67,8 +69,8 @@ export function cleanCloudSession(raw: unknown): CloudSession | null {
       : [],
     registered: codes(s.registered),
     springSummer: s.springSummer === true,
-    coursesPerTerm: count(s.coursesPerTerm, MAX_COURSES_PER_TERM),
-    summerPerTerm: count(s.summerPerTerm, MAX_SUMMER_COURSES),
+    coursesPerTerm: count(s.coursesPerTerm, MAX_COURSES_PER_TERM, DEFAULT_PER_TERM),
+    summerPerTerm: count(s.summerPerTerm, MAX_SUMMER_COURSES, DEFAULT_SUMMER),
     ...(typeof s.phone === 'string' && PHONE_RE.test(s.phone.trim()) ? { phone: s.phone.trim() } : {}),
   }
 }
