@@ -21,7 +21,7 @@ export function WhatIfSheet() {
   )
   const other = choices.find((x) => x.spec.id === otherId) ?? null
 
-  const { planningSpecs, completed, inProgressCourses, coursesPerTerm, startTerm, springSummer, hero } = m
+  const { planningSpecs, completed, inProgressCourses, coursesPerTerm, startTerm, springSummer, booked, hero } = m
   const result = useMemo(
     () =>
       other
@@ -32,9 +32,10 @@ export function WhatIfSheet() {
             coursesPerTerm,
             start: startTerm,
             springSummer,
+            booked,
           })
         : null,
-    [other, hero, planningSpecs, completed, inProgressCourses, coursesPerTerm, startTerm, springSummer],
+    [other, hero, planningSpecs, completed, inProgressCourses, coursesPerTerm, startTerm, springSummer, booked],
   )
 
   return (

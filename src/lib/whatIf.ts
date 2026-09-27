@@ -12,6 +12,8 @@ export interface WhatIfInputs {
   coursesPerTerm: number
   start: TermStart
   springSummer: boolean
+  /** In-progress courses by term label, as the real plan uses them. */
+  booked?: Record<string, string[]>
 }
 
 export interface TargetOutlook {
@@ -44,6 +46,7 @@ export function outlook(match: SpecializationMatch, input: WhatIfInputs): Target
     input.coursesPerTerm,
     input.start,
     input.springSummer,
+    input.booked,
   )
   const courses = plan.flatMap((t) => t.courses)
   return {

@@ -10,6 +10,7 @@ const INK = '#12262b'
 const TAUPE = '#c38d94'
 const INK_2 = 'rgba(18, 38, 43, 0.7)'
 const SURFACE = '#f9ede2'
+const IN_PROGRESS = 'rgba(195, 141, 148, 0.38)'
 
 const W = 1080
 const H = 1350
@@ -20,10 +21,16 @@ export interface ShareCardData {
   kindLabel: string
   name: string
   doneCount: number
+  /** Required courses the student is taking now: not done, but no longer to plan. */
+  inProgressCount: number
   totalRequired: number
+  /** Still to take once the in-progress courses are passed. */
   remaining: number
+  /** The roadmap: what's left, plus the in-progress courses (reason `registered`) in their terms. */
   plan: PlannedTerm[]
-  /** Best next course, already formatted ("CMPT 317"). */
+  /** The term the last planned course is in, or null when nothing's left to plan. */
+  finish: string | null
+  /** The first course the plan schedules, already formatted ("CMPT 371"). */
   nextCourse?: string
   /** The public link printed at the foot. */
   site: string
@@ -80,7 +87,15 @@ export async function drawShareCard(data: ShareCardData): Promise<HTMLCanvasElem
   ctx.font = `700 64px ${FONT}`
   const nameLines = wrap(ctx, data.name, textW).slice(0, 3)
   const countY = 330 + nameLines.length * 74 + 24
-  const taglineY = Math.max(countY + 72, cy + r + 90)
+  // One status per line, so a long term name ("Spring/Summer 2027") never wraps into the next.
+  const statusLines =
+    data.remaining === 0
+      ? [data.inProgressCount > 0 ? 'Done once this term’s courses are passed.' : 'Done. It goes on the transcript.']
+      : [
+          `${data.doneCount} done${data.inProgressCount > 0 ? ` · ${data.inProgressCount} in progress` : ''}`,
+          ...(data.finish ? [`Finished by ${data.finish}`] : []),
+        ]
+  const taglineY = Math.max(countY + statusLines.length * 40 + 28, cy + r + 90)
   const blockH = taglineY + 64
   ctx.fillStyle = CHERRY
   ctx.fillRect(0, 0, W, blockH)
@@ -99,7 +114,7 @@ export async function drawShareCard(data: ShareCardData): Promise<HTMLCanvasElem
   ctx.beginPath()
   ctx.arc(cx, cy, r, 0, Math.PI * 2)
   ctx.stroke()
-  const fraction = data.totalRequired > 0 ? Math.min(1, data.doneCount / data.totalRequired) : 1
+  const fraction = data.totalRequired > 0 ? Math.min(1, (data.totalRequired - data.remaining) / data.totalRequired) : 1
   ctx.strokeStyle = OLD_LACE
   ctx.lineCap = 'round'
   ctx.beginPath()
@@ -120,14 +135,9 @@ export async function drawShareCard(data: ShareCardData): Promise<HTMLCanvasElem
   ctx.fillStyle = OLD_LACE
   ctx.font = `700 64px ${FONT}`
   nameLines.forEach((line, i) => ctx.fillText(line, PAD, 330 + i * 74))
-  const finish = data.plan[data.plan.length - 1]?.label
   ctx.font = `600 30px ${FONT}`
   ctx.fillStyle = 'rgba(255, 248, 235, 0.88)'
-  const countLine =
-    data.remaining === 0
-      ? 'Done. It goes on the transcript.'
-      : `${data.doneCount} of ${data.totalRequired} done${finish ? ` · finished by ${finish}` : ''}`
-  wrap(ctx, countLine, textW).slice(0, 2).forEach((l, i) => ctx.fillText(l, PAD, countY + i * 38))
+  statusLines.forEach((line, i) => ctx.fillText(line, PAD, countY + i * 40))
   ctx.font = `600 28px ${FONT}`
   ctx.fillStyle = 'rgba(255, 248, 235, 0.75)'
   ctx.fillText('My school never told me I was this close.', PAD, taglineY)
@@ -137,7 +147,37 @@ export async function drawShareCard(data: ShareCardData): Promise<HTMLCanvasElem
   ctx.fillStyle = INK
   ctx.font = `700 34px ${FONT}`
   ctx.fillText(data.plan.length ? 'The plan' : 'Nothing left to plan', PAD, y)
+
+  // A small key, right-aligned on the heading's line.
+  const key: { label: string; fill: string; outline?: boolean }[] = [
+    { label: 'Required', fill: CHERRY },
+    { label: 'Prereq', fill: OLD_LACE, outline: true },
+    { label: 'In progress', fill: IN_PROGRESS },
+  ]
+  ctx.font = `600 20px ${FONT}`
+  let kx = W - PAD
+  for (const item of [...key].reverse()) {
+    const w = ctx.measureText(item.label).width
+    kx -= w
+    ctx.fillStyle = INK_2
+    ctx.fillText(item.label, kx, y - 6)
+    kx -= 28
+    roundRect(ctx, kx, y - 24, 18, 18, 5)
+    ctx.fillStyle = item.fill
+    ctx.fill()
+    if (item.outline) {
+      ctx.strokeStyle = TAUPE
+      ctx.lineWidth = 2
+      ctx.stroke()
+    }
+    kx -= 24
+  }
   y += 40
+
+  // The term column is as wide as its longest label, so "Spring/Summer 2027" never runs into a pill.
+  ctx.font = `600 24px ${FONT}`
+  const labelW = Math.max(...data.plan.map((t) => ctx.measureText(t.label).width), 0)
+  const pillsX = PAD + 28 + labelW + 28
 
   // As many terms as fit above the foot.
   let shown = 0
@@ -151,23 +191,31 @@ export async function drawShareCard(data: ShareCardData): Promise<HTMLCanvasElem
     ctx.fillStyle = INK_2
     ctx.font = `600 24px ${FONT}`
     ctx.fillText(term.label, PAD + 28, y + 56)
-    let x = PAD + 250
-    ctx.font = `600 24px ${FONT}`
-    for (const course of term.courses.slice(0, 4)) {
+    let x = pillsX
+    let hidden = 0
+    for (const course of term.courses) {
       const label = course.code.replace(/([A-Z]+)(\d+)/, '$1 $2')
       const w = ctx.measureText(label).width + 32
-      if (x + w > W - PAD - 20) break
+      if (x + w > W - PAD - 20) {
+        hidden++
+        continue
+      }
       roundRect(ctx, x, y + 24, w, 44, 12)
-      ctx.fillStyle = course.reason === 'prerequisite' ? OLD_LACE : CHERRY
+      const fill = course.reason === 'registered' ? IN_PROGRESS : course.reason === 'prerequisite' ? OLD_LACE : CHERRY
+      ctx.fillStyle = fill
       ctx.fill()
       if (course.reason === 'prerequisite') {
         ctx.strokeStyle = TAUPE
         ctx.lineWidth = 2
         ctx.stroke()
       }
-      ctx.fillStyle = course.reason === 'prerequisite' ? INK : OLD_LACE
+      ctx.fillStyle = course.reason === 'requirement' ? OLD_LACE : INK
       ctx.fillText(label, x + 16, y + 54)
       x += w + 12
+    }
+    if (hidden > 0) {
+      ctx.fillStyle = INK_2
+      ctx.fillText(`+${hidden}`, x + 4, y + 54)
     }
     y += 92
   }

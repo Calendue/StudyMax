@@ -12,6 +12,7 @@ import type { Program } from './data/programs/types.ts'
 import { buildCallScript, type CallContext } from './lib/callScript.ts'
 import { buildStudentPlan, termsFrom, upcomingTerm, type Season, type TermStart } from './lib/plan.ts'
 import { computeCredentials } from './lib/credentials.ts'
+import { bookedByTerm, seasonNow, withCurrentCourses } from './lib/currentTerms.ts'
 import { searchCourses, catalogueTitle } from './lib/courseSearch.ts'
 import { courseInfo } from './data/prereqs.ts'
 import { artsAndScienceSubjects, catalogueCourses } from './data/courses.ts'
@@ -742,7 +743,7 @@ function useStudyMax() {
   }, [])
 
   // The courses the student is taking, grouped by term: this term first, then the ones after it.
-  const currentSeason: Season = today.getMonth() >= 8 ? 'Fall' : today.getMonth() >= 4 ? 'Spring/Summer' : 'Winter'
+  const currentSeason = seasonNow(today)
   const currentByTerm = useMemo(() => {
     const order: Season[] = ['Fall', 'Winter', 'Spring/Summer']
     const from = order.indexOf(currentSeason)
@@ -788,6 +789,8 @@ function useStudyMax() {
   // The plan starts in a term the student picks; in-progress courses count as passed by then.
   const startChoices = useMemo(() => termsFrom(upcomingTerm(today), 6), [today])
   const [startTerm, setStartTerm] = useState<TermStart>(startChoices[0])
+  // What the student is already taking, by term: it fills part of each term's courses-per-term.
+  const booked = useMemo(() => bookedByTerm(currentByTerm, today), [currentByTerm, today])
   const plan = useMemo(
     () =>
       buildStudentPlan(
@@ -798,9 +801,12 @@ function useStudyMax() {
         coursesPerTerm,
         startTerm,
         springSummer,
+        booked,
       ),
-    [targets, planningSpecs, completed, inProgressCourses, coursesPerTerm, startTerm, springSummer],
+    [targets, planningSpecs, completed, inProgressCourses, coursesPerTerm, startTerm, springSummer, booked],
   )
+  // The plan as the roadmap draws it: what's left, plus the courses already under way in their terms.
+  const roadmap = useMemo(() => withCurrentCourses(plan, currentByTerm, today), [plan, currentByTerm, today])
   const [planCopied, setPlanCopied] = useState(false)
   // Clipboard writes are blocked in some browsers and contexts. Rather than a button that appears to
   // do nothing, the plan text is shown for the student to select by hand.
@@ -1491,10 +1497,12 @@ function useStudyMax() {
     // results
     currentByTerm,
     setCourseTerm,
+    roadmap,
     resultsStale,
     matches,
     credentials,
     planningSpecs,
+    booked,
     hero,
     heroKind,
     kindOf,

@@ -35,25 +35,17 @@ export interface RoadmapSelection {
 export function PlanRoadmap({ selected, onSelect }: { selected?: string | null; onSelect?: (sel: RoadmapSelection | null) => void } = {}) {
   const m = useModel()
 
-  // Completed and in-progress courses that count toward what's being planned, so the graph reads
-  // as a whole journey rather than only what's left. The plan counts in-progress courses as passed
-  // by its first term, so without this list they would appear nowhere.
-  const { completedRelevant, inProgressRelevant } = useMemo(() => {
+  // Completed courses that count toward what's being planned, listed above the graph so it reads
+  // as a whole journey rather than only what's left.
+  const completedRelevant = useMemo(() => {
     const counted = new Set(m.targets.flatMap((t) => t.spec.requirements.flatMap((g) => g.courses)))
-    return {
-      completedRelevant: [...counted].filter((code) => m.completed.has(code)).sort(),
-      inProgressRelevant: m.inProgressCourses.filter((code) => counted.has(code) && !m.completed.has(code)).sort(),
-    }
-  }, [m.targets, m.completed, m.inProgressCourses])
-  const doneSummary =
-    (completedRelevant.length > 0 ? `${plural(completedRelevant.length, 'course')} already done` : '') +
-    (completedRelevant.length > 0 && inProgressRelevant.length > 0 ? ' and ' : '') +
-    (inProgressRelevant.length > 0
-      ? `${completedRelevant.length > 0 ? inProgressRelevant.length : plural(inProgressRelevant.length, 'course')} in progress`
-      : '') +
-    ' toward this'
+    return [...counted].filter((code) => m.completed.has(code)).sort()
+  }, [m.targets, m.completed])
+  // In-progress courses are drawn in their terms on the roadmap, so this only lists what's finished.
+  const doneSummary = `${plural(completedRelevant.length, 'course')} already done toward this`
 
-  const { rows, nodes, edges } = useMemo(() => buildRoadmapLayout(m.plan), [m.plan])
+  // The roadmap, not the bare plan: the courses already under way sit in their terms too.
+  const { rows, nodes, edges } = useMemo(() => buildRoadmapLayout(m.roadmap), [m.roadmap])
   const nodesByCode = useMemo(() => new Map(nodes.map((n) => [n.code, n])), [nodes])
 
   const [doneOpen, setDoneOpen] = useState(false)
@@ -101,7 +93,7 @@ export function PlanRoadmap({ selected, onSelect }: { selected?: string | null; 
 
   return (
     <Appear index={3} className="roadmap">
-      {completedRelevant.length + inProgressRelevant.length > 0 && (
+      {completedRelevant.length > 0 && (
         <div className="roadmap__done">
           <button
             type="button"
@@ -122,17 +114,7 @@ export function PlanRoadmap({ selected, onSelect }: { selected?: string | null; 
                   {courseCode(code)}
                 </span>
               ))}
-              {inProgressRelevant.map((code) => (
-                <span key={code} className="chip chip--quiet roadmap__in-progress" title={m.courseTitle(code)}>
-                  {courseCode(code)} · in progress
-                </span>
-              ))}
             </div>
-          )}
-          {doneOpen && inProgressRelevant.length > 0 && (
-            <p className="footnote">
-              The plan counts in-progress courses as passed from {m.startTerm.season} {m.startTerm.year}.
-            </p>
           )}
         </div>
       )}
@@ -205,6 +187,11 @@ export function CourseDetail({ code, node }: RoadmapSelection) {
   return (
     <>
       <p className="lead">{m.courseTitle(code)}</p>
+      {node.state === 'registered' && (
+        <p className="footnote">
+          <Chip>In progress</Chip> You&rsquo;re taking this now. The plan builds on it rather than scheduling it again.
+        </p>
+      )}
       {node.state === 'prerequisite' && (
         <p className="footnote">
           <Chip>Prerequisite</Chip> Needed before {courseCode(node.neededBy ?? '')}
@@ -245,6 +232,7 @@ function RoadmapNodeView({
           <span className="roadmap__node-dot" title={`Also counts toward ${node.alsoAdvances.join(', ')}`} />
         )}
         {node.state === 'prerequisite' && <span className="roadmap__node-tag">Prereq</span>}
+        {node.state === 'registered' && <span className="roadmap__node-tag">In progress</span>}
       </span>
       <span className="roadmap__node-title">{title}</span>
     </button>

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useModel } from '../model.ts'
 import { KIND_LABEL, courseCode } from '../format.ts'
 import { canvasToBlob, drawShareCard, shareOrDownload } from '../lib/shareCard.ts'
+import { computeMatches } from '../lib/match.ts'
 import { haptic } from '../platform.ts'
 import { Wordmark } from '../ui/Brand.tsx'
 import { Button, Skeleton } from '../ui/primitives.tsx'
@@ -19,21 +20,27 @@ export function ShareSheet() {
   const [image, setImage] = useState<{ blob: Blob; url: string } | null>(null)
   const [status, setStatus] = useState<'idle' | 'shared' | 'downloaded' | 'failed'>('idle')
 
-  const { hero, heroKind, plan, topOverlap } = m
+  const { hero, heroKind, plan, roadmap, completed, inProgressCourses } = m
   useEffect(() => {
     if (!open) return
     let live = true
     let url: string | null = null
     setStatus('idle')
     setImage(null)
-    const next = topOverlap?.course ?? plan[0]?.courses[0]?.code
+    // What's truly left once this term's courses are passed, the same count the plan works from.
+    const afterInProgress = computeMatches([hero.spec], new Set([...completed, ...inProgressCourses]))[0]
+    const remaining = afterInProgress?.remaining ?? hero.remaining
+    // The first course the plan itself schedules, so "Start with" always matches the plan.
+    const next = plan.flatMap((t) => t.courses)[0]?.code
     void drawShareCard({
       kindLabel: KIND_LABEL[heroKind],
       name: hero.spec.name,
       doneCount: hero.doneCount,
+      inProgressCount: hero.remaining - remaining,
       totalRequired: hero.totalRequired,
-      remaining: hero.remaining,
-      plan,
+      remaining,
+      plan: roadmap,
+      finish: plan[plan.length - 1]?.label ?? null,
       nextCourse: next ? courseCode(next) : undefined,
       site: SITE,
       wordmarkSvg: markRef.current?.innerHTML,
@@ -50,7 +57,7 @@ export function ShareSheet() {
       live = false
       if (url) URL.revokeObjectURL(url)
     }
-  }, [open, hero, heroKind, plan, topOverlap])
+  }, [open, hero, heroKind, plan, roadmap, completed, inProgressCourses])
 
   async function share() {
     if (!image) return
@@ -68,7 +75,6 @@ export function ShareSheet() {
       open={open}
       onClose={() => m.setSheet(null)}
       title="Share your result"
-      tall
       footer={
         <Button block icon="share" disabled={!image} onClick={() => void share()}>
           {status === 'shared' ? 'Shared' : status === 'downloaded' ? 'Saved to your downloads' : 'Share image'}

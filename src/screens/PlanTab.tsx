@@ -156,8 +156,8 @@ export function PlanCopy() {
         </>
       )}
       <p className="footnote">
-        Prerequisites come from catalogue.usask.ca verbatim; nothing here is inferred. What we can&rsquo;t know is which terms
-        a course actually runs in, so confirm that with your advisor before you register.
+        Prerequisites come from catalogue.usask.ca verbatim, and each course sits in a term it ran in on USask&rsquo;s class
+        search over the last two years. Schedules can change, so confirm with your advisor before you register.
       </p>
     </>
   )

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useModel } from '../model.ts'
 import { courseCode } from '../format.ts'
 import type { Season } from '../lib/plan.ts'
+import { termLabel } from '../lib/currentTerms.ts'
 import { catalogueCourses, artsAndScienceSubjects } from '../data/courses.ts'
 import { ActionBar, ScreenBody, ScreenTitle, TopBar } from '../ui/chrome.tsx'
 import { Icon } from '../ui/Icon.tsx'
@@ -165,16 +166,6 @@ export function CompletedList({ label = true }: { label?: boolean }) {
 }
 
 const SEASONS: Season[] = ['Fall', 'Winter', 'Spring/Summer']
-
-/** "Fall 2026": the season's next (or current) occurrence from today. */
-function termLabel(season: Season, today: Date) {
-  const year = today.getFullYear()
-  const month = today.getMonth()
-  const now: Season = month >= 8 ? 'Fall' : month >= 4 ? 'Spring/Summer' : 'Winter'
-  // Terms run Winter → Spring/Summer → Fall within a year; one that's already passed is next year's.
-  const rank = { Winter: 0, 'Spring/Summer': 1, Fall: 2 }
-  return `${season} ${rank[season] < rank[now] ? year + 1 : year}`
-}
 
 /**
  * What the student is taking, grouped by term (this term first). The transcript says which term a
