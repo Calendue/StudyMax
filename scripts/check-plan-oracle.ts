@@ -17,12 +17,14 @@
 // they pass after that Winter, and graduation counts that Winter. Never a concurrent option.
 // Not generated: level-filtered credit rules, booked courses, assumedCuPerTerm.
 //
-// Run: node --experimental-strip-types --experimental-loader ./scripts/_resolve-ts-loader.mjs scripts/check-plan-oracle.ts [--verbose]
+// Run: node --experimental-strip-types --experimental-loader ./scripts/_resolve-ts-loader.mjs scripts/check-plan-oracle.ts [--verbose] [--dump=random#589]
 import { courseInfo } from '../src/data/prereqs.ts'
 import { cuOf, levelOf, runsIn, subjectOf } from './_degree-rules.ts'
 import type { CoreInput, CoreItem, CoreResult, CoreTerm, CreditRule, Season } from '../src/lib/planner/types.ts'
 
 const VERBOSE = process.argv.includes('--verbose')
+/** --dump=<name> ("random#589") prints that instance with both schedules. */
+const DUMP = process.argv.find((a) => a.startsWith('--dump='))?.slice(7)
 type Schedule = (input: CoreInput) => CoreResult
 let scheduleCore: Schedule | null = null
 try {
@@ -340,6 +342,11 @@ function runOne(name: string, input: CoreInput) {
   if (bad.length) fails.push(`${name}: engine schedule breaks a rule: ${bad.slice(0, 3).join('; ')}`)
   const last = Math.max(-1, ...res.at.map((x, i) => x + (input.items[i].fullYear ? 1 : 0)))
   if (last !== res.graduation) fails.push(`${name}: engine graduation ${res.graduation} but its last placed term is ${last}`)
+  if (DUMP === name) {
+    console.log(JSON.stringify({ terms: input.terms.map((t) => `${t.label} cap ${t.cap} cu ${t.cuCap} sr ${t.seniorCap}`), done: input.done, items: input.items.map((it) => ({ id: it.id, named: it.named, level: it.level, subject: it.subject, fy: it.fullYear, allowed: it.allowed.join(','), pre: it.pre.map((g) => `${g.concurrent ? 'co:' : ''}${g.opts.join('|')}`), credit: it.credit })) }, null, 1))
+    console.log('BFS   ', JSON.stringify(o.at), 'grad', o.grad)
+    console.log('engine', JSON.stringify(res.at), 'grad', res.graduation, res.optimality, 'lb', res.lowerBound, 'nodes', res.nodes, JSON.stringify(res.binding))
+  }
   if (res.graduation !== o.grad) fails.push(`${name}: engine graduates at term ${res.graduation}, the optimum is ${o.grad} (${res.optimality})${res.optimality === 'proven' ? ' — it CLAIMS proven' : ''}`)
   if (res.optimality === 'proven') proven++
   if (res.lowerBound > o.grad) fails.push(`${name}: engine lowerBound ${res.lowerBound} is above the optimum ${o.grad}`)
