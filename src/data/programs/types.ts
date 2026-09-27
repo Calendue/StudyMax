@@ -21,6 +21,11 @@ export interface Program {
   specializationsAreMajors?: boolean
   /** The degree itself, where it's mapped: named requirements, open choices, and the credit total. */
   degree?: Degree
+  /**
+   * Every variant of the degree a student can choose to plan (Four-year, Honours, Three-year), `degree`
+   * among them. Absent when there's only the one.
+   */
+  degrees?: Degree[]
   /** Only populated where a real sample transcript exists. */
   sampleTranscript?: string[]
   /** Courses the sample student is registered in but has not finished. */

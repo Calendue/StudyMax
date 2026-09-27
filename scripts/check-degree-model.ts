@@ -6,7 +6,8 @@
 // expected progress was worked out by hand from src/data/transcript.ts.
 import assert from 'node:assert/strict'
 import { computerScienceBsc4 as degree, computerScienceHonours as honours } from '../src/data/degrees/computerScience.ts'
-import { auditDegree, courseCu, groupAccepts } from '../src/lib/degree.ts'
+import { auditDegree, courseCu, groupAccepts, juniorCapOf } from '../src/lib/degree.ts'
+import { juniorCaps } from '../src/data/degrees/juniorCaps.ts'
 import { breadth } from '../src/data/breadth.ts'
 import { catalogueCourses } from '../src/data/courses.ts'
 import { completedCourses, inProgressCourses } from '../src/data/transcript.ts'
@@ -184,6 +185,66 @@ assert.equal(phil.groups.find((p) => p.group.id === 'c2-breadth')!.cu, 0)
 const junior = catalogueCourses.map((c) => c.code).filter((c) => /^(ART|MUS|FREN|LING)1\d\d$/.test(c)).slice(0, 20)
 const tooJunior = auditDegree(degree, junior)
 assert.equal(tooJunior.countedCu, 54, '20 junior courses count only 54 cu')
+
+// --- maximum junior credit by subject (policies.php, "Maximum Junior Credit Units by Subject") ---
+assert.equal(degree.juniorCaps, juniorCaps, 'the Four-year uses the college table')
+assert.equal(honours.juniorCaps, juniorCaps, 'so does Honours')
+const printed: Record<string, number | null> = {
+  CMPT: 12, MATH: 18, STAT: 6, PHYS: 9, CHEM: 9, BIOL: 12, ASTR: 9, GEOL: 8, GEOG: 12, ENG: 6, PHIL: 12, PSY: 6,
+  SOC: 6, ECON: 6, HIST: 9, POLS: 9, INDG: 3, LING: 15, ANTH: 9, FREN: 21, CLAS: 18, CTST: 0,
+  ART: null, DRAM: null, MUS: null, MUAP: null, INTS: null, INCC: null,
+}
+for (const [subject, cu] of Object.entries(printed)) assert.equal(juniorCaps[subject]?.cu, cu, `${subject}: ${cu ?? 'unlimited'} junior cu`)
+assert.deepEqual(juniorCaps.ENG.extra, ['ENG120'], 'ENG 120.3 may be taken in addition')
+for (const [subject, code] of [['BIOL', 'BIOL102'], ['CHEM', 'CHEM142'], ['GEOL', 'GEOL102'], ['PHYS', 'PHYS152']]) {
+  assert.deepEqual(juniorCaps[subject].extra, [code], `${code} may be taken in addition`)
+}
+assert.equal(juniorCapOf(degree, 'ENG120'), null, 'ENG 120 is outside the ENG cap')
+assert.equal(juniorCapOf(degree, 'ENG210'), null, 'a senior course is never junior-capped')
+assert.equal(juniorCapOf(degree, 'elective:0:Free elective'), null, 'a slot is never junior-capped')
+assert.deepEqual(juniorCapOf(degree, 'CMPT 141.3'), { subject: 'CMPT', cu: 12 })
+
+// Four junior ENG courses: only 6 cu count, toward the total and toward any group.
+const fourEng = auditDegree(degree, ['ENG111', 'ENG112', 'ENG113', 'ENG114'])
+assert.equal(fourEng.countedCu, 6, 'four junior ENG courses count 6 cu')
+assert.equal(fourEng.remainingCu, 114)
+assert.ok(fourEng.violations.includes('12 cu of 100-level ENG; only 6 count toward the degree.'), fourEng.violations.join(' | '))
+const engInGroups = fourEng.groups.flatMap((p) => p.courses).filter((c) => c.startsWith('ENG'))
+assert.equal(engInGroups.reduce((n, c) => n + courseCu(c), 0), 6, 'groups count no more junior ENG than the cap')
+// ENG 110.6 is 6 cu on its own: another junior ENG course adds nothing.
+assert.equal(auditDegree(degree, ['ENG110', 'ENG111']).countedCu, 6)
+// ENG 120 may be taken in addition.
+const withEng120 = auditDegree(degree, ['ENG111', 'ENG112', 'ENG120'])
+assert.equal(withEng120.countedCu, 9, 'ENG 120 counts on top of 6 cu of other junior ENG')
+assert.ok(!withEng120.violations.some((v) => v.includes('100-level ENG')), 'ENG 111, 112 and 120 are within the cap')
+const pastEng120 = auditDegree(degree, ['ENG111', 'ENG112', 'ENG113', 'ENG120'])
+assert.equal(pastEng120.countedCu, 9)
+assert.ok(pastEng120.violations.includes('12 cu of 100-level ENG; only 9 count toward the degree.'), pastEng120.violations.join(' | '))
+// CMPT: 12 cu; the required CMPT 141 and 145 keep their groups, the rest is what's lost.
+const fiveCmpt = auditDegree(degree, ['CMPT140', 'CMPT141', 'CMPT142', 'CMPT145', 'CMPT146'])
+assert.equal(fiveCmpt.countedCu, 12, 'five junior CMPT courses count 12 cu')
+assert.equal(fiveCmpt.assignment.CMPT141, 'c4-cmpt141')
+assert.equal(fiveCmpt.assignment.CMPT145, 'c4-cmpt145')
+assert.ok(fiveCmpt.violations.includes('15 cu of 100-level CMPT; only 12 count toward the degree.'))
+// A subject with no cap (ART is unlimited; COMM isn't an Arts & Science subject) counts in full.
+const fiveArt = auditDegree(degree, ['ART110', 'ART122', 'ART123', 'ART124', 'ART125'])
+assert.equal(fiveArt.countedCu, 15, 'five junior ART courses all count')
+assert.ok(!fiveArt.violations.some((v) => v.includes('100-level ART')))
+assert.equal(auditDegree(degree, ['COMM100', 'COMM101', 'COMM104', 'COMM105', 'COMM111']).countedCu, 15)
+// The junior cap comes before the 54-cu junior limit: 15 three-cu ART/DRAM/MUS courses (45 cu,
+// unlimited) and four junior ENG (12 cu, 6 count) are 51 cu, not the 54 the limit alone would allow.
+const fifteenArts = catalogueCourses
+  .map((c) => c.code)
+  .filter((c) => /^(ART|DRAM|MUS)1\d\d$/.test(c) && courseCu(c) === 3)
+  .slice(0, 15)
+assert.equal(fifteenArts.length, 15)
+assert.equal(auditDegree(degree, [...fifteenArts, 'ENG111', 'ENG112', 'ENG113', 'ENG114']).countedCu, 51)
+// The Arts-to-CS switcher: ENG 113 and 114 count toward nothing, so 102 cu remain, not 96.
+const switcher = auditDegree(degree, ['ENG111', 'ENG112', 'ENG113', 'ENG114', 'PSY120', 'PSY121', 'CMPT141', 'MATH110'])
+assert.equal(switcher.countedCu, 18)
+assert.equal(switcher.remainingCu, 102)
+assert.equal(switcher.assignment.ENG113, null)
+assert.equal(switcher.assignment.ENG114, null)
 
 // --- specializations: no default target names a course the 2026-27 catalogue lacks ---
 const pl = specializations.find((s) => s.id === 'programming-languages')!

@@ -10,9 +10,10 @@ import type { Degree, DegreeGroup } from '../data/degrees/types.js'
 // and the program page: a course counts toward one group only; "A or B" items count once per group
 // (oneOf); "A and B" items count only together (allOf); a per-area ceiling inside a group (C3 junior
 // science, 6 cu per area); "no more than 6 credit units from one subject" across the capped groups,
-// with 9 allowed in one subject across English writing and Indigenous learning; and junior (100-level)
-// credit counting toward the total only up to totalCu - minSeniorCu. A course that no group takes
-// counts as a C5 elective (assignment null).
+// with 9 allowed in one subject across English writing and Indigenous learning; the college's maximum
+// junior credit by subject (degree.juniorCaps: past it, 100-level credit in that subject counts toward
+// neither the total nor any group); and junior (100-level) credit counting toward the total only up to
+// totalCu - minSeniorCu. A course that no group takes counts as a C5 elective (assignment null).
 
 /** Credit values the 2026-27 program pages print (ENG 110.6, MATH 133.4) for courses courseInfo may lack. */
 const LISTED_CU: Record<string, number> = { ENG110: 6, CREE101: 6, PHIL110: 6, MATH133: 4, MUS120: 2, MUS121: 2, MUS125: 1 }
@@ -141,6 +142,19 @@ const isTyped = (group: DegreeGroup, code: string) =>
   !!group.typeMin &&
   (slotLabel(code) === TYPED_BREADTH_LABEL || (breadth[code] ?? []).some((type) => group.typeMin!.types.includes(type)))
 
+/**
+ * The junior-credit cap `code` counts against, when it has one: a real 100-level course in a subject
+ * with a finite cap, and not one of the courses the policy lets a student take "in addition" (ENG 120).
+ */
+export function juniorCapOf(degree: Degree, code: string): { subject: string; cu: number } | null {
+  if (!degree.juniorCaps || SLOT.test(code) || levelOf(code) >= 200) return null
+  const base = baseCode(code)
+  const subject = subjectOf(base)
+  const cap = degree.juniorCaps[subject]
+  if (!cap || cap.cu === null || cap.extra?.includes(base)) return null
+  return { subject, cu: cap.cu }
+}
+
 /** Audits `courses` (completed, in progress and planned alike) against `degree`, in credit units. */
 export function auditDegree(degree: Degree, courses: Iterable<string>): DegreeAudit {
   const prep = prepare(degree)
@@ -189,6 +203,10 @@ export function auditDegree(degree: Degree, courses: Iterable<string>): DegreeAu
   const subjectTotal = new Map<string, number>()
   const subjectOutside = new Map<string, number>()
   const placedCodes = new Set<string>()
+  // Junior credit per capped subject already counted toward a group: never past the subject's cap, so
+  // every course a group counts also counts toward the total.
+  const juniorPlaced = new Map<string, number>()
+  const juniorCap = new Map(codes.map((code) => [code, juniorCapOf(degree, code)]))
 
   const subjectOk = (unit: Unit, gi: number) => {
     if (!cap || !prep.capped[gi]) return true
@@ -216,8 +234,20 @@ export function auditDegree(degree: Degree, courses: Iterable<string>): DegreeAu
       const set = prep.oneOf[gi].get(code)
       return set === undefined || !oneOfUsed[gi].get(set)
     })
+  const juniorOk = (unit: Unit) => {
+    const adding = new Map<string, number>()
+    for (const code of unit.codes) {
+      const limit = juniorCap.get(code)
+      if (!limit) continue
+      const after = (adding.get(limit.subject) ?? juniorPlaced.get(limit.subject) ?? 0) + courseCu(code)
+      if (after > limit.cu) return false
+      adding.set(limit.subject, after)
+    }
+    return true
+  }
   const canPlace = (unit: Unit, gi: number) =>
     sum[gi] < groups[gi].needCu &&
+    juniorOk(unit) &&
     unit.codes.every((code) => !placedCodes.has(code)) &&
     oneOfOk(unit, gi) &&
     areaOk(unit, gi) &&
@@ -232,6 +262,8 @@ export function auditDegree(degree: Degree, courses: Iterable<string>): DegreeAu
       if (area !== undefined) areaCu[gi].set(area, (areaCu[gi].get(area) ?? 0) + sign * courseCu(code))
       if (sign > 0) placedCodes.add(code)
       else placedCodes.delete(code)
+      const limit = juniorCap.get(code)
+      if (limit) juniorPlaced.set(limit.subject, (juniorPlaced.get(limit.subject) ?? 0) + sign * courseCu(code))
     }
     if (cap && prep.capped[gi]) {
       for (const [subject, cu] of unit.subjects) {
@@ -315,6 +347,8 @@ export function auditDegree(degree: Degree, courses: Iterable<string>): DegreeAu
   const violations: string[] = []
   for (const unit of order) {
     if (unit.at !== null || unit.codes.some((c) => placedCodes.has(c))) continue
+    // Past its subject's junior cap it counts nowhere; the subject's own sentence below says why.
+    if (!juniorOk(unit)) continue
     const code = unit.codes.map(spaced).join(' and ')
     for (const gi of unit.candidates) {
       if (sum[gi] >= groups[gi].needCu) continue
@@ -364,9 +398,20 @@ export function auditDegree(degree: Degree, courses: Iterable<string>): DegreeAu
 
   let juniorCu = 0
   let seniorCu = 0
+  const cappedJunior = new Map<string, number>()
   for (const code of codes) {
-    if (levelOf(code) >= 200) seniorCu += courseCu(code)
+    const limit = juniorCap.get(code)
+    if (limit) cappedJunior.set(limit.subject, (cappedJunior.get(limit.subject) ?? 0) + courseCu(code))
+    else if (levelOf(code) >= 200) seniorCu += courseCu(code)
     else juniorCu += courseCu(code)
+  }
+  // Maximum junior credit by subject: what's past the cap counts toward nothing.
+  for (const [subject, cu] of cappedJunior) {
+    const limit = degree.juniorCaps![subject].cu!
+    juniorCu += Math.min(cu, limit)
+    if (cu <= limit) continue
+    const extra = codes.filter((c) => subjectOf(c) === subject && levelOf(c) < 200 && !juniorCap.get(c)).reduce((n, c) => n + courseCu(c), 0)
+    violations.push(`${cu + extra} cu of 100-level ${subject}; only ${limit + extra} count toward the degree.`)
   }
   const juniorLimit = degree.totalCu - degree.minSeniorCu
   if (juniorCu > juniorLimit) {

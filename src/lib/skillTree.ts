@@ -638,7 +638,10 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
             { lane: 'fall', label: head('Fall'), y: 12 },
             { lane: 'winter', label: head('Winter'), y: 12 },
           ]
-    bands.push({ key: `year-${year}`, kind: 'year', year, label: `Year ${year}`, y, h, current: started && year === currentYear, heads, internship })
+    // A lane with no card this year gets no head ("Winter 2028" over nothing reads as a missing term).
+    const inLane = (lane: TreeLane) => [...drafts.values()].some((d) => d.year === year && d.lane === lane)
+    const shown = heads.some((hd) => inLane(hd.lane)) ? heads.filter((hd) => inLane(hd.lane)) : heads
+    bands.push({ key: `year-${year}`, kind: 'year', year, label: `Year ${year}`, y, h, current: started && year === currentYear, heads: shown, internship })
     bandY.set(year, { y, h })
     y += h
   }
