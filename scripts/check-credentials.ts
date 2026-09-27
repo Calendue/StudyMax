@@ -1,5 +1,5 @@
 // Sanity check for cross-program credential matching.
-// Run: node --experimental-strip-types scripts/check-credentials.ts
+// Run: node --experimental-strip-types --experimental-loader ./scripts/_resolve-ts-loader.mjs scripts/check-credentials.ts
 import assert from 'node:assert/strict'
 import { computeCredentials } from '../src/lib/credentials.ts'
 import { programs } from '../src/data/programs/index.ts'

@@ -1,4 +1,4 @@
-import type { RequirementGroup, Specialization } from '../data/specializations.ts'
+import type { RequirementGroup, Specialization } from '../data/specializations.js'
 
 export interface UnsatisfiedGroup {
   /** Courses in this slot the student hasn't completed yet (any one/N of them would count). */

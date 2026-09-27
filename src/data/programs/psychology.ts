@@ -1,6 +1,6 @@
-import type { Program } from './types.ts'
-import type { RequirementGroup } from '../specializations.ts'
-import { codesIn, single, subjectAtLevels } from './helpers.ts'
+import type { Program } from './types.js'
+import type { RequirementGroup } from '../specializations.js'
+import { codesIn, single, subjectAtLevels } from './helpers.js'
 
 // Source: programs.usask.ca/arts-and-science/psychology/ba-4-psychology.php, B4 Major Requirement
 // (University Catalogue 2026-27, checked 2026-09-26). Major requirement only, like Physics.

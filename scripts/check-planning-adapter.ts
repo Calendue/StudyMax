@@ -1,6 +1,6 @@
 // Sanity check for src/lib/max/planningAdapter.ts against the exact seeded-demo-student numbers
 // verified in docs/BayMax/implementation/01-seed-demo-student.md and 03-planning-and-audit-adapter.md.
-// Run: node --experimental-strip-types scripts/check-planning-adapter.ts
+// Run: node --experimental-strip-types --experimental-loader ./scripts/_resolve-ts-loader.mjs scripts/check-planning-adapter.ts
 import assert from 'node:assert/strict'
 import { regenerate, validate, diff } from '../src/lib/max/planningAdapter.ts'
 import { completedCourses, inProgressCourses } from '../src/data/transcript.ts'

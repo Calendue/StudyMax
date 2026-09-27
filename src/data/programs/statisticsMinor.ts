@@ -1,6 +1,6 @@
-import type { Program } from './types.ts'
-import { single } from './helpers.ts'
-import { courseTitles } from '../courseTitles.ts'
+import type { Program } from './types.js'
+import { single } from './helpers.js'
+import { courseTitles } from '../courseTitles.js'
 
 // Source: programs.usask.ca/arts-and-science/statistics/minor-statistics.php (18 credit units,
 // standard track — a separate alternate track exists for Economics/Business Economics majors,

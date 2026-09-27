@@ -1,6 +1,6 @@
-import type { Program } from './types.ts'
-import { single } from './helpers.ts'
-import { courseTitles } from '../courseTitles.ts'
+import type { Program } from './types.js'
+import { single } from './helpers.js'
+import { courseTitles } from '../courseTitles.js'
 
 // Source: programs.usask.ca/arts-and-science/formal-reasoning/index.php (21 credit units).
 // Fully enumerated — no open-ended course-level buckets.

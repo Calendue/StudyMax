@@ -1,5 +1,5 @@
-import type { RequirementGroup } from '../specializations.ts'
-import { catalogueCourses } from '../courses.ts'
+import type { RequirementGroup } from '../specializations.js'
+import { catalogueCourses } from '../courses.js'
 
 export const single = (course: string): RequirementGroup => ({ courses: [course], need: 1 })
 

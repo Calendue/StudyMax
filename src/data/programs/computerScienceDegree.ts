@@ -1,6 +1,6 @@
-import type { Degree } from './types.ts'
-import type { RequirementGroup } from '../specializations.ts'
-import { single, subjectAtLevels } from './helpers.ts'
+import type { Degree } from './types.js'
+import type { RequirementGroup } from '../specializations.js'
+import { single, subjectAtLevels } from './helpers.js'
 
 // Source: programs.usask.ca/arts-and-science/computer-science/bsc-4-computer-science.php
 // (University Catalogue 2026-27, checked 2026-09-27). B.Sc. Four-year, 120 credit units.

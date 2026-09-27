@@ -1,5 +1,5 @@
 // Sanity check for the new USask Arts & Science program data. Run:
-// node --experimental-strip-types scripts/check-new-programs.ts
+// node --experimental-strip-types --experimental-loader ./scripts/_resolve-ts-loader.mjs scripts/check-new-programs.ts
 import assert from 'node:assert/strict'
 import { programs } from '../src/data/programs/index.ts'
 import { computeMatches } from '../src/lib/match.ts'

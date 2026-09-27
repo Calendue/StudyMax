@@ -1,5 +1,5 @@
 // Which terms each course actually runs in, from USask's class search (Banner), and regenerates
-// src/data/offerings.ts. Run: npx tsx scripts/scrape-offerings.ts   (about ten minutes: it's polite)
+// src/data/offerings.ts. Run: npx tsx --experimental-loader ./scripts/_resolve-ts-loader.mjs scripts/scrape-offerings.ts   (about ten minutes: it's polite)
 //
 // Two academic years are read, so a course offered every other year still has a season. Spring and
 // Summer are one season to the planner. A course the search never shows gets no entry, and the

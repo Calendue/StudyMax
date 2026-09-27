@@ -1,5 +1,5 @@
-import type { Program } from './types.ts'
-import { single, subjectAtLevels } from './helpers.ts'
+import type { Program } from './types.js'
+import { single, subjectAtLevels } from './helpers.js'
 
 // Source: programs.usask.ca/arts-and-science/biology/bsc-4-biology.php, C4 Major Requirement
 // (University Catalogue 2026-27, checked 2026-09-26). Major requirement only, like Physics.

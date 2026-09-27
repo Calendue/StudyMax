@@ -1,8 +1,8 @@
-import type { Specialization } from '../data/specializations.ts'
-import type { Degree } from '../data/programs/types.ts'
-import { courseInfo } from '../data/prereqs.ts'
-import { offerings as scrapedOfferings } from '../data/offerings.ts'
-import { computeCourseOverlap, computeMatches, type SpecializationMatch } from './match.ts'
+import type { Specialization } from '../data/specializations.js'
+import type { Degree } from '../data/programs/types.js'
+import { courseInfo } from '../data/prereqs.js'
+import { offerings as scrapedOfferings } from '../data/offerings.js'
+import { computeCourseOverlap, computeMatches, type SpecializationMatch } from './match.js'
 
 export interface PlannedCourse {
   code: string

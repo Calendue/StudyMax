@@ -7,8 +7,8 @@
 // unmet prerequisite, and never exceeds coursesPerTerm), and the current catalogue has no offering
 // calendar or exclusion data to check NOT_OFFERED/EXCLUSION_CONFLICT/PROGRAM_RESTRICTED against — so
 // `validate` below is intentionally close to a no-op.
-import { programs } from '../../data/programs/index.ts'
-import { buildStudentPlan, type PlannedTerm, type TermStart } from '../plan.ts'
+import { programs } from '../../data/programs/index.js'
+import { buildStudentPlan, type PlannedTerm, type TermStart } from '../plan.js'
 
 export interface AdapterInput {
   completed: Set<string>

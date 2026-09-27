@@ -1,4 +1,4 @@
-// Sanity check for the Academic Skill Tree's layout. Run: node --experimental-strip-types scripts/check-skill-tree.ts
+// Sanity check for the Academic Skill Tree's layout. Run: node --experimental-strip-types --experimental-loader ./scripts/_resolve-ts-loader.mjs scripts/check-skill-tree.ts
 import assert from 'node:assert/strict'
 import { computeCourseOverlap, computeMatches } from '../src/lib/match.ts'
 import { computeCredentials } from '../src/lib/credentials.ts'

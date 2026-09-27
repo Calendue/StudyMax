@@ -4,7 +4,7 @@
 // The seasons each course ran in across 2025–26 and 2026–27 (Spring/Summer: 2025 and 2026). A course
 // with no entry wasn't found in those terms; the planner places it anywhere rather than nowhere.
 
-import type { Season } from '../lib/plan.ts'
+import type { Season } from '../lib/plan.js'
 
 export const OFFERINGS_SOURCE = "USask's class search, 2025–26 and 2026–27"
 

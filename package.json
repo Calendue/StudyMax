@@ -17,7 +17,7 @@
     "db:studio": "dotenv -e .env.local -- prisma studio",
     "db:seed:institutions": "node --experimental-strip-types --env-file=.env.local scripts/seed-institutions.ts",
     "db:seed:majors": "node --experimental-strip-types --env-file=.env.local scripts/seed-majors.ts",
-    "db:seed:demo-student": "node --experimental-strip-types --env-file=.env.local scripts/seed-demo-student.ts",
+    "db:seed:demo-student": "node --experimental-strip-types --experimental-loader ./scripts/_resolve-ts-loader.mjs --env-file=.env.local scripts/seed-demo-student.ts",
     "db:seed": "npm run db:seed:institutions && npm run db:seed:majors",
     "postinstall": "prisma generate"
   },

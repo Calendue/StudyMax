@@ -1,4 +1,4 @@
-// Sanity check for the term planner. Run: node --experimental-strip-types scripts/check-plan.ts
+// Sanity check for the term planner. Run: node --experimental-strip-types --experimental-loader ./scripts/_resolve-ts-loader.mjs scripts/check-plan.ts
 import assert from 'node:assert/strict'
 import { computeMatches } from '../src/lib/match.ts'
 import { buildPlan, selectCourses, withPrerequisites, courseLevel, upcomingTerm, buildStudentPlan, termsFrom, isElective } from '../src/lib/plan.ts'

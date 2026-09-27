@@ -1,6 +1,6 @@
-import type { Program } from './types.ts'
-import { single } from './helpers.ts'
-import { courseTitles } from '../courseTitles.ts'
+import type { Program } from './types.js'
+import { single } from './helpers.js'
+import { courseTitles } from '../courseTitles.js'
 
 // Source: programs.usask.ca/arts-and-science/astronomy/index.php (15 credit units).
 // The page's primary phrasing is open-ended ("choose 9cu from ASTR at any level"). Using the

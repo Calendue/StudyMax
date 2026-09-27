@@ -1,5 +1,5 @@
 // Scrapes verbatim prerequisite text from the USask course catalogue and regenerates
-// src/data/prereqs.ts. Run: node --experimental-strip-types scripts/scrape-prereqs.ts
+// src/data/prereqs.ts. Run: node --experimental-strip-types --experimental-loader ./scripts/_resolve-ts-loader.mjs scripts/scrape-prereqs.ts
 //
 // The catalogue's own search form is a plain GET — one request per subject with cnum=% returns
 // every course in that subject, so the whole graph is ~16 requests.

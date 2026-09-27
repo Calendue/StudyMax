@@ -1,5 +1,5 @@
 // Cross-checks every course code the programs reference against the scraped catalogue.
-// Run: node --experimental-strip-types scripts/check-course-codes.ts
+// Run: node --experimental-strip-types --experimental-loader ./scripts/_resolve-ts-loader.mjs scripts/check-course-codes.ts
 //
 // A code that no longer appears in catalogue.usask.ca is a course the app would tell a student to
 // register for that USask doesn't list any more — usually because the program page it came from is

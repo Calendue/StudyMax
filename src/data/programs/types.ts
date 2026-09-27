@@ -1,4 +1,4 @@
-import type { Specialization } from '../specializations.ts'
+import type { Specialization } from '../specializations.js'
 
 /**
  * A program's own degree requirements, planned alongside the specialization the student targets, so
