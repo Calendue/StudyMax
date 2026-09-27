@@ -532,10 +532,8 @@ const inputProblems: string[] = []
 if (!/setRegistered\(\s*\[\s*\]\s*\)/.test(body('loadSampleStudent'))) inputProblems.push("loading the sample doesn't clear onboarding's registered picks")
 const upload = body('handleTranscriptFile')
 if (/\.\.\.prev,\s*\.\.\.inProgressCodes|\{\s*\.\.\.prev,\s*\.\.\.terms\s*\}/.test(upload)) inputProblems.push('a re-upload merges in-progress courses and terms instead of replacing them')
-if (!/inProgressCourses[\s\S]{0,400}(completed\.has|!completed)/.test(app)) inProgressProblemsNote()
-function inProgressProblemsNote() {
-  inputProblems.push('in-progress courses are not filtered against completed ones')
-}
+const takingNow = app.match(/const inProgressCourses = useMemo\(([\s\S]*?)\n  \)/)?.[1] ?? ''
+if (!/completed/.test(takingNow)) inputProblems.push('in-progress courses are not filtered against completed ones')
 
 // ───────────────────────── the scoreboard ─────────────────────────
 
