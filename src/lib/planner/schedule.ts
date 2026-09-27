@@ -547,8 +547,11 @@ function exact(c: Ctx, H: number, dl: number[], budget: number): Dfs {
           const ok0 = valid()
           let ok = ok0
           if (ok) {
+            // Maximal subsets only: leaving out a course that still fits never helps (move it earlier
+            // and nothing gets worse) — except a full-year course, whose Winter seat can be the one a
+            // later course needs, so leaving it out is a real branch.
             for (const i of cands) {
-              if (s.at[i] >= 0 || !fits(c, s, i, t)) continue
+              if (s.at[i] >= 0 || c.items[i].fullYear || !fits(c, s, i, t)) continue
               if (eligible(c, s, i, t, g)) { ok = false; break }
             }
           }
