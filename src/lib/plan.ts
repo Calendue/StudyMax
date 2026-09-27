@@ -590,7 +590,7 @@ function runPlan(
         const term = built.core.terms[t]
         const used = placed.get(t)?.length ?? 0
         if (term.cap > used && term.season !== 'Spring/Summer') {
-          diagnostics.push({ level: 'info', code: 'EMPTY_SEAT', term: term.label, message: `${term.label} has ${term.cap - used} open seat${term.cap - used > 1 ? 's' : ''}: nothing left can be taken yet then.` })
+          diagnostics.push({ level: 'warning', code: 'EMPTY_SEAT', term: term.label, message: `${term.label} has ${term.cap - used} open seat${term.cap - used > 1 ? 's' : ''}: nothing left can be taken yet then.` })
         }
       }
     }
