@@ -47,8 +47,8 @@ export interface PlannedCourse {
   group?: string
   /** The advising year (1-4) it's recommended in. */
   year?: number
-  /** A full-year course (CMPT 400): listed in its Fall, it also holds a seat in the next Winter. */
-  fullYear?: boolean
+  /** Spans this Fall and the following Winter (CMPT 400); listed in its Fall, holding a seat in both. */
+  fullYear?: true
 }
 
 export interface PlannedTerm {
@@ -377,29 +377,6 @@ interface PlanRun {
 }
 
 /**
- * Whether a course runs in a season, from the same Catalog the planner schedules with (Banner, then
- * the catalogue). A course neither source dates runs in Fall or Winter, never silently anywhere (the
- * planner flags it "offering unconfirmed"). Max's live replanning checks moves with this.
- */
-export function courseRunsIn(code: string, season: Season, springSummer = false, offerings?: Record<string, Season[]>, catalog: Catalog = defaultCatalog()): boolean {
-  if (season === 'Spring/Summer' && !springSummer) return false
-  // No 300- or 400-level CMPT course ran in a Spring/Summer term in 2025-27 (USask's class search).
-  if (isElective(code)) return season !== 'Spring/Summer' || !/410 or higher|senior cmpt/i.test(electiveLabel(code))
-  const listed = offerings?.[code]
-  const seasons = listed && listed.length > 0 ? listed : (catalog[code]?.seasons ?? [])
-  if (seasons.length === 0) return season !== 'Spring/Summer'
-  return seasons.includes(season)
-}
-
-/** Whether a course's prerequisite groups are met: `before` passed earlier, `alongside` this same term (corequisites). */
-export function prerequisitesMet(code: string, before: ReadonlySet<string>, alongside: ReadonlySet<string>, catalog: Catalog = defaultCatalog()): boolean {
-  const c = catalog[code]
-  if (!c) return prerequisiteGroups(code).every((g) => g.options.some((o) => before.has(o) || (g.concurrent && alongside.has(o))))
-  const credited = (o: string) => before.has(o) || (catalog[o]?.antirequisites ?? []).some((a) => before.has(a))
-  return c.requires.every((g) => g.some(credited)) && c.concurrent.every((g) => g.some((o) => credited(o) || alongside.has(o)))
-}
-
-/**
  * Spreads the courses across terms, `coursesPerTerm` at a time (`summerPerTerm` in a Spring/Summer
  * term), under the college's 15-credit-unit ceiling and at most three senior CMPT courses a term:
  * the earliest graduation the hard rules allow (src/lib/planner/schedule.ts), found exactly.
@@ -579,12 +556,20 @@ function runPlan(
     const result = scheduleCore(force.size > 0 ? { ...built.core, nodeBudget: Math.min(built.core.nodeBudget ?? 3000, 300) } : built.core)
     const byCode = new Map(courses.map((c) => [c.code, c]))
     const diagnostics = [...built.diagnostics]
+    // A requirement with no course left in the 2026-27 catalogue (BINF 451) can't be planned: said, never dropped silently.
+    for (const t of targets) {
+      for (const slot of t.unsatisfied) {
+        if (slot.label || slot.options.some((o) => courseInfo[o] !== undefined)) continue
+        const first = [...slot.options].sort()[0]
+        if (first) diagnostics.push({ level: 'error', code: 'NO_OFFERING', course: first, message: `${t.spec.name} needs ${slot.options.map(spaced).join(' or ')}, which the 2026-27 catalogue no longer lists.` })
+      }
+    }
     const placed = new Map<number, PlannedCourse[]>()
     if (result.at) {
       built.core.items.forEach((item, i) => {
         const t = result.at![i]
         const course = byCode.get(item.id)!
-        placed.set(t, [...(placed.get(t) ?? []), item.fullYear ? { ...course, fullYear: true } : course])
+        placed.set(t, [...(placed.get(t) ?? []), item.fullYear ? { ...course, fullYear: true as const } : course])
       })
     } else if (built.core.items.length > 0) {
       for (const item of built.core.items) diagnostics.push({ level: 'error', code: 'HORIZON', course: item.id, message: `${isElective(item.id) ? electiveLabel(item.id) : spaced(item.id)} can't be scheduled within ${built.labels.length} terms.` })
@@ -593,8 +578,8 @@ function runPlan(
 
     // Graduation: the last term holding a planned or booked course.
     const bookedLast = Object.entries(booked).filter(([, v]) => v.length > 0).map(([l]) => termFromLabel(l)).filter((t): t is TermStart => t !== null).sort((a, b) => termOrder(a) - termOrder(b)).at(-1)
-    // A full-year course in the last Fall runs on into the Winter after it.
-    const plannedLast = result.at && result.graduation >= 0 && built.labels[result.graduation] ? termFromLabel(built.labels[result.graduation]) : null
+    // A full-year course's Winter counts: CMPT 400 started in Fall runs to the Winter after it.
+    const plannedLast = result.at && result.graduation >= 0 ? termFromLabel(built.labels[result.graduation]) : null
     const last = [bookedLast, plannedLast].filter((t): t is TermStart => Boolean(t)).sort((a, b) => termOrder(a) - termOrder(b)).at(-1)
     const graduation = last ? `${last.season} ${last.year}` : null
 
@@ -605,7 +590,7 @@ function runPlan(
         const term = built.core.terms[t]
         const used = placed.get(t)?.length ?? 0
         if (term.cap > used && term.season !== 'Spring/Summer') {
-          diagnostics.push({ level: 'info', code: 'EMPTY_SEAT', term: term.label, message: `${term.label} has ${term.cap - used} open seat${term.cap - used > 1 ? 's' : ''}: nothing left can be taken yet then.` })
+          diagnostics.push({ level: 'warning', code: 'EMPTY_SEAT', term: term.label, message: `${term.label} has ${term.cap - used} open seat${term.cap - used > 1 ? 's' : ''}: nothing left can be taken yet then.` })
         }
       }
     }
