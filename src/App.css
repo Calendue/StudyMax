@@ -1189,6 +1189,31 @@
   margin-bottom: var(--s2);
 }
 
+.classes__term--off {
+  color: var(--ink-2);
+  text-decoration: line-through;
+  text-decoration-color: var(--taupe);
+}
+
+.classes__offered {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s1);
+  margin: 0 var(--s1) var(--s2);
+  font-size: var(--fs-caption);
+  color: var(--ink-2);
+}
+
+.classes__offered--yes {
+  color: var(--ink);
+}
+
+.classes__offered svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--accent);
+}
+
 .classes__search {
   margin-top: var(--s4);
 }

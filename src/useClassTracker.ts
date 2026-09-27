@@ -38,6 +38,9 @@ export function useClassTracker() {
   const [alert, setAlert] = useState<Watch | null>(null)
   const [checking, setChecking] = useState(false)
   const searchId = useRef(0)
+  /** Which open terms run the course being typed: section count per term, null where the check failed. */
+  const [offered, setOffered] = useState<{ course: string; byTerm: Load<Record<string, number | null>> } | null>(null)
+  const offeredId = useRef(0)
 
   useEffect(() => {
     try {
@@ -79,6 +82,34 @@ export function useClassTracker() {
       if (id === searchId.current) setSections({ state: 'error', message: UNREACHABLE })
     }
   }
+
+  /** Looks the course up across every open term, so each term can say whether it runs it. */
+  const checkOffered = useCallback(
+    async (code: string) => {
+      const clean = code.trim().toUpperCase().replace(/\s+/g, '')
+      const open = terms.state === 'done' ? terms.value.filter((t) => !t.viewOnly).map((t) => t.code) : []
+      const id = ++offeredId.current
+      if (!clean || open.length === 0) {
+        setOffered(null)
+        return
+      }
+      setOffered({ course: clean, byTerm: { state: 'loading' } })
+      try {
+        const { offered: byTerm } = await getJson<{ offered: Record<string, number | null> }>(
+          `/api/classes?op=offered&terms=${open.join(',')}&course=${encodeURIComponent(clean)}`,
+        )
+        if (id === offeredId.current) setOffered({ course: clean, byTerm: { state: 'done', value: byTerm } })
+      } catch {
+        if (id === offeredId.current) setOffered({ course: clean, byTerm: { state: 'error', message: UNREACHABLE } })
+      }
+    },
+    [terms],
+  )
+
+  const clearOffered = useCallback(() => {
+    offeredId.current++
+    setOffered(null)
+  }, [])
 
   function chooseTerm(code: string) {
     haptic.selection()
@@ -200,6 +231,9 @@ export function useClassTracker() {
     course,
     sections,
     search,
+    offered,
+    checkOffered,
+    clearOffered,
     watches,
     watch,
     unwatch,

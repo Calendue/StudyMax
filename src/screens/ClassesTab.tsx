@@ -1,13 +1,20 @@
 import { useEffect, useState } from 'react'
 import { useModel } from '../model.ts'
 import { courseCode } from '../format.ts'
-import { bannerTermCode, formatMeeting, openSeats, PAWS_URL, statusLabel, type Section, type Watch } from '../lib/classTracker.ts'
+import { bannerTermCode, formatMeeting, openSeats, PAWS_URL, statusLabel, type Section, type Term, type Watch } from '../lib/classTracker.ts'
 import { ScreenTitle } from '../ui/chrome.tsx'
 import { Icon } from '../ui/Icon.tsx'
 import { Appear, Button, Chip, Group, Row, SectionLabel, Skeleton } from '../ui/primitives.tsx'
 
 // The class tracker, ported from CalenDue: find a course's sections for a USask term, watch the full
 // ones, and hear the moment a seat opens. StudyMax never registers anyone; PAWS does that.
+
+/** A whole course code, "CMPT 280" or "cmpt280": enough to ask which terms run it. */
+const FULL_CODE = /^[A-Z]{2,5}\s*\d{3}[A-Z]?$/i
+
+function listTerms(names: string[]) {
+  return names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+}
 
 function checkedAt(ms: number) {
   return new Date(ms).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
@@ -18,14 +25,27 @@ export function ClassesTab() {
   const c = m.classes
   const [query, setQuery] = useState('')
 
-  const { ensureTerms } = c
+  const { ensureTerms, checkOffered, clearOffered } = c
   useEffect(() => ensureTerms(), [ensureTerms])
+
+  // Once a full course code is typed, each term says whether it runs it. Debounced so typing
+  // "CMPT 2" on the way to "CMPT 280" doesn't ask Banner about CMPT 2.
+  const typed = query.trim()
+  useEffect(() => {
+    if (!FULL_CODE.test(typed)) {
+      clearOffered()
+      return
+    }
+    const id = window.setTimeout(() => void checkOffered(typed), 450)
+    return () => window.clearTimeout(id)
+  }, [typed, checkOffered, clearOffered])
 
   const terms = c.terms.state === 'done' ? c.terms.value.filter((t) => !t.viewOnly) : []
   // The plan's first term, if Banner has it open: its courses are the ones worth grabbing a seat in.
   const nextTerm = m.plan[0]
   const nextTermCode = nextTerm ? bannerTermCode(nextTerm.label) : null
   const planCourses = nextTerm && terms.some((t) => t.code === nextTermCode) ? nextTerm.courses.map((p) => p.code) : []
+  const offeredBy = c.offered?.byTerm.state === 'done' ? c.offered.byTerm.value : null
 
   function find(code: string) {
     setQuery(courseCode(code))
@@ -59,13 +79,16 @@ export function ClassesTab() {
                 type="button"
                 role="radio"
                 aria-checked={c.term === t.code}
-                className={`chip ${c.term === t.code ? 'chip--target' : 'chip--add'}`}
+                className={`chip ${c.term === t.code ? 'chip--target' : 'chip--add'}${offeredBy?.[t.code] === 0 ? ' classes__term--off' : ''}`}
                 onClick={() => c.chooseTerm(t.code)}
               >
+                {(offeredBy?.[t.code] ?? 0) > 0 && <Icon name="check" size={14} />}
                 {t.description}
+                {offeredBy?.[t.code] === 0 && <span className="visually-hidden">, not offered</span>}
               </button>
             ))}
           </div>
+          {c.offered && <OfferedNote terms={terms} />}
 
           {planCourses.length > 0 && (
             <>
@@ -108,6 +131,35 @@ export function ClassesTab() {
 
       <Watching />
     </>
+  )
+}
+
+/** The line under the terms saying which of them run the course typed in the search. */
+function OfferedNote({ terms }: { terms: Term[] }) {
+  const offered = useModel().classes.offered
+  if (!offered) return null
+  const code = courseCode(offered.course)
+  const s = offered.byTerm
+  let text: string
+  if (s.state === 'done') {
+    const running = terms.filter((t) => (s.value[t.code] ?? 0) > 0).map((t) => t.description)
+    const unknown = terms.some((t) => s.value[t.code] === null)
+    text = running.length
+      ? `${code} runs in ${listTerms(running)}.`
+      : unknown
+        ? `Couldn't confirm which terms run ${code}.`
+        : `${code} isn't offered in any term open for registration.`
+  } else if (s.state === 'error') {
+    text = `Couldn't check which terms run ${code}.`
+  } else {
+    text = `Checking which terms run ${code}…`
+  }
+  const good = s.state === 'done' && terms.some((t) => (s.value[t.code] ?? 0) > 0)
+  return (
+    <p className={`classes__offered${good ? ' classes__offered--yes' : ''}`} role="status" aria-live="polite">
+      {good && <Icon name="check" size={16} />}
+      {text}
+    </p>
   )
 }
 
