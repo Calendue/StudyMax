@@ -608,7 +608,7 @@ function solveAt(c: Ctx, H: number, earliest: number[], budget: { left: number }
   // Template order, tightening the deadline of whatever misses (and its prerequisites) and trying
   // again: a senior CMPT slot squeezed out of the last term moves up a term, and so on.
   const dl = [...chainDl]
-  for (let round = 0; round < 3 * c.n; round++) {
+  for (let round = 0; round < Math.min(3 * c.n, 30); round++) {
     const missed: { item: number; before?: number } = { item: -1 }
     const at = listSchedule(c, H, dl, 'template', missed)
     if (at) return { at, proven: true }
@@ -622,6 +622,12 @@ function solveAt(c: Ctx, H: number, earliest: number[], budget: { left: number }
   const r = exact(c, H, chainDl, budget.left)
   budget.left -= r.nodes
   return { at: r.at, proven: r.proven }
+}
+
+/** The lower bound on the graduation term index alone (-1 with nothing to place; a huge number when unreachable). */
+export function coreLowerBound(input: CoreInput): number {
+  const c = makeCtx(input)
+  return c.n === 0 ? -1 : lowerBound(c).lb
 }
 
 export function scheduleCore(input: CoreInput): CoreResult {
