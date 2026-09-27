@@ -83,7 +83,7 @@ The Plan tab (`src/screens/PlanTab.tsx`) draws the plan as a graph (`src/screens
 
 ## Database
 
-Schema lives in `prisma/schema.prisma`, migrated onto the team's shared remote Supabase Postgres (the app itself doesn't read or write it yet; identity is the Firebase uid in `UserInfo.authUid`) — see `docs/databaseSpec.md` for what each table is for and what's deliberately not in the DB (the course catalogue/programs/scholarships stay static files).
+Schema lives in `prisma/schema.prisma`, migrated onto the team's shared remote Supabase Postgres. The app syncs a signed-in student's session through `api/session.ts` (GET/PUT, Firebase ID token verified in `api/_firebaseAuth.ts`, Prisma client in `api/_db.ts`); it stays local-first, with localStorage as what it runs from and the DB filling in a session on a phone that has none. Identity is the Firebase uid in `UserInfo.authUid`; guests never touch the DB — see `docs/databaseSpec.md` for what each table is for and what's deliberately not in the DB (the course catalogue/programs/scholarships stay static files).
 
 - **Use `prisma migrate deploy`, never `prisma migrate dev`.** There's no local/shadow database here — only the one shared remote instance — and `migrate dev` provisions a shadow DB to diff against, which isn't the right model for four people hitting the same remote schema. Write migration SQL with `prisma migrate diff` (or by hand for something simple like a rename), then apply it with `npm run db:migrate` (wraps `prisma migrate deploy`).
 - Prisma's CLI doesn't read `.env.local` — `db:migrate`/`db:studio` are wrapped in `dotenv-cli` for this reason. Don't add a plain `.env` with the same values instead.
