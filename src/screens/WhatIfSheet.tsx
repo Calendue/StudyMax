@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useModel } from '../model.ts'
+import { MAX_COURSES_PER_TERM } from '../lib/cloudSession.ts'
 import { KIND_LABEL, courseCode, plural } from '../format.ts'
 import { compareTargets, delta, outlook, rankAlternatives, termShift, type WhatIf, type WhatIfInputs } from '../lib/whatIf.ts'
 import { Icon } from '../ui/Icon.tsx'
@@ -12,7 +13,7 @@ import { Sheet } from '../ui/Sheet.tsx'
 //   sheet 'whatif'      the list to pick from, quickest finish first
 //   sheet 'whatif:<id>' the comparison with that one
 
-const PACES = [1, 2, 3, 4]
+const PACES = Array.from({ length: MAX_COURSES_PER_TERM }, (_, i) => i + 1)
 
 export function WhatIfSheet() {
   const m = useModel()
