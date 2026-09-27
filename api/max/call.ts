@@ -3,6 +3,13 @@
 import { VapiClient } from '@vapi-ai/server-sdk'
 import { db, hasDatabase } from '../_db.js'
 import { resolveMaxUser } from '../_maxIdentity.js'
+import { programName } from '../../src/lib/max/planningAdapter.js'
+import { currentTermOf } from '../../src/lib/plan.js'
+
+// spec 11: "institution-configured, with a national fallback" — no Institution-level wellness field
+// exists yet (deferred, docs/BayMax/HANDOFF.md), so this is the fallback alone for every school. 988
+// is Canada's (and the US's) real, live Suicide Crisis Helpline — call or text, 24/7.
+const WELLNESS_FALLBACK = 'call or text 988, the Suicide Crisis Helpline, available 24/7'
 
 interface VercelRequest {
   method?: string
@@ -59,17 +66,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return
   }
 
-  const [profile, plan] = await Promise.all([
+  const [profile, plan, currentCourses] = await Promise.all([
     db().studentProfile.findUnique({ where: { userId: user.userId } }),
     db().generatedPlan.findUnique({ where: { userId: user.userId } }),
+    db().studentCourse.findMany({ where: { userId: user.userId, status: 'in_progress' } }),
   ])
   if (!profile || !plan) {
     res.status(500).json({ error: 'demo student has no profile/plan — run npm run db:seed:demo-student' })
     return
   }
 
+  // plan.terms only ever holds courses not yet taken (buildStudentPlan assumes in-progress ones are
+  // already done "by start" — src/lib/plan.ts) — its last entry is the GRADUATION term, not the one
+  // the student is sitting in right now. "Now" comes from today's date; "what they're taking" comes
+  // from StudentCourse, not the plan.
   const terms = plan.terms as unknown as { label: string; courses: { code: string }[] }[]
   const lastTerm = terms[terms.length - 1]
+  const currentTerm = currentTermOf(new Date())
   const firstName = user.firstName ?? 'there'
   const isFirstCall = !settings.hasMetMax
 
@@ -91,12 +104,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       assistantOverrides: {
         variableValues: {
           name: firstName,
-          programLine: `${profile.degree}, ${profile.majorProgramId}`,
-          currentTerm: lastTerm?.label ?? 'unknown',
-          currentCoursesLine: lastTerm ? lastTerm.courses.map((c) => c.code).join(', ') : 'none',
+          programLine: `${profile.degree}, ${programName(profile.majorProgramId)}`,
+          currentTerm: `${currentTerm.season} ${currentTerm.year}`,
+          currentCoursesLine: currentCourses.length > 0 ? currentCourses.map((c) => c.courseCode).join(', ') : 'none',
           roadmapVersion: plan.version,
           projectedGraduation: lastTerm?.label ?? 'unknown',
           isFirstCall,
+          wellnessResourceLine: WELLNESS_FALLBACK,
         },
         firstMessage: isFirstCall
           ? `Hi ${firstName}, this is Max from StudyMax — I help you plan your degree. I've got your roadmap in front of me. What's on your mind?`

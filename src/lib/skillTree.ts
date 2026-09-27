@@ -2,7 +2,7 @@ import { courseInfo } from '../data/prereqs.ts'
 import { creditPrereqs } from '../data/creditPrereqs.ts'
 import type { RequirementGroup } from '../data/specializations.ts'
 import type { SpecializationMatch } from './match.ts'
-import { courseLevel, DEFAULT_SUMMER_COURSES, isElective, upcomingTerm, type PlannedTerm, type Season, type TermStart } from './plan.ts'
+import { courseLevel, currentTermOf, DEFAULT_SUMMER_COURSES, isElective, type PlannedTerm, type Season, type TermStart } from './plan.ts'
 
 // The Academic Skill Tree: the student's degree drawn as a tree that grows UP. Roots at the bottom,
 // Year 1 above them, the years rising to a canopy of the credentials they're working toward. Fall
@@ -911,11 +911,9 @@ export function treeTargets(
   return out.slice(0, MAX_LEAVES)
 }
 
-/** The term being sat now: the one before the term a student would register for next. */
-export function currentTermOf(today: Date): TermStart {
-  const next = upcomingTerm(today)
-  return next.season === 'Fall' ? { season: 'Winter', year: next.year } : { season: 'Fall', year: next.year - 1 }
-}
+// currentTermOf moved to plan.ts (api/max/call.ts needs it too, server-side) — re-exported here so
+// existing imports from this module (src/skilltree/planView.ts, scripts/check-skill-tree.ts) don't break.
+export { currentTermOf }
 
 /** The season a lane stands for. */
 export function laneSeason(lane: TreeLane): Season {
