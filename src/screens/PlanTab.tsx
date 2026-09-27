@@ -80,12 +80,36 @@ export function PlanTargets() {
 /** Spring/Summer: off, or the most courses a Spring/Summer term may take. */
 const SUMMER_CHOICES = [0, ...Array.from({ length: MAX_SUMMER_COURSES }, (_, i) => i + 1)]
 
-/** Courses per term (Fall/Winter and Spring/Summer), and the term it starts in. */
+/** What a degree variant is called in the plan's settings. */
+const VARIANT_LABEL: Record<string, string> = { 'bsc-4': 'Four-year', 'bsc-honours': 'Honours', 'bsc-3': 'Three-year' }
+
+/** The degree (where the program has variants), courses per term (Fall/Winter and Spring/Summer), and the term it starts in. */
 export function PlanControls() {
   const m = useModel()
   const summer = m.springSummer ? m.summerPerTerm : 0
+  const variants = m.selectedProgram?.degrees ?? []
   return (
     <>
+      {variants.length > 1 && (
+        <Appear index={1} className="per-term">
+          <span id="degree-variant-label">Degree</span>
+          <div className="segmented segmented--labels" role="radiogroup" aria-labelledby="degree-variant-label">
+            {variants.map((d) => (
+              <button
+                key={d.variant}
+                type="button"
+                role="radio"
+                aria-checked={m.activeDegree?.variant === d.variant}
+                aria-label={d.name}
+                className={`segmented__option${m.activeDegree?.variant === d.variant ? ' segmented__option--on' : ''}`}
+                onClick={() => m.setDegreeVariant(d.variant)}
+              >
+                {VARIANT_LABEL[d.variant] ?? d.name}
+              </button>
+            ))}
+          </div>
+        </Appear>
+      )}
       <Appear index={1} className="per-term">
         <span id="per-term-label">Courses per term</span>
         <div className="segmented" role="radiogroup" aria-labelledby="per-term-label">
@@ -193,8 +217,8 @@ export function PlanCopy() {
         </>
       )}
       <p className="footnote">
-        {m.selectedProgram?.degree
-          ? `The plan is the whole ${m.selectedProgram.degree.name} from the 2026-27 catalogue: ${m.selectedProgram.degree.totalCu} credit units, ${m.selectedProgram.degree.minSeniorCu} of them at the 200 level or higher, at most 15 a term. `
+        {m.activeDegree
+          ? `The plan is the whole ${m.activeDegree.name} from the 2026-27 catalogue: ${m.activeDegree.totalCu} credit units, ${m.activeDegree.minSeniorCu} of them at the 200 level or higher, at most 15 a term. `
           : "The plan covers your major's requirements; add breadth and electives with an advisor. "}
         Prerequisites come from catalogue.usask.ca verbatim, and each course sits in a term it ran in on USask&rsquo;s class
         search over the last two years. Schedules can change, so confirm with your advisor before you register.

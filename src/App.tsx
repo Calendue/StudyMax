@@ -149,6 +149,8 @@ export interface ProgramOption {
 }
 
 const SAVE_KEY = 'studymax:v1'
+/** The degree variant a plan is for until the student picks another: the Four-year B.Sc. */
+const DEFAULT_DEGREE_VARIANT = 'bsc-4'
 
 interface SavedState {
   universityId: UniversityChoice
@@ -177,6 +179,8 @@ interface SavedState {
   courseTerms?: Record<string, Season>
   /** The term ("Fall 2024") each completed course was passed in, where the transcript dates it. Device-only. */
   completedTerms?: Record<string, string>
+  /** Which variant of the degree the plan is for ('bsc-4', 'bsc-honours', 'bsc-3'). Device-only, like gradYear. */
+  degreeVariant?: string
 }
 
 
@@ -248,6 +252,7 @@ function useStudyMax() {
   const [minorId, setMinorId] = useState<string | null>(saved.minorId ?? null)
   const [concentrationIds, setConcentrationIds] = useState<string[]>(saved.concentrationIds ?? [])
   const [gradYear, setGradYear] = useState<number | null>(saved.gradYear ?? null)
+  const [degreeVariant, setDegreeVariant] = useState(saved.degreeVariant ?? DEFAULT_DEGREE_VARIANT)
   const [registered, setRegistered] = useState<string[]>(() => registeredFrom(saved.registered))
   const [springSummer, setSpringSummer] = useState(saved.springSummer ?? false)
   // The plan's load limits: the most courses per Fall/Winter term, and per Spring/Summer term. Only a
@@ -273,6 +278,9 @@ function useStudyMax() {
       : universityId === 'other'
         ? OTHER_PROGRAM
         : null
+  // The degree the plan is for: the variant the student chose (Four-year, Honours, Three-year) where the
+  // program has more than one, otherwise the program's own.
+  const activeDegree = selectedProgram?.degrees?.find((d) => d.variant === degreeVariant) ?? selectedProgram?.degree
   // A full load (15 credit units, five courses) unless the student chose otherwise.
   const coursesPerTerm = chosenPerTerm ?? selectedProgram?.coursesPerTerm ?? DEFAULT_COURSES_PER_TERM
 
@@ -390,6 +398,7 @@ function useStudyMax() {
     springSummer,
     courseTerms,
     completedTerms,
+    degreeVariant,
     coursesPerTerm,
     coursesPerTermChosen: chosenPerTerm !== null,
     summerPerTerm,
@@ -435,8 +444,8 @@ function useStudyMax() {
   }, [accountUid, cloudUid, cloudJson])
 
   const matches = useMemo(
-    () => computeMatches(selectedProgram?.specializations ?? [], completed, selectedProgram?.degree),
-    [selectedProgram, completed],
+    () => computeMatches(selectedProgram?.specializations ?? [], completed, activeDegree),
+    [selectedProgram, completed, activeDegree],
   )
 
   const [heroId, setHeroId] = useState<string | null>(() => seedOf(saved)[0] ?? null)
@@ -479,7 +488,7 @@ function useStudyMax() {
       const doneHeroId = hero.spec.id
       const promoteId = setTimeout(() => {
         // Already in the hero order (computeMatches: available first, fewest left, most shared with the degree).
-        const next = computeMatches(selectedProgram?.specializations ?? [], completedRef.current, selectedProgram?.degree).filter(
+        const next = computeMatches(selectedProgram?.specializations ?? [], completedRef.current, activeDegree).filter(
           (m) => m.spec.id !== doneHeroId && m.remaining > 0,
         )[0]
         if (next) setHeroId(next.spec.id)
@@ -487,7 +496,7 @@ function useStudyMax() {
       return () => clearTimeout(promoteId)
     }
     prevRemaining.current = hero.remaining
-  }, [hero.spec.id, hero.remaining, selectedProgram])
+  }, [hero.spec.id, hero.remaining, selectedProgram, activeDegree])
 
   const topOverlap = useMemo(() => {
     const overlap = computeCourseOverlap(selectedProgram?.specializations ?? [], completed)
@@ -900,16 +909,16 @@ function useStudyMax() {
         inProgressCourses,
         coursesPerTerm,
         startTerm,
-        { springSummer, summerPerTerm, degree: selectedProgram?.degree, booked },
+        { springSummer, summerPerTerm, degree: activeDegree, booked },
       ),
-    [targets, planningSpecs, completed, inProgressCourses, coursesPerTerm, startTerm, springSummer, summerPerTerm, selectedProgram, booked],
+    [targets, planningSpecs, completed, inProgressCourses, coursesPerTerm, startTerm, springSummer, summerPerTerm, activeDegree, booked],
   )
   // The plan as the roadmap draws it: what's left, plus the courses already under way in their terms.
   const roadmap = useMemo(() => withCurrentCourses(plan, currentByTerm, today), [plan, currentByTerm, today])
   // The degree in credit units for the tree's readout and milestones: done, under way and planned.
   const treeDegree = useMemo(
-    () => (selectedProgram?.degree ? treeDegreeProgress(selectedProgram.degree, completed, inProgressCourses, plan) : undefined),
-    [selectedProgram, completed, inProgressCourses, plan],
+    () => (activeDegree ? treeDegreeProgress(activeDegree, completed, inProgressCourses, plan) : undefined),
+    [activeDegree, completed, inProgressCourses, plan],
   )
   const [planCopied, setPlanCopied] = useState(false)
   // Clipboard writes are blocked in some browsers and contexts. Rather than a button that appears to
@@ -1117,6 +1126,7 @@ function useStudyMax() {
     setMinorId(state.minorId ?? null)
     setConcentrationIds(state.concentrationIds ?? [])
     setGradYear(state.gradYear ?? null)
+    setDegreeVariant(state.degreeVariant ?? DEFAULT_DEGREE_VARIANT)
     setRegistered(registeredFrom(state.registered))
     setSpringSummer(state.springSummer ?? false)
     setCoursesPerTerm(chosenLoad(state))
@@ -1588,6 +1598,9 @@ function useStudyMax() {
     updateMajor,
     updateMinor,
     updateGradYear,
+    activeDegree,
+    degreeVariant,
+    setDegreeVariant,
     registered,
     registeredQuery,
     setRegisteredQuery,
