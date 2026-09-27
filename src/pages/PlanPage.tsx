@@ -37,7 +37,7 @@ export function PlanPage() {
             <MaxLiveBar />
             <TalkToMax />
             <PlanTargets />
-            <SkillTree dock={docked ? dock : undefined} contained />
+            <SkillTree dock={docked ? dock : undefined} />
           </Card>
         </div>
         <aside className="plan-page__side">
