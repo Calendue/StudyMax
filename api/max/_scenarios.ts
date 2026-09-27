@@ -33,12 +33,15 @@ interface Snapshot {
   targetSpecializationIds: string[]
   coursesPerTerm: number
   start: Term
+  /** StudentProfile.internshipAcademicYear: the academic year the plan leaves empty. */
+  away: number | null
 }
 
 async function loadCurrentSnapshot(userId: bigint): Promise<{ plan: GeneratedPlan; snapshot: Snapshot } | null> {
-  const [plan, courses] = await Promise.all([
+  const [plan, courses, profile] = await Promise.all([
     db().generatedPlan.findUnique({ where: { userId } }),
     db().studentCourse.findMany({ where: { userId } }),
+    db().studentProfile.findUnique({ where: { userId }, select: { internshipAcademicYear: true } }),
   ])
   if (!plan) return null
   return {
@@ -51,6 +54,8 @@ async function loadCurrentSnapshot(userId: bigint): Promise<{ plan: GeneratedPla
       targetSpecializationIds: plan.targetSpecializationIds,
       coursesPerTerm: plan.coursesPerTerm,
       start: { season: plan.startSeason as Term['season'], year: plan.startYear },
+      // Not a scenario op: a what-if keeps the student's internship year, so the diff never shows one.
+      away: profile?.internshipAcademicYear ?? null,
     },
   }
 }
@@ -140,6 +145,7 @@ export async function runScenario(
     targetSpecializationIds: applied.targetSpecializationIds,
     coursesPerTerm: applied.coursesPerTerm,
     start: applied.start,
+    away: applied.away,
   })
   const validation = validate(terms)
   const roadmapDiff = diff(plan.terms as unknown as PlannedTerm[], terms)

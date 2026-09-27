@@ -61,6 +61,10 @@ model StudentProfile {
   // Onboarding's internship question: "3" | "4" (the year of the degree the plan keeps free),
   // "unsure" | "no", or null when never answered. Validated app-side, no DB enum.
   internship         String?  @db.VarChar
+  // The academic year (its Fall's calendar year, e.g. 2027 for 2027-28) that internship takes, as the
+  // app resolved it from the transcript's dated terms. Max's plan snapshot leaves it empty (lib/plan.ts
+  // `away`); the server can't resolve "Year 4" itself, since it doesn't keep the transcript's terms.
+  internshipAcademicYear Int?
   createdAt          DateTime @default(now()) @db.Timestamp(6)
   updatedAt          DateTime @updatedAt @db.Timestamp(6)
 
