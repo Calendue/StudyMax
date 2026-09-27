@@ -139,7 +139,9 @@ function academicYear(term: TermStart) {
 
 function parseTerm(label: string): TermStart | null {
   const [season, year] = label.split(' ')
-  return (season === 'Fall' || season === 'Winter') && Number(year) > 0 ? { season, year: Number(year) } : null
+  return (season === 'Fall' || season === 'Winter' || season === 'Spring/Summer') && Number(year) > 0
+    ? { season, year: Number(year) }
+    : null
 }
 
 /** A prerequisite the catalogue lets you take alongside ("can be taken concurrently") doesn't sequence. */
@@ -253,6 +255,8 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
       add(course.code, {
         status: 'planned',
         year: Math.max(1, currentYear + academicYear(t) - currentAY),
+        // Spring/Summer has no lane of its own yet (a thin centre lane later): it sits on the Winter
+        // side of its academic year, and the card keeps its real term.
         lane: t.season === 'Fall' ? 'fall' : 'winter',
         term: `${t.season} ${t.year}`,
         termKnown: true,
@@ -319,7 +323,7 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
       const seq = links.filter((l) => l.sequencing && drafts.get(l.from)!.status === 'completed' && drafts.get(l.to)!.status === 'completed')
       const hasPrereq = seq.some((l) => l.to === d.code && sameYear(l.from, d.code))
       const unlocks = seq.some((l) => l.from === d.code && sameYear(l.to, d.code))
-      if (year === currentYear && current.season === 'Winter') d.lane = 'fall'
+      if (year === currentYear && current.season !== 'Fall') d.lane = 'fall'
       else if (hasPrereq) d.lane = 'winter'
       else if (unlocks) d.lane = 'fall'
       if (d.lane) count[d.lane]++

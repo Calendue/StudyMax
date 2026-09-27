@@ -10,7 +10,7 @@ import { completedCourses, inProgressCourses } from '../src/data/transcript.ts'
 
 const TODAY = new Date(2026, 8, 26) // a Fall term, as on demo day
 
-function student(completedList: string[], inProgress: string[], today: Date, width: number) {
+function student(completedList: string[], inProgress: string[], today: Date, width: number, springSummer = false) {
   const completed = new Set(completedList)
   const specs = computerScience.specializations
   const matches = computeMatches(specs, completed)
@@ -18,7 +18,7 @@ function student(completedList: string[], inProgress: string[], today: Date, wid
   const hero = matches[0]
   const planning = [...specs, ...credentials.map((c) => c.spec)]
   const start: TermStart = upcomingTerm(today)
-  const plan = buildStudentPlan([hero.spec], planning, completed, inProgress, 2, start)
+  const plan = buildStudentPlan([hero.spec], planning, completed, inProgress, 2, start, springSummer)
   const targets = treeTargets(
     [{ match: hero, kind: 'specialization' }],
     credentials.map((c) => ({ match: c, kind: c.program.kind === 'minor' ? 'minor' : 'certificate' })),
@@ -110,6 +110,11 @@ const firstYear = student([], [], TODAY, 390)
 checkLayout('first-year', firstYear)
 assert.ok(firstYear.layout.leaves.length >= 1, 'a first-year still sees their target in the canopy')
 assert.ok(firstYear.layout.nodes.every((n) => n.status !== 'completed'))
+
+// ── a plan with Spring/Summer terms: those courses sit on the Winter side and keep their term ──
+const summer = student([], [], TODAY, 390, true)
+checkLayout('spring-summer', summer)
+assert.ok(summer.layout.nodes.some((n) => n.term.startsWith('Spring/Summer') && n.lane === 'winter'), 'a Spring/Summer course keeps its term')
 
 // ── nothing at all: no targets, no plan ──
 const empty = layoutSkillTree({ completed: [], inProgress: [], plan: [], currentTerm: currentTermOf(TODAY), targets: [], width: 390 })
