@@ -1,0 +1,1022 @@
+/* The Academic Skill Tree. Its own material: a deep teal-slate circuit board with luminous traces,
+ * a deliberate contrast to the Old Lace and Cherry Rose app around it. The same night board in the
+ * app's light and dark modes. Every colour the board uses is defined HERE and nowhere else.
+ *
+ * Depth is machined, not blurred (Prospector Studio's rule): tight radii, a 1px edge highlight,
+ * small shadows. Only three things glow: lit current (completed traces), the brass pulse (in
+ * progress) and the rose beacon (the best next course).
+ *
+ * Contrast against the board's lighter corner (#163236): jade 6.3:1, brass 6.1:1, beacon edge 3.3:1,
+ * credential hues 5.1 to 9.2:1, bone text 13:1 / 70% 7.6:1 / 55% 4.9:1. The credential hues were
+ * tuned so every pair, and each against jade and brass, stays apart (CIE76 dE >= 15) in normal
+ * vision, deuteranopia and protanopia; the brief's aqua sat on top of jade and its fern on brass. */
+.tree,
+.tree-detail,
+.tree-detail__empty {
+  --tree-board-1: #0f2326; /* the original palette's deep teal #1F4047, pushed darker */
+  --tree-board-2: #163236;
+  --tree-jacket: #081719; /* under every trace, so a crossing reads as passing over */
+  --tree-trunk: #1f4047;
+  --tree-edge-hi: rgb(239 231 216 / 0.07);
+  --tree-shadow: rgb(8 23 25 / 0.6);
+
+  --tree-silk-1: #efe7d8; /* bone: primary text */
+  --tree-silk-2: rgb(239 231 216 / 0.7);
+  --tree-silk-3: rgb(239 231 216 / 0.55); /* the faintest text allowed */
+  --tree-silk-planned: rgb(239 231 216 / 0.6);
+  --tree-line: rgb(239 231 216 / 0.16);
+  --tree-dot: rgb(239 231 216 / 0.06);
+  --tree-slate: rgb(160 184 190 / 0.35);
+
+  --tree-jade: #45c4a9; /* completed, and the current it carries */
+  --tree-jade-ink: #0a2520;
+  --tree-brass: #d9a441; /* in progress */
+  --tree-beacon: var(--cherry); /* the one rose element: the best next course */
+  --tree-beacon-edge: color-mix(in srgb, var(--cherry) 58%, var(--tree-silk-1));
+
+  --tree-cred-1: #84cfe4; /* sky: the hero */
+  --tree-cred-2: #9a9ce2; /* lilac */
+  --tree-cred-3: #e0886f; /* copper */
+  --tree-cred-4: #93e88a; /* mint (the brief's aqua, moved off jade) */
+  --tree-cred-5: #ddd84a; /* citron (the brief's fern, moved off brass) */
+
+  --tree-bar-h: 80px;
+}
+
+.tree {
+  position: relative;
+  margin: 0 0 var(--s5);
+  color: var(--tree-silk-1);
+  font-family: var(--font-text);
+}
+
+/* On a phone the board fills the tab, edge to edge. */
+.tree--bleed {
+  margin-left: calc(-1 * (var(--s4) + var(--sal)));
+  margin-right: calc(-1 * (var(--s4) + var(--sar)));
+}
+
+/* ── the sticky key and credential chips ── */
+.tree__bar {
+  position: sticky;
+  top: var(--tree-sticky-top, 0px);
+  z-index: 5;
+  display: grid;
+  align-content: center;
+  gap: var(--s2);
+  height: var(--tree-bar-h);
+  padding: 0 var(--s3);
+  background: var(--tree-board-1);
+  border-radius: var(--r2) var(--r2) 0 0;
+  box-shadow: inset 0 1px 0 var(--tree-edge-hi), 0 1px 0 var(--tree-line);
+}
+
+.tree__legend {
+  display: flex;
+  gap: var(--s2) var(--s3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow: hidden;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--tree-silk-2);
+}
+
+.tree__legend li {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.tree__key,
+.tree-swatch {
+  flex: none;
+  width: 13px;
+  height: 10px;
+  border: 1.5px solid var(--tree-silk-planned);
+  border-radius: 3px;
+  background: var(--tree-board-1);
+}
+
+.tree__key--completed,
+.tree-swatch--completed {
+  background: var(--tree-jade);
+  border-color: var(--tree-jade);
+}
+
+.tree__key--inProgress,
+.tree-swatch--inProgress {
+  border-color: var(--tree-brass);
+}
+
+.tree__key--next,
+.tree-swatch--next {
+  background: var(--tree-beacon);
+  border-color: var(--tree-beacon-edge);
+}
+
+.tree__key--elective,
+.tree-swatch--elective {
+  border-style: dashed;
+  border-color: var(--tree-silk-2);
+}
+
+.tree__key--locked,
+.tree-swatch--locked {
+  border-color: var(--tree-slate);
+}
+
+.tree__chips {
+  display: flex;
+  gap: 6px;
+  margin: 0 calc(-1 * var(--s3));
+  padding: 0 var(--s3);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tree__chips::-webkit-scrollbar {
+  display: none;
+}
+
+.tree__chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--hue) 40%, transparent);
+  border-radius: 999px;
+  background: var(--tree-board-2);
+  color: var(--tree-silk-1);
+  font-size: 12px;
+  font-weight: 600;
+  transition: background-color var(--d-fast), border-color var(--d-fast);
+}
+
+.tree__chip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--hue);
+}
+
+.tree__chip-name {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tree__chip-count {
+  color: var(--tree-silk-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.tree__chip--on {
+  background: color-mix(in srgb, var(--hue) 22%, var(--tree-board-2));
+  border-color: var(--hue);
+}
+
+/* ── the board ── */
+.tree__board {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(160deg, var(--tree-board-1) 20%, var(--tree-board-2));
+  border-radius: 0 0 var(--r2) var(--r2);
+  box-shadow: inset 0 0 0 1px var(--tree-edge-hi);
+}
+
+.tree--bleed .tree__bar,
+.tree--bleed .tree__board {
+  border-radius: 0;
+}
+
+.tree__grid {
+  position: absolute;
+  inset: -80px 0;
+  background-image: radial-gradient(circle at 1px 1px, var(--tree-dot) 1px, transparent 1.6px);
+  background-size: 16px 16px;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.tree__svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+/* Silkscreen: small, tracked, faint. */
+.tree__silk {
+  font: 700 9.5px var(--font-text);
+  letter-spacing: 0.2em;
+  fill: var(--tree-silk-3);
+  /* A board-coloured keep-out around the letters, so a trace passing behind never cuts them. */
+  paint-order: stroke;
+  stroke: var(--tree-board-1);
+  stroke-width: 5px;
+  stroke-linejoin: round;
+}
+
+.tree__silk--now {
+  fill: var(--tree-brass);
+}
+
+.tree__band-line {
+  stroke: var(--tree-line);
+  stroke-width: 1;
+  stroke-dasharray: 5 6;
+}
+
+.tree__band-line--now {
+  stroke: color-mix(in srgb, var(--tree-brass) 50%, transparent);
+}
+
+.tree__band-line--ground {
+  stroke-dasharray: none;
+}
+
+.tree__trunk {
+  fill: none;
+  stroke: var(--tree-trunk);
+  stroke-linecap: butt;
+}
+
+.tree__trunk-edge {
+  stroke: var(--tree-edge-hi);
+  stroke-width: 1;
+}
+
+/* A trace: a dark jacket under a coloured core, round joins. */
+.tr path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: opacity var(--d-med);
+}
+
+.tr {
+  transition: opacity var(--d-med);
+}
+
+.tr__jacket {
+  stroke: var(--tree-jacket);
+  stroke-width: 4.6;
+}
+
+.tr__core {
+  stroke: var(--tree-silk-3);
+  stroke-width: 1.6;
+}
+
+.tr__halo {
+  stroke: var(--tree-jade);
+  stroke-width: 6;
+  opacity: 0.14;
+}
+
+.tr__stripe {
+  stroke: var(--tree-jacket);
+  stroke-width: 0.7;
+  stroke-dasharray: 2 6;
+}
+
+.tr__pad {
+  fill: var(--tree-silk-3);
+}
+
+.tr--prereq.tr--lit .tr__core,
+.tr--prereq.tr--lit .tr__pad {
+  stroke: var(--tree-jade);
+  fill: var(--tree-jade);
+}
+
+.tr--prereq.tr--lit .tr__core {
+  fill: none;
+}
+
+.tr--prereq.tr--live .tr__core {
+  stroke: var(--tree-brass);
+}
+
+.tr--prereq.tr--live .tr__pad {
+  fill: var(--tree-brass);
+}
+
+.tr--prereq.tr--idle .tr__core {
+  stroke: var(--tree-silk-planned);
+}
+
+.tr--prereq.tr--locked .tr__core {
+  stroke: var(--tree-slate);
+}
+
+.tree__arrow--lit {
+  fill: var(--tree-jade);
+}
+
+.tree__arrow--live {
+  fill: var(--tree-brass);
+}
+
+.tree__arrow--idle {
+  fill: var(--tree-silk-planned);
+}
+
+.tree__arrow--locked {
+  fill: var(--tree-slate);
+}
+
+/* The bus: one rail per credential up the trunk, and the taps into it. */
+.tr--rail .tr__jacket {
+  stroke-width: 4;
+}
+
+.tr--rail .tr__core,
+.tr--tap .tr__core {
+  stroke: var(--hue);
+}
+
+.tr--rail .tr__halo,
+.tr--tap .tr__halo {
+  stroke: var(--hue);
+}
+
+.tr--tap .tr__core {
+  stroke-width: 1.3;
+}
+
+.tr--tap .tr__jacket {
+  stroke-width: 3.8;
+}
+
+.tr--tap .tr__halo {
+  display: none;
+}
+
+.tr--rail.tr--idle .tr__core,
+.tr--tap.tr--idle .tr__core,
+.tr--tap.tr--live .tr__core {
+  opacity: 0.6;
+}
+
+.tr--tap.tr--locked .tr__core {
+  opacity: 0.35;
+}
+
+.tr--root .tr__core {
+  stroke: var(--tree-silk-3);
+  stroke-width: 1.4;
+}
+
+.tr--root .tr__halo {
+  display: none;
+}
+
+.tree__root-pad {
+  fill: var(--tree-board-1);
+  stroke: var(--tree-silk-3);
+  stroke-width: 1.2;
+}
+
+.tree__via {
+  fill: var(--tree-jacket);
+  stroke: var(--hue);
+  stroke-width: 1.4;
+  transition: opacity var(--d-med);
+}
+
+.tree__via--lit {
+  fill: var(--hue);
+}
+
+/* Current: a slow pulse running up every lit trace, toward the canopy. */
+.tr__pulse {
+  stroke: color-mix(in srgb, var(--tree-jade) 45%, var(--tree-silk-1));
+  stroke-width: 2.2;
+  stroke-dasharray: 0.04 0.96;
+  stroke-dashoffset: 1;
+  opacity: 0.9;
+  animation: tree-pulse 3.6s linear infinite;
+}
+
+.tr--rail .tr__pulse {
+  stroke: color-mix(in srgb, var(--hue) 55%, var(--tree-silk-1));
+  stroke-dasharray: 0.025 0.975;
+  animation-duration: 5.2s;
+}
+
+.tr:nth-child(3n) .tr__pulse {
+  animation-delay: -1.2s;
+}
+
+.tr:nth-child(3n + 1) .tr__pulse {
+  animation-delay: -2.5s;
+}
+
+@keyframes tree-pulse {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* ── course cards ── */
+.tree-node {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 0 var(--s2);
+  border: 1.5px solid var(--tree-silk-planned);
+  border-radius: 6px;
+  background: var(--tree-board-1);
+  color: var(--tree-silk-1);
+  text-align: left;
+  box-shadow: inset 0 1px 0 var(--tree-edge-hi), 0 1px 2px var(--tree-shadow);
+  transition:
+    opacity var(--d-med),
+    transform var(--d-med) var(--spring);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tree--compact .tree-node {
+  align-items: center;
+  padding: 0 4px;
+}
+
+.tree-node:active {
+  transform: scale(0.96);
+}
+
+.tree-node__code {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.1;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.tree--compact .tree-node__code {
+  font-size: 11.5px;
+}
+
+.tree-node__sub {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--tree-silk-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tree--compact .tree-node__sub {
+  font-size: 9.5px;
+  font-weight: 600;
+}
+
+.tree-node__glyph {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 9px;
+  height: 9px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.tree-node--completed {
+  background: var(--tree-jade);
+  border-color: var(--tree-jade);
+  color: var(--tree-jade-ink);
+}
+
+.tree-node--completed .tree-node__sub {
+  color: color-mix(in srgb, var(--tree-jade-ink) 78%, transparent);
+}
+
+.tree-node--inProgress {
+  border-color: var(--tree-brass);
+}
+
+/* The brass pulse: a ring that breathes out from an in-progress card. */
+.tree-node--inProgress::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border: 1.5px solid var(--tree-brass);
+  border-radius: 9px;
+  opacity: 0;
+  animation: tree-breathe 2.8s ease-out infinite;
+  pointer-events: none;
+}
+
+@keyframes tree-breathe {
+  0% {
+    opacity: 0.7;
+    transform: scale(0.96);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.1);
+  }
+}
+
+.tree-node--next {
+  background: var(--tree-beacon);
+  border-color: var(--tree-beacon-edge);
+  color: var(--tree-silk-1);
+  box-shadow:
+    0 0 0 1px var(--tree-beacon-edge),
+    0 0 20px color-mix(in srgb, var(--tree-beacon) 75%, transparent);
+}
+
+.tree-node--next .tree-node__sub {
+  color: color-mix(in srgb, var(--tree-silk-1) 85%, transparent);
+}
+
+/* Planned: a bone outline with a stripe in the credential it counts toward. */
+.tree-node--planned::before,
+.tree-node--locked::before {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 6px;
+  right: 6px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--hue);
+}
+
+.tree-node--locked {
+  border-color: var(--tree-slate);
+  color: var(--tree-silk-2);
+}
+
+.tree-node--locked::before {
+  opacity: 0.45;
+}
+
+.tree-node--locked .tree-node__glyph {
+  color: var(--tree-silk-3);
+}
+
+.tree-node--elective {
+  border-style: dashed;
+  background: transparent;
+}
+
+.tree-node--elective.tree-node--next {
+  background: var(--tree-beacon);
+}
+
+.tree-node:focus-visible,
+.tree-node.is-selected,
+.tree-leaf:focus-visible,
+.tree-leaf[aria-pressed='true'] {
+  outline: 2px solid var(--tree-silk-1);
+  outline-offset: 2px;
+}
+
+/* ── the canopy ── */
+.tree-leaf {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: 0 var(--s2);
+  border: 1.5px solid color-mix(in srgb, var(--hue) 55%, transparent);
+  border-radius: 8px;
+  background: var(--tree-board-2);
+  color: var(--tree-silk-1);
+  text-align: left;
+  box-shadow: inset 0 1px 0 var(--tree-edge-hi), 0 2px 6px var(--tree-shadow);
+  transition:
+    opacity var(--d-med),
+    transform var(--d-slow) var(--spring);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tree-leaf--hero {
+  border-color: var(--hue);
+}
+
+.tree-leaf__ring {
+  position: relative;
+  flex: none;
+  width: 42px;
+  height: 42px;
+}
+
+.tree-leaf__ring svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.tree-leaf__ring circle {
+  fill: none;
+  stroke-width: 4;
+}
+
+.tree-leaf__track {
+  stroke: var(--tree-line);
+}
+
+.tree-leaf__fill {
+  stroke: var(--hue);
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: calc(1 - var(--pct));
+  transition: stroke-dashoffset 900ms var(--settle) 250ms;
+}
+
+.tree-leaf__count {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 10.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.tree-leaf__text {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.tree-leaf__name {
+  display: -webkit-box;
+  overflow: hidden;
+  font: 600 12.5px/1.2 var(--font-brand);
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.tree-leaf__kind {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--tree-silk-2);
+}
+
+/* ── year markers on the left edge, sticky as you scroll ── */
+.tree__year,
+.tree__band-sentinel {
+  position: absolute;
+  left: 0;
+  width: 22px;
+  pointer-events: none;
+}
+
+.tree__band-sentinel {
+  width: 1px;
+}
+
+.tree__year-label {
+  position: sticky;
+  top: calc(var(--tree-sticky-top, 0px) + var(--tree-bar-h) + 12px);
+  display: block;
+  margin: 10px 0 0 5px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--tree-silk-2);
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  white-space: nowrap;
+}
+
+.tree__year-label--now {
+  color: var(--tree-brass);
+}
+
+.tree:not(.tree--compact) .tree__year {
+  width: 34px;
+}
+
+.tree:not(.tree--compact) .tree__year-label {
+  margin-left: 10px;
+}
+
+/* ── the roots ── */
+.tree__roots {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: grid;
+  justify-items: center;
+  gap: var(--s2);
+  padding: 0 var(--s4);
+  text-align: center;
+  pointer-events: none;
+}
+
+.tree__plate {
+  padding: 5px 10px;
+  border: 1px solid var(--tree-line);
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--tree-silk-2);
+}
+
+.tree__sapling {
+  max-width: 32ch;
+  font-size: 12.5px;
+  color: var(--tree-silk-2);
+}
+
+.tree__cue {
+  position: absolute;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border: 1px solid var(--tree-line);
+  border-radius: 999px;
+  background: var(--tree-board-1);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--tree-silk-1);
+  white-space: nowrap;
+  transform: translateX(-50%);
+  transition: opacity var(--d-slow);
+  pointer-events: none;
+}
+
+.tree__cue svg,
+.tree__float-btn svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.tree__cue.is-gone {
+  opacity: 0;
+}
+
+/* ── Back to roots / Jump to now: float over the board once you've climbed ── */
+.tree__float {
+  position: sticky;
+  bottom: var(--s3);
+  z-index: 6;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  height: 0;
+  pointer-events: none;
+}
+
+.tree__float-inner {
+  display: flex;
+  gap: var(--s2);
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity var(--d-med),
+    transform var(--d-med) var(--spring);
+}
+
+.tree__float-inner.is-on {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
+.tree__float-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid color-mix(in srgb, var(--tree-silk-1) 22%, transparent);
+  border-radius: 999px;
+  background: var(--tree-board-2);
+  color: var(--tree-silk-1);
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: inset 0 1px 0 var(--tree-edge-hi), 0 4px 12px var(--tree-shadow);
+}
+
+/* ── growing: the trunk draws up, the copper fades in, each year pops in as it arrives ── */
+.tree--grow .tree__trunk.is-drawing {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: tree-draw 1.1s var(--settle) 0.1s forwards;
+}
+
+.tree--grow .tree__layer.is-drawing {
+  animation: tree-fade 0.9s ease-out 0.45s both;
+}
+
+.tree--grow .tr--rail .tr__core {
+  stroke-dasharray: 1;
+}
+
+@keyframes tree-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes tree-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.tree--grow .tree-node,
+.tree--grow .tree-leaf {
+  opacity: 0;
+  transform: translateY(8px) scale(0.86);
+}
+
+.tree--grow .tree-node.is-in,
+.tree--grow .tree-leaf.is-in {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 320ms ease-out calc(var(--i, 0) * 45ms),
+    transform 460ms var(--spring) calc(var(--i, 0) * 45ms);
+}
+
+.tree--grow .tree-leaf:not(.is-in) .tree-leaf__fill {
+  stroke-dashoffset: 1;
+}
+
+/* ── focus: a selected course lights its path to the roots and the leaves; the rest dims ── */
+.tree--focus .tree-node.is-dim,
+.tree--focus .tree-leaf.is-dim {
+  opacity: 0.26;
+}
+
+.tree--focus .tr.is-dim,
+.tree--focus .tree__via.is-dim {
+  opacity: 0.1;
+}
+
+.tree--focus .tr--tap:not(.is-on):not(.is-dim),
+.tree--focus .tr--prereq:not(.is-on) {
+  opacity: 0.1;
+}
+
+.tree--focus .tr.is-on .tr__core {
+  stroke-width: 2.2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tr__pulse,
+  .tree-node--inProgress::after {
+    display: none;
+  }
+
+  .tree--grow .tree-node,
+  .tree--grow .tree-leaf,
+  .tree--grow .tree__layer.is-drawing,
+  .tree--grow .tree__trunk.is-drawing {
+    opacity: 1;
+    transform: none;
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}
+
+/* ── the switch above the Plan: Tree or Ayo's roadmap (app chrome, the normal theme) ── */
+.plan-switch {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  margin-bottom: var(--s3);
+}
+
+.plan-switch .segmented {
+  flex: 1;
+  max-width: 280px;
+}
+
+.plan-switch--sticky {
+  position: sticky;
+  top: 0;
+  z-index: 7;
+  height: 56px;
+  margin: calc(-1 * var(--s2)) calc(-1 * (var(--s4) + var(--sar))) 0 calc(-1 * (var(--s4) + var(--sal)));
+  padding: 0 calc(var(--s4) + var(--sar)) 0 calc(var(--s4) + var(--sal));
+  background: var(--bg);
+}
+
+.plan-after {
+  display: grid;
+  gap: var(--s3);
+}
+
+/* ── the detail sheet and panel: app chrome, carrying the board's swatches ── */
+.tree-detail {
+  display: grid;
+  gap: var(--s3);
+}
+
+.tree-detail .lead,
+.tree-detail__lead {
+  margin: 0;
+}
+
+.tree-detail__status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  font-weight: 600;
+}
+
+.tree-detail__when {
+  font-weight: 400;
+  color: var(--ink-2);
+}
+
+.tree-detail__section h3 {
+  margin-bottom: var(--s1);
+  font: 600 var(--fs-section) / 1.3 var(--font-brand);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+.tree-detail__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: var(--s2);
+}
+
+.tree-detail__pick {
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
+.tree-detail__creds {
+  display: grid;
+  gap: var(--s2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tree-detail__creds .inline-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  text-align: left;
+}
+
+.tree-detail__leaf {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+}
+
+.tree-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px var(--edge);
+}
+
+.tree-swatch[style] {
+  background: var(--hue);
+  border-color: var(--hue);
+}
+
+.tree-detail__empty {
+  margin: 0;
+}
+
+/* ── the desktop page: the board inset in its card, centred at a comfortable width ── */
+.plan-page__tree .tree {
+  max-width: 880px;
+  margin: var(--s3) auto 0;
+}
