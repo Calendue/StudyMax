@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useModel } from '../model.ts'
 import { authHeader, initial, isAuthConfigured } from '../auth.ts'
-import { api } from '../platform.ts'
+import { api, isNative } from '../platform.ts'
+import { webLinkFor } from '../webSync.ts'
 import { Button, Group, Row, RowIcon, SectionLabel } from '../ui/primitives.tsx'
 import { Sheet } from '../ui/Sheet.tsx'
 import { Avatar } from '../ui/chrome.tsx'
@@ -16,6 +17,23 @@ import { readGuestCall, updateGuestCall } from '../maxLive/guestCall.ts'
 export function AccountSheet() {
   const m = useModel()
   const account = m.account
+  const [webShared, setWebShared] = useState(false)
+  /** Hands this device's plan to the website: the share sheet, else the clipboard. */
+  async function shareWebLink() {
+    const url = webLinkFor(account?.uid ?? null)
+    if (!url) return
+    try {
+      const { Share } = await import('@capacitor/share')
+      await Share.share({ title: 'My StudyMax plan', url })
+    } catch {
+      try {
+        await navigator.clipboard.writeText(url)
+        setWebShared(true)
+      } catch {
+        // neither worked: nothing to hand over
+      }
+    }
+  }
 
   // Max's own settings — this account's when signed in; a guest's live in their session instead
   // (docs/BayMax/implementation/06-vapi-voice-integration.md's "Identity simplification" describes
@@ -129,6 +147,20 @@ export function AccountSheet() {
               title="Graduation year"
               subtitle={m.gradYear ? String(m.gradYear) : 'Not set'}
               onClick={() => m.setSheet('edit-gradyear')}
+            />
+          </Group>
+        </>
+      )}
+
+      {m.revealed && isNative && (
+        <>
+          <SectionLabel>On a computer</SectionLabel>
+          <Group>
+            <Row
+              leading={<RowIcon name="share" />}
+              title={webShared ? 'Link copied' : 'Continue on the web'}
+              subtitle="Opens your courses, schedule and plan on studymax.study, no sign-in"
+              onClick={() => void shareWebLink()}
             />
           </Group>
         </>
