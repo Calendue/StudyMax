@@ -407,7 +407,7 @@ function useStudyMax() {
   }, [accountUid, cloudUid, cloudJson])
 
   const matches = useMemo(
-    () => computeMatches(selectedProgram?.specializations ?? [], completed),
+    () => computeMatches(selectedProgram?.specializations ?? [], completed, selectedProgram?.degree),
     [selectedProgram, completed],
   )
 
@@ -450,10 +450,10 @@ function useStudyMax() {
     if (prevRemaining.current !== null && prevRemaining.current > 0 && hero.remaining === 0) {
       const doneHeroId = hero.spec.id
       const promoteId = setTimeout(() => {
-        const freshMatches = computeMatches(selectedProgram?.specializations ?? [], completedRef.current)
-        const next = freshMatches
-          .filter((m) => m.spec.id !== doneHeroId && m.remaining > 0)
-          .sort((a, b) => a.remaining - b.remaining || a.spec.name.localeCompare(b.spec.name))[0]
+        // Already in the hero order (computeMatches: available first, fewest left, most shared with the degree).
+        const next = computeMatches(selectedProgram?.specializations ?? [], completedRef.current, selectedProgram?.degree).filter(
+          (m) => m.spec.id !== doneHeroId && m.remaining > 0,
+        )[0]
         if (next) setHeroId(next.spec.id)
       }, 1800)
       return () => clearTimeout(promoteId)
