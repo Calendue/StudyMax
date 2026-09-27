@@ -53,7 +53,8 @@ const listSets = new WeakMap<DegreeGroup, Set<string>>()
 /** Whether `group` takes `code` at all: listed, or matched by the group's rule (or a slot with its label). */
 export function groupAccepts(group: DegreeGroup, code: string): boolean {
   const label = slotLabel(code)
-  if (label !== undefined) return label === group.label || (label === TYPED_BREADTH_LABEL && !!group.typeMin)
+  // "Junior science: Biology, Chemistry or Earth Science" is still a Junior science slot, narrowed.
+  if (label !== undefined) return label === group.label || label.startsWith(`${group.label}: `) || (label === TYPED_BREADTH_LABEL && !!group.typeMin)
   let set = listSets.get(group)
   if (!set) listSets.set(group, (set = new Set(group.courses)))
   const base = baseCode(code)

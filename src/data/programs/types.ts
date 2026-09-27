@@ -1,16 +1,5 @@
 import type { Specialization } from '../specializations.js'
-
-/**
- * A program's own degree requirements, planned alongside the specialization the student targets, so
- * the plan is a whole degree and a specialization pick also has to fit it. Never shown as something
- * the student is "closest to".
- */
-export interface Degree extends Specialization {
-  /** Courses in the whole degree (credit units ÷ 3). What the requirements don't name is free electives. */
-  totalCourses: number
-  /** Credit units the degree needs at the 200 level or higher (66 of a Four-year B.Sc.'s 120). */
-  minSeniorCu?: number
-}
+import type { Degree } from '../degrees/types.js'
 
 export interface Program {
   id: string

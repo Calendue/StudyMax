@@ -285,6 +285,8 @@ interface Case {
   inProgress: string[]
   terms: Record<string, Season>
   start: TermStart
+  /** Plan Spring/Summer terms too (DEFAULT_SUMMER_COURSES a term). */
+  springSummer?: boolean
 }
 
 type Legacy = (...args: unknown[]) => PlannedTerm[]
@@ -306,9 +308,9 @@ function build(c: Case) {
   const targets = [hero].filter((m) => m.remaining > 0)
   const degree = computerScience.degree
   const plan = LEGACY
-    ? (buildStudentPlan as unknown as Legacy)(targets.map((t) => t.spec), planningSpecs, completed, inProgress, LOAD, c.start, false, DEFAULT_SUMMER_COURSES, degree, booked)
+    ? (buildStudentPlan as unknown as Legacy)(targets.map((t) => t.spec), planningSpecs, completed, inProgress, LOAD, c.start, c.springSummer ?? false, DEFAULT_SUMMER_COURSES, degree, booked)
     : buildStudentPlan(targets.map((t) => t.spec), planningSpecs, completed, inProgress, LOAD, c.start, {
-        springSummer: false,
+        springSummer: c.springSummer ?? false,
         summerPerTerm: DEFAULT_SUMMER_COURSES,
         degree,
         booked,
@@ -391,7 +393,9 @@ function check(c: Case) {
     const before = passedBefore(x.term)
     const now = sameTerm(x.term)
     for (const group of courseInfo[x.code]?.requires ?? []) {
-      if (group.length > 0 && !group.some((o) => before.has(o))) v.I3.push(`${x.code} (${x.term}) before its prerequisite ${group.join('/')}`)
+      // Credit that rules a course out (CME 331 for CMPT 215) stands in for it as a prerequisite.
+      const has = (o: string) => before.has(o) || (courseInfo[o]?.antirequisites ?? []).some((a) => before.has(a))
+      if (group.length > 0 && !group.some(has)) v.I3.push(`${x.code} (${x.term}) before its prerequisite ${group.join('/')}`)
     }
     for (const group of courseInfo[x.code]?.concurrent ?? []) {
       if (group.length > 0 && !group.some((o) => before.has(o) || now.has(o))) v.I3.push(`${x.code} (${x.term}) without its co-requisite ${group.join('/')}`)
@@ -411,9 +415,19 @@ function check(c: Case) {
   }
   for (const x of slots) {
     const label = electiveLabel(x.code)
+    // No 300/400-level CMPT course ran in a Spring/Summer term in 2025-27 (Banner).
+    if (parse(x.term)?.season === 'Spring/Summer' && /410|senior cmpt/i.test(label)) v.I2.push(`"${label}" in ${x.term}, when no senior CMPT course runs`)
     const done = allCu(passedBefore(x.term))
     if (/410/.test(label) && done < 60) v.I3.push(`"${label}" in ${x.term} after only ${done} cu`)
     else if (/senior cmpt/i.test(label) && done < 30) v.I3.push(`"${label}" in ${x.term} after only ${done} cu`)
+  }
+
+  // I3 (antirequisites): never a course the student's credit rules out ("Students with credit for X
+  // may not take this course for credit").
+  const had0 = new Set([...completed, ...inProgress])
+  for (const x of named) {
+    const clash = (courseInfo[x.code]?.antirequisites ?? []).filter((a) => had0.has(a))
+    if (clash.length > 0) v.I3.push(`${x.code} planned, but the student has ${clash.join(', ')} (an antirequisite)`)
   }
 
   // I4: at most three 300/400-level CMPT courses a term, booked included.
@@ -438,7 +452,7 @@ function check(c: Case) {
   }
 
   // I7: a first-year's shape.
-  if (c.kind === 'A' || c.kind === 'B') {
+  if ((c.kind === 'A' || c.kind === 'B') && !c.springSummer) {
     const fw = timeline.filter((t) => parse(t.label)?.season !== 'Spring/Summer' && t.courses.length > 0)
     const first = fw[0] ? orderOf(fw[0].label) : 0
     const last = fw.at(-1) ? orderOf(fw.at(-1)!.label) : 0
@@ -469,6 +483,10 @@ function check(c: Case) {
       if (code && where.get(code) !== 2 && !had.has(code)) v.I7.push(`${code} in Year ${where.get(code)}, not Year 2`)
     }
     const free = slots.filter((x) => /free elective|senior elective|200-level or higher/i.test(electiveLabel(x.code)))
+    const lastFW = Math.max(...fw.map((t) => yearOf(t.label)))
+    for (const x of slots.filter((s) => /business|economics|science/i.test(electiveLabel(s.code)) && !/breadth/i.test(electiveLabel(s.code)))) {
+      if (yearOf(x.term) === lastFW && free.some((f) => yearOf(f.term) < lastFW)) v.I7.push(`"${electiveLabel(x.code)}" (Year 1-2) in the last year behind free electives`)
+    }
     const lastYear = Math.max(...where.values())
     const late = free.filter((x) => yearOf(x.term) === lastYear)
     if (free.length > 1 && late.length === free.length) v.I7.push(`all ${free.length} free electives piled into the last year`)
@@ -524,9 +542,12 @@ const cases: Case[] = [
 const B_COURSES = ['CMPT141', 'MATH110', 'MATH163', 'ENG111', 'BIOL120']
 const C_COURSES = ['CMPT141', 'CMPT145', 'MATH110', 'MATH163', 'MATH164', 'ENG111', 'ENG113', 'INDG107', 'BIOL120', 'PHYS115', 'CMPT214', 'CMPT270', 'PHIL232', 'ECON111', 'PSY120']
 cases.push({ name: 'A default', kind: 'A', completed: [], inProgress: [], terms: {}, start: nextFall })
+cases.push({ name: 'A default +summer', kind: 'A', completed: [], inProgress: [], terms: {}, start: nextFall, springSummer: true })
+cases.push({ name: 'C +CME331 prog-lang', kind: 'C', spec: computerScience.specializations.find((s) => s.id === 'programming-languages'), completed: ['CMPT141', 'CMPT145', 'MATH110', 'MATH163', 'MATH164', 'ENG111', 'ENG113', 'INDG107', 'BIOL120', 'PHYS115', 'CMPT214', 'CMPT270', 'PHIL232', 'ECON111', 'PSY120', 'CME331'], inProgress: [], terms: {}, start: next })
 for (const spec of computerScience.specializations) {
   cases.push({ name: `A ${spec.id}`, kind: 'A', spec, completed: [], inProgress: [], terms: {}, start: nextFall })
   cases.push({ name: `B ${spec.id}`, kind: 'B', spec, completed: [], inProgress: B_COURSES, terms: Object.fromEntries(B_COURSES.map((x) => [x, 'Fall'])), start: next })
+  cases.push({ name: `B ${spec.id} +summer`, kind: 'B', spec, completed: [], inProgress: B_COURSES, terms: Object.fromEntries(B_COURSES.map((x) => [x, 'Fall'])), start: next, springSummer: true })
   cases.push({ name: `C ${spec.id}`, kind: 'C', spec, completed: C_COURSES, inProgress: [], terms: {}, start: next })
 }
 

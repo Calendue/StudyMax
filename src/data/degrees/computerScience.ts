@@ -95,6 +95,8 @@ export const computerScienceBsc4: Degree = {
       matches: (code) => /^INDG[234]\d\d$/.test(code),
       open: true,
       year: 1,
+      // The sheet's Year 1 Winter slot is "Indigenous or breadth": what moves when Year 1 is full.
+      flexible: true,
     },
     { id: 'c1-qr', block: 'C1', label: 'Quantitative reasoning', needCu: 6, courses: ['MATH163', 'MATH164'], year: 1 },
 
@@ -122,7 +124,9 @@ export const computerScienceBsc4: Degree = {
       oneOf: [['PHYS117', 'PHYS125']],
       areas: { capCu: 6, byArea: scienceAreas },
       open: true,
+      // A junior science each Year 1 term; the third is Year 2 Fall's "breadth or science".
       year: 1,
+      yearCu: 6,
     },
     {
       id: 'c3-phil',

@@ -1,4 +1,5 @@
 import type { RequirementGroup, Specialization } from '../data/specializations.js'
+import type { Degree } from '../data/degrees/types.js'
 
 export interface UnsatisfiedGroup {
   /** Courses in this slot the student hasn't completed yet (any one/N of them would count). */
@@ -53,9 +54,9 @@ function matchOne(spec: Specialization, completed: Set<string>): SpecializationM
  * names (a first-year is equally far from several; the one that shares most with the degree wins),
  * then name.
  */
-export function compareMatches(degree?: Specialization): (a: SpecializationMatch, b: SpecializationMatch) => number {
-  // The degree's named courses: its open-choice lists (`label`) are electives, not what it names.
-  const named = new Set(degree?.requirements.filter((g) => !g.label).flatMap((g) => g.courses) ?? [])
+export function compareMatches(degree?: Degree): (a: SpecializationMatch, b: SpecializationMatch) => number {
+  // The degree's named courses: its open-choice lists are electives, not what it names.
+  const named = new Set(degree?.groups.filter((g) => !g.open).flatMap((g) => g.courses) ?? [])
   const shared = (m: SpecializationMatch) => new Set(m.spec.requirements.flatMap((g) => g.courses).filter((c) => named.has(c))).size
   return (a, b) =>
     Number(Boolean(a.spec.unavailable)) - Number(Boolean(b.spec.unavailable)) ||
@@ -69,7 +70,7 @@ export function computeMatches(
   specializations: Specialization[],
   completed: Set<string>,
   /** The program's degree, where it's mapped: breaks ties toward what it names. */
-  degree?: Specialization,
+  degree?: Degree,
 ): SpecializationMatch[] {
   return specializations.map((spec) => matchOne(spec, completed)).sort(compareMatches(degree))
 }

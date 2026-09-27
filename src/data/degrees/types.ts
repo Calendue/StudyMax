@@ -35,6 +35,13 @@ export interface DegreeGroup {
   prefer?: string[]
   /** The advising sheet's year tag (1-4): the year advisors put this requirement in. */
   year?: number
+  /** How many of its credit units the year tag covers; the rest fall a year later (two of three sciences in Year 1). */
+  yearCu?: number
+  /**
+   * When its year is full, this is the slot that moves to the next one (the sheet's Year 1 Winter
+   * "Indigenous or breadth").
+   */
+  flexible?: boolean
   /** Areas within the group with a per-area ceiling (C3 junior science: at most 6 cu from one area). */
   areas?: { capCu: number; byArea: Record<string, string[]> }
   /** At least `cu` of this group from these program types (C2: 3 cu of Humanities or Social Science). */

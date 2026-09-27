@@ -22,6 +22,7 @@ import {
   type TermStart,
 } from './lib/plan.ts'
 import { computeCredentials } from './lib/credentials.ts'
+import { treeDegreeProgress } from './lib/degreeProgress.ts'
 import { bookedByTerm, seasonNow, takingNow, termLabels, termsAfterUpload, withCurrentCourses } from './lib/currentTerms.ts'
 import { searchCourses, catalogueTitle } from './lib/courseSearch.ts'
 import { courseInfo } from './data/prereqs.ts'
@@ -905,6 +906,11 @@ function useStudyMax() {
   )
   // The plan as the roadmap draws it: what's left, plus the courses already under way in their terms.
   const roadmap = useMemo(() => withCurrentCourses(plan, currentByTerm, today), [plan, currentByTerm, today])
+  // The degree in credit units for the tree's readout and milestones: done, under way and planned.
+  const treeDegree = useMemo(
+    () => (selectedProgram?.degree ? treeDegreeProgress(selectedProgram.degree, completed, inProgressCourses, plan) : undefined),
+    [selectedProgram, completed, inProgressCourses, plan],
+  )
   const [planCopied, setPlanCopied] = useState(false)
   // Clipboard writes are blocked in some browsers and contexts. Rather than a button that appears to
   // do nothing, the plan text is shown for the student to select by hand.
@@ -1616,6 +1622,7 @@ function useStudyMax() {
     removeInProgress,
     inProgressTerms,
     completedTerms,
+    treeDegree,
     roadmap,
     resultsStale,
     matches,
