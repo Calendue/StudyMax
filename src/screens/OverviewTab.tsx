@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useModel } from '../model.ts'
 import { firstName } from '../auth.ts'
 import { KIND_LABEL, WHY_IT_MATTERS, WHY_SHORT, courseCode, plural } from '../format.ts'
-import type { SpecializationMatch } from '../lib/match.ts'
+import { withoutRegistered, type SpecializationMatch } from '../lib/match.ts'
+import { heroNextCourse } from '../lib/widgetSnapshot.ts'
 import { ScreenTitle } from '../ui/chrome.tsx'
 import { Appear, Button, Chip, CountUp, Group, OptionList, Ring, Row, SectionLabel } from '../ui/primitives.tsx'
 import { Sheet } from '../ui/Sheet.tsx'
@@ -25,11 +26,53 @@ function WhyItMatters() {
   )
 }
 
+/**
+ * The hero's open requirements, minus the courses the student is already registered for (those
+ * get one line underneath with their term, so the list is only what still needs deciding).
+ */
+export function HeroLeft({ index = 0 }: { index?: number }) {
+  const m = useModel()
+  const { left, registered } = withoutRegistered(m.hero.unsatisfied, m.inProgressCourses)
+  return (
+    <>
+      {left.length > 0 && (
+        <Group>
+          {left.map((g, i) => (
+            <Row
+              key={i}
+              index={index + i}
+              leading={<span className="todo" aria-hidden />}
+              title={<OptionList options={g.options} label={m.courseLabel} />}
+              subtitle={g.need > 1 ? `Any ${g.need} of these` : g.options.length > 1 ? 'Any one of these' : undefined}
+            />
+          ))}
+        </Group>
+      )}
+      {registered.length > 0 && (
+        <p className="footnote">
+          Already registered:{' '}
+          {registered.map((c, i) => (
+            <span key={c}>
+              {i > 0 && ', '}
+              <strong>{courseCode(c)}</strong>
+              {m.inProgressTerms[c] ? ` (${m.inProgressTerms[c]})` : ''}
+            </span>
+          ))}
+          . {registered.length === 1 ? 'It counts' : 'They count'} once you pass.
+        </p>
+      )}
+    </>
+  )
+}
+
 export function OverviewTab() {
   const m = useModel()
   const hero = m.hero
   const done = hero.remaining === 0
   const name = firstName(m.account)
+  const next = heroNextCourse(hero, m.topOverlap, m.plan.flatMap((t) => t.courses.map((c) => c.code)), m.inProgressCourses)
+  const registered = withoutRegistered(hero.unsatisfied, m.inProgressCourses).registered.length
+  const nextOverlap = m.topOverlap && m.topOverlap.course === next ? m.topOverlap : null
 
   return (
     <>
@@ -56,7 +99,7 @@ export function OverviewTab() {
           <p className="hero__count">
             {done
               ? "Done. It'll show on your transcript."
-              : `${hero.doneCount} of ${plural(hero.totalRequired, 'course')} already done`}
+              : `${hero.doneCount} of ${plural(hero.totalRequired, 'course')} already done${registered > 0 ? ` · ${registered} registered` : ''}`}
           </p>
         </div>
       </Appear>
@@ -69,17 +112,7 @@ export function OverviewTab() {
           <Appear index={2}>
             <SectionLabel>What&rsquo;s left</SectionLabel>
           </Appear>
-          <Group>
-            {hero.unsatisfied.map((g, i) => (
-              <Row
-                key={i}
-                index={2 + i}
-                leading={<span className="todo" aria-hidden />}
-                title={<OptionList options={g.options} label={m.courseLabel} />}
-                subtitle={g.need > 1 ? `Any ${g.need} of these` : g.options.length > 1 ? 'Any one of these' : undefined}
-              />
-            ))}
-          </Group>
+          <HeroLeft index={2} />
           <Appear index={4} className="hero-action">
             <Button block onClick={() => m.setTab('plan')}>
               See your term-by-term plan
@@ -94,23 +127,31 @@ export function OverviewTab() {
         </>
       )}
 
-      {m.topOverlap && (
+      {next && (
         <>
           <Appear index={5}>
             <SectionLabel>The one course to take next</SectionLabel>
           </Appear>
           <Appear index={5} className="spotlight">
-            <p className="spotlight__code">{courseCode(m.topOverlap.course)}</p>
-            <p className="spotlight__title">{m.courseTitle(m.topOverlap.course)}</p>
-            <p className="spotlight__why">
-              Counts toward <strong>{m.topOverlap.specs.length} specializations</strong> at once, more than any other
-              course you haven&rsquo;t taken.
-            </p>
-            <div className="chips">
-              {m.topOverlap.specs.map((s) => (
-                <Chip key={s.id}>{s.name}</Chip>
-              ))}
-            </div>
+            <p className="spotlight__code">{courseCode(next)}</p>
+            <p className="spotlight__title">{m.courseTitle(next)}</p>
+            {nextOverlap ? (
+              <>
+                <p className="spotlight__why">
+                  Counts toward <strong>{nextOverlap.specs.length} specializations</strong> at once, more than any other
+                  course you haven&rsquo;t taken.
+                </p>
+                <div className="chips">
+                  {nextOverlap.specs.map((s) => (
+                    <Chip key={s.id}>{s.name}</Chip>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <p className="spotlight__why">
+                The next course {hero.spec.name} needs that your plan schedules.
+              </p>
+            )}
           </Appear>
         </>
       )}

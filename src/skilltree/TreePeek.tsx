@@ -5,6 +5,7 @@ import { Icon } from '../ui/Icon.tsx'
 import { Ring } from '../ui/primitives.tsx'
 import { statusLabel, type TreeSelection } from './planView.ts'
 import { Swatch } from './TreeDetail.tsx'
+import { useElectivePicks } from '../lib/electivePicks.ts'
 
 function Codes({ label, codes, onSelect, arrow }: { label: string; codes: string[]; onSelect: (code: string) => void; arrow?: boolean }) {
   if (codes.length === 0) return null
@@ -50,6 +51,7 @@ export function TreePeek({
   onDetails: () => void
   onClose: () => void
 }) {
+  const picks = useElectivePicks()
   const toCourse = (code: string) => onSelect({ kind: 'node', code })
   const node = selection.kind === 'node' ? layout.nodes.find((n) => n.code === selection.code) : undefined
   const leaf = selection.kind === 'leaf' ? layout.leaves[selection.index] : undefined
@@ -60,7 +62,7 @@ export function TreePeek({
       <div className="tree-peek__head">
         {node ? (
           <div className="tree-peek__id">
-            <p className="tree-peek__name">{courseCode(node.code)}</p>
+            <p className="tree-peek__name">{courseCode(picks[node.code] ?? node.code)}</p>
             <p className="tree-peek__status">
               <Swatch kind={node.elective ? 'elective' : node.status} />
               {node.elective ? `Elective · ${statusLabel(node)}` : statusLabel(node)}

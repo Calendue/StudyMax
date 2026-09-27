@@ -608,6 +608,11 @@
   border-style: dashed;
 }
 
+/* An elective slot with the student's own course in it: solid again, a real course now. */
+.tree-node--picked {
+  border-style: solid;
+}
+
 .tree-node--locked {
   border-color: var(--tree-locked);
   box-shadow: none;
