@@ -1041,8 +1041,31 @@
 }
 
 .roadmap__node-code {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font: 600 var(--fs-body) / 1.2 var(--font-brand);
   white-space: nowrap;
+}
+
+/* An unnamed elective's label ("Indigenous learning course") is longer than a code: two lines. */
+.roadmap__node-code--elective {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  white-space: normal;
+}
+
+.roadmap__row-nodes--dense .roadmap__node {
+  padding: var(--s2);
+}
+
+.roadmap__row-nodes--dense .roadmap__node-code {
+  font-size: 0.8125rem;
+}
+
+.roadmap__row-nodes--dense .roadmap__node-title {
+  font-size: 0.75rem;
 }
 
 .roadmap__node-dot {

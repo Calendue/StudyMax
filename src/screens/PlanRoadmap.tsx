@@ -169,7 +169,8 @@ export function PlanRoadmap({ selected, onSelect }: { selected?: string | null; 
               {row.label}
             </p>
             <div
-              className="roadmap__row-nodes"
+              // A full term (4-5 courses) shares a phone's width five ways: smaller type so codes fit.
+              className={`roadmap__row-nodes${row.codes.length >= 4 ? ' roadmap__row-nodes--dense' : ''}`}
               style={{ gridTemplateColumns: `repeat(${row.codes.length}, minmax(0, 1fr))`, gap: NODE_GAP, height: NODE_HEIGHT }}
             >
               {row.codes.map((code) => {
@@ -245,13 +246,15 @@ function RoadmapNodeView({
   return (
     <button type="button" className={classes.join(' ')} onClick={onSelect}>
       <span className="roadmap__node-head">
-        <span className="roadmap__node-code">{courseCode(node.code)}</span>
+        <span className={`roadmap__node-code${isElective(node.code) ? ' roadmap__node-code--elective' : ''}`}>
+          {courseCode(node.code)}
+        </span>
         {node.alsoAdvances.length > 0 && (
           <span className="roadmap__node-dot" title={`Also counts toward ${node.alsoAdvances.join(', ')}`} />
         )}
         {node.state === 'prerequisite' && <span className="roadmap__node-tag">Prereq</span>}
       </span>
-      <span className="roadmap__node-title">{title}</span>
+      <span className="roadmap__node-title">{isElective(node.code) ? 'Your choice' : title}</span>
     </button>
   )
 }

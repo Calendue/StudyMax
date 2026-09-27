@@ -14,7 +14,7 @@ export const nursing: Program = {
   name: 'Nursing',
   courseTitles: {},
   specializationsAreMajors: true,
-  coursesPerTerm: 6,
+  coursesPerTerm: 5,
   specializations: [
     {
       id: 'bsn',

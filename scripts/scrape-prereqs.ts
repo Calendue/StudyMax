@@ -80,10 +80,23 @@ export function parsePrerequisiteCodes(text: string): string[][] {
   if (!text) return []
   const groups: string[][] = []
 
-  // Split on "and" / ";" — the AND spine. "or" and comma lists inside a clause stay together.
-  for (const clause of text.split(/;|\band\b/i)) {
-    const codes = [...clause.matchAll(/\b([A-Z]{2,4})\s*(\d{3})\b/g)].map((m) => `${m[1]}${m[2]}`)
-    if (codes.length > 0) groups.push([...new Set(codes)])
+  // A clause a Grade 12 course also satisfies ("Computer Science 30, CMPT 140.3, BINF 151.3",
+  // "Biology 30 or BIOL 107") is met by a high-school diploma, so it isn't a university course the
+  // plan has to add first.
+  const highSchool = (clause: string) => /\b[AB]?30\b(?!\s*credit)/.test(clause)
+  // Split on ";" then "and": the AND spine. "or" and comma lists inside a clause stay together. A
+  // "; or …" segment is an alternative to the one before it, so when high school covers that one
+  // ("(Computer Science 30 …) and (Pre-Calculus 30 …); or MATH 110"), the alternative is moot too.
+  let previousCovered = false
+  for (const segment of text.split(';')) {
+    if (previousCovered && /^\s*or\b/i.test(segment)) continue
+    const clauses = segment.split(/\band\b/i)
+    previousCovered = clauses.every(highSchool)
+    for (const clause of clauses) {
+      if (highSchool(clause)) continue
+      const codes = [...clause.matchAll(/\b([A-Z]{2,4})\s*(\d{3})\b/g)].map((m) => `${m[1]}${m[2]}`)
+      if (codes.length > 0) groups.push([...new Set(codes)])
+    }
   }
 
   return groups

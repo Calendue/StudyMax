@@ -196,6 +196,9 @@ interface Draft {
   col: number
 }
 
+/** A full-time term's load: completed courses have no dates, so this is what a term on the tree holds. */
+const TERM_LOAD = 5
+
 export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
   const g = geometry(Math.max(300, input.width))
   const width = Math.max(300, Math.round(input.width))
@@ -229,10 +232,16 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
     drafts.set(code, { code, ...d, creds: credsOf(code), elective: null, order: order++, tier: 0, row: 0, col: 0 })
   }
 
-  for (const code of [...completed].sort()) {
+  // By course level, but a year holds two full terms at most: a student who took many 100-level
+  // courses took some of them later, so the rest move up a year (never past the last finished one).
+  const perYear = new Map<number, number>()
+  for (const code of [...completed].sort((a, b) => courseLevel(a) - courseLevel(b) || a.localeCompare(b))) {
+    let year = Math.min(lastDoneYear, Math.max(1, courseLevel(code)))
+    while (year < lastDoneYear && (perYear.get(year) ?? 0) >= 2 * TERM_LOAD) year++
+    perYear.set(year, (perYear.get(year) ?? 0) + 1)
     add(code, {
       status: 'completed',
-      year: Math.min(lastDoneYear, Math.max(1, courseLevel(code))),
+      year,
       lane: null,
       term: '',
       termKnown: false,
@@ -328,9 +337,11 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
       const seq = links.filter((l) => l.sequencing && drafts.get(l.from)!.status === 'completed' && drafts.get(l.to)!.status === 'completed')
       const hasPrereq = seq.some((l) => l.to === d.code && sameYear(l.from, d.code))
       const unlocks = seq.some((l) => l.from === d.code && sameYear(l.to, d.code))
+      // A side that already holds a full term's load passes the course to the other side.
+      const room = (lane: 'fall' | 'winter') => count[lane] < TERM_LOAD
       if (year === currentYear && current.season !== 'Fall') d.lane = 'fall'
-      else if (hasPrereq) d.lane = 'winter'
-      else if (unlocks) d.lane = 'fall'
+      else if (hasPrereq && room('winter')) d.lane = 'winter'
+      else if (unlocks && room('fall')) d.lane = 'fall'
       if (d.lane) count[d.lane]++
       else free.push(d)
     }

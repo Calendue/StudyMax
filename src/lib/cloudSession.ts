@@ -24,7 +24,7 @@ export interface CloudSession {
 }
 
 /** The choices the app offers; anything outside them is stored as the default instead. */
-export const MAX_COURSES_PER_TERM = 6
+export const MAX_COURSES_PER_TERM = 5
 export const MAX_SUMMER_COURSES = 3
 const DEFAULT_PER_TERM = 2
 

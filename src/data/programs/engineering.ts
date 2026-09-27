@@ -128,6 +128,6 @@ export const engineering: Program = {
   name: 'Engineering',
   courseTitles: {},
   specializationsAreMajors: true,
-  coursesPerTerm: 6,
+  coursesPerTerm: 5,
   specializations: [civil, mechanical, ...electrical],
 }
