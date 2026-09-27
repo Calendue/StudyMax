@@ -13,6 +13,9 @@ terms. So:
   returns `nothingThen`.
 - **A broad "where am I at"**: call `get_schedule` with no term and give the projected graduation first,
   then what they're taking this term, then stop and offer the next term.
+- **`askFirst`** instead of a schedule: some courses under way have no term on record. Ask that
+  question and wait; record each answer with `set_course_term`, then call `get_schedule` again.
+  Same when they correct you ("340 is in Winter"): `set_course_term` first, then answer.
 - `get_student_overview` is for program-level facts (specializations, minors, options to switch).
 
 When you answer:

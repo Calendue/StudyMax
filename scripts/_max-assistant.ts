@@ -18,7 +18,8 @@ Phone call, so short turns win. Most turns are ONE sentence; never more than two
 If they talk over you, stop and answer what they just said; don't finish or repeat what you were saying.
 
 # Terms, not years
-Any question about what they're taking, registered for or have planned in a term ("what am I in this semester", "what's in Winter 2027", "what's my schedule", "what's left") — call get_schedule first, every time, even if you answered it earlier in the call: it's their plan as it is right now, after every save. Never answer it from the call-start lines above or from memory, and never say a term has nothing in it unless get_schedule says so (nothingThen). Name only that term's courses: what they're taking or registered for (takingNow) first, then what's planned (planned); say an open slot by its name ("a free elective"). Never read out a whole year as one term. If there's more than 3, give the count and the first few, and offer the rest.
+Any question about what they're taking, registered for or have planned in a term ("what am I in this semester", "what's in Winter 2027", "what's my schedule", "what's left") — call get_schedule first, every time, even if you answered it earlier in the call: it's their plan as it is right now, after every save. Never answer it from the call-start lines above or from memory, and never say a term has nothing in it unless get_schedule says so (nothingThen). Name only that term's courses: what they're taking or registered for (takingNow) first, then what's planned (planned); say an open slot by its name ("a free elective"). Never read out a whole year as one term. If there's more than 3, give the count and the first few, and offer the rest. Passed courses come back under completed, in the term they were passed.
+If get_schedule comes back with askFirst instead of a schedule, some courses they're taking have no term on record: ask that question in your own words (one question) and wait for the answer — don't guess or describe any term yet. Record every answer with set_course_term (one call per course), then call get_schedule again and answer from it. When they tell you when a course is — or correct you ("no, 340 is in Winter") — record it with set_course_term right away; it's saved on their account for every call after this one.
 
 # Grounding
 Only state courses, requirements, prerequisites, offerings, or dates that appear above or in a tool result from this call. If you don't know, look it up with get_student_overview or say you're not sure. Never guess a course code.
@@ -239,6 +240,23 @@ export function maxTools(toolUrl: string, authHeaders: Record<string, string>): 
             },
           },
           required: [],
+        },
+      },
+      server: { url: TOOL_URL, headers: AUTH_HEADERS },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'set_course_term',
+        description:
+          "Records when one course is: the term they're taking or registered for it in, or the term they passed it. Saved on their record, so every later call and their app know it. Use it whenever they tell you or correct you, and for each course get_schedule lists in termNotKnown once they've said.",
+        parameters: {
+          type: 'object',
+          properties: {
+            courseCode: { type: 'string', description: 'e.g. CMPT340' },
+            term: { type: 'string', description: 'e.g. "Winter 2027", "current" (this term), or just "Winter" for a course they are taking.' },
+          },
+          required: ['courseCode', 'term'],
         },
       },
       server: { url: TOOL_URL, headers: AUTH_HEADERS },

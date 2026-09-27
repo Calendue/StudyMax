@@ -82,6 +82,9 @@ model StudentCourse {
   // "What courses have you registered for?" list (this term), kept apart from the transcript's in-progress codes.
   status          String   @db.VarChar
   source          String   @default("manual") @db.VarChar // "manual" | "transcript_upload"
+  // The term it was passed, is being taken or is registered for: "Winter 2027". The record of when,
+  // for Max and every device; null when nothing has said. A save that doesn't know keeps what's here.
+  term            String?  @db.VarChar
   createdAt       DateTime @default(now()) @db.Timestamp(6)
   updatedAt       DateTime @updatedAt @db.Timestamp(6)
 

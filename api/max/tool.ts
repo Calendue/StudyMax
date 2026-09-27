@@ -19,6 +19,7 @@ import {
   presentScenario,
   runScenario,
   snapshotFromCall,
+  storedTermsOf,
   termOf,
   type CallScope,
 } from './_scenarios.js'
@@ -34,6 +35,7 @@ import { electiveOptions } from '../../src/lib/max/catalogue.js'
 import { programs } from '../../src/data/programs/index.js'
 import { currentTermOf, termFromLabel, termOrder, upcomingTerm, type TermStart } from '../../src/lib/plan.js'
 import { getTerms, searchCourse } from '../_banner.js'
+import { termLabel } from '../../src/lib/currentTerms.js'
 import { bannerTermCode, formatMeeting, openSeats, statusLabel } from '../../src/lib/classTracker.js'
 
 interface VercelRequest {
@@ -142,6 +144,7 @@ const SKILL_BY_TOOL: Record<string, string> = {
   app_action: 'manage_roadmap',
   check_seats: 'check_seats',
   get_schedule: 'summarize_roadmap',
+  set_course_term: 'summarize_roadmap',
 }
 
 /** One short, tool-specific fact worth seeing in a log line — never the full payload. */
@@ -553,16 +556,31 @@ async function runGetSchedule(call: ResolvedCall, args: Record<string, unknown>)
   const current = await loadCurrentSnapshot(call.userId, scopeOf(call))
   if (!current) return { ok: false, code: 'NO_PLAN', speakable: "I don't have a roadmap on file for you yet." }
   const { snapshot, baselineTerms } = current
-  const schedule = scheduleByTerm(adapterInput(snapshot), baselineTerms)
+  // Passed courses by the term the record dates them (a guest's live on their device, not here).
+  const passed = call.isGuest ? {} : (await storedTermsOf(call.userId)).passed
+  const schedule = scheduleByTerm(adapterInput(snapshot), baselineTerms, passed)
+  // Under way with no term on record or from the app: placed in the term running now, which may be wrong.
+  const unsure = snapshot.inProgress.filter((c) => !snapshot.inProgressSeasons?.[c]).map((c) => c.replace(/^([A-Z]+)(\d)/, '$1 $2'))
   const graduation = baselineTerms.at(-1)?.label ?? null
   const open = await db().scenario.findFirst({
     where: { userId: call.userId, callId: call.callId, status: { in: ['computed', 'presented'] } },
     select: { scenarioId: true },
   })
+  // A schedule built on guessed terms would be wrong wherever the guess is: ask first, answer after.
+  if (unsure.length > 0) {
+    const list = unsure.length > 1 ? `${unsure.slice(0, -1).join(', ')} and ${unsure.at(-1)}` : unsure[0]
+    const now = labelOfTerm(currentTermOf(snapshot.today))
+    return {
+      termNotKnown: unsure,
+      askFirst: `Before I read out your schedule: I don't have a term on record for ${list}. Which of those are this term, ${now}, and which are later?`,
+      currentTerm: now,
+    }
+  }
   const extras = {
     currentTerm: labelOfTerm(currentTermOf(snapshot.today)),
     projectedGraduation: graduation,
     ...(snapshot.droppedCourses.length > 0 ? { droppedInSavedPlan: snapshot.droppedCourses } : {}),
+    ...(unsure.length > 0 ? { termNotKnown: unsure } : {}),
     // The schedule is the saved plan; a change shown but not saved yet isn't in it.
     ...(open ? { unsavedChangeOpen: true } : {}),
   }
@@ -581,15 +599,68 @@ async function runGetSchedule(call: ResolvedCall, args: Record<string, unknown>)
       : first && termOrder(term) < termOrder(termFromLabel(first)!)
         ? 'That term is before anything in your plan.'
         : 'Nothing is planned in that term — the plan skips it.'
-  return { term: label, takingNow: entry?.takingNow ?? [], planned: entry?.planned ?? [], ...(why ? { nothingThen: why } : {}), ...extras }
+  return {
+    term: label,
+    ...(entry?.completed.length ? { completed: entry.completed } : {}),
+    takingNow: entry?.takingNow ?? [],
+    planned: entry?.planned ?? [],
+    ...(why ? { nothingThen: why } : {}),
+    ...extras,
+  }
 }
 
 const labelOfTerm = (t: TermStart) => `${t.season} ${t.year}`
+
+/**
+ * Records when a course is — "I'm taking CMPT 340 in Winter", "I did MATH 110 in Fall 2025": on the
+ * student's own record (StudentCourse.term, what every device and every later call read), in this
+ * call's plan, and on their screen. A guest's goes to this call and their screen only.
+ */
+async function runSetCourseTerm(call: ResolvedCall, args: Record<string, unknown>): Promise<ToolResponse> {
+  const code = normalizeCourseCode(args.courseCode)
+  const current = await loadCurrentSnapshot(call.userId, scopeOf(call))
+  if (!current) return { ok: false, code: 'NO_PLAN', speakable: "I don't have a roadmap on file for you yet." }
+  const { snapshot } = current
+  const spoken = code.replace(/^([A-Z]+)(\d)/, '$1 $2')
+  const underWay = snapshot.enrolled.includes(code)
+  const passed = snapshot.completed.includes(code)
+  if (!underWay && !passed) {
+    return { ok: false, code: 'NOT_ON_RECORD', speakable: `I don't have ${spoken} as something you've taken or are taking.` }
+  }
+  // "Winter" alone, for a course they're taking: the next Winter (the app's own reading of a season).
+  const said = typeof args.term === 'string' ? args.term : ''
+  const bare = /^\s*(fall|winter|spring|summer|spring\/summer)\s*$/i.test(said) && underWay ? termOf(termLabel(termOf(`${said} 2030`)!.season, snapshot.today)) : null
+  const term = bare ?? seatTerm(args.term, snapshot.today)
+  if (!term) return { ok: false, code: 'INVALID_TERM', speakable: "I didn't catch which term — could you say it like Winter 2027?" }
+  const label = labelOfTerm(term)
+  const now = currentTermOf(snapshot.today)
+  if (underWay && termOrder(term) < termOrder(now)) {
+    return { ok: false, code: 'TERM_PAST', speakable: `${label} is already over — is ${spoken} this term or a later one?` }
+  }
+  if (passed && termOrder(term) > termOrder(now)) {
+    return { ok: false, code: 'TERM_AHEAD', speakable: `You've passed ${spoken}, so it was in an earlier term — which one?` }
+  }
+
+  if (!call.isGuest) {
+    await db().studentCourse.updateMany({
+      where: { userId: call.userId, courseCode: code, status: passed && !underWay ? 'completed' : { in: ['in_progress', 'registered'] } },
+      data: { term: label },
+    })
+  }
+  if (underWay && call.planInputs) {
+    const planInputs = { ...call.planInputs, inProgressSeasons: { ...(call.planInputs.inProgressSeasons ?? {}), [code]: term.season } }
+    await db().maxCall.update({ where: { callId: call.callId }, data: { planInputs: planInputs as unknown as Prisma.InputJsonValue } })
+  }
+  await publish(call.liveToken, { type: 'course.term', courseCode: code, term: label })
+  return { ok: true, courseCode: spoken, term: label, speakable: `Got it — ${spoken} is ${passed && !underWay ? 'from' : 'in'} ${label}.` }
+}
 
 async function executeTool(name: string, call: ResolvedCall, args: Record<string, unknown>): Promise<ToolResponse> {
   switch (name) {
     case 'get_schedule':
       return runGetSchedule(call, args)
+    case 'set_course_term':
+      return runSetCourseTerm(call, args)
     case 'check_seats':
       return runCheckSeats(call, args)
     case 'get_student_overview':

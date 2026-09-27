@@ -10,7 +10,8 @@
 import { PrismaClient } from '@prisma/client'
 import { regenerate, validate, type AdapterInput } from '../src/lib/max/planningAdapter.ts'
 import { DEFAULT_COURSES_PER_TERM, DEFAULT_SUMMER_COURSES } from '../src/lib/plan.ts'
-import { completedCourses, inProgressCourses } from '../src/data/transcript.ts'
+import { completedCourses, inProgressCourses, inProgressTerms } from '../src/data/transcript.ts'
+import { termLabel } from '../src/lib/currentTerms.ts'
 
 const AUTH_UID = 'baymax-demo-student'
 const USASK_INSTITUTION = 'University of Saskatchewan'
@@ -74,7 +75,13 @@ await prisma.$transaction([
   prisma.studentCourse.createMany({
     data: [
       ...completedCourses.map((courseCode) => ({ userId: user.userId, courseCode, status: 'completed' })),
-      ...inProgressCourses.map((courseCode) => ({ userId: user.userId, courseCode, status: 'in_progress' })),
+      // When each is under way, as the sample transcript dates it (Fall 2026 now, Winter 2027 registered).
+      ...inProgressCourses.map((courseCode) => ({
+        userId: user.userId,
+        courseCode,
+        status: 'in_progress',
+        term: inProgressTerms[courseCode] ? termLabel(inProgressTerms[courseCode], TODAY) : null,
+      })),
     ],
     skipDuplicates: true,
   }),

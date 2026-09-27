@@ -29,7 +29,7 @@ import { applyOverrides, sameOverride, sortOverrides, type CourseOverride } from
 import { defaultCatalog } from './lib/catalog.ts'
 import { diffPlans } from './lib/planner/explain.ts'
 import { treeDegreeProgress } from './lib/degreeProgress.ts'
-import { bookedByTerm, seasonNow, takingNow, termLabels, termsAfterUpload, withCurrentCourses } from './lib/currentTerms.ts'
+import { bookedByTerm, seasonNow, takingNow, termLabel, termLabels, termsAfterUpload, withCurrentCourses } from './lib/currentTerms.ts'
 import { academicYearOfDegreeYear, currentTermOf } from './lib/skillTree.ts'
 import { searchCourses, catalogueTitle } from './lib/courseSearch.ts'
 import { schoolOf } from './lib/transcriptParse.ts'
@@ -221,7 +221,20 @@ function storedOverrides(value: unknown): CourseOverride[] {
 
 /** A session from the database: its load is one the student saved, so it's kept as chosen. */
 function fromCloud(session: CloudSession): Partial<SavedState> {
-  return { ...session, coursesPerTermChosen: true }
+  const { courseTerms: _terms, ...rest } = session
+  return { ...rest, coursesPerTermChosen: true, ...termsFromCloud(session) }
+}
+
+/** The database's record of when each course is: a season for those under way, a term for those passed. */
+function termsFromCloud(session: CloudSession): Pick<SavedState, 'courseTerms' | 'completedTerms'> {
+  const terms = session.courseTerms ?? {}
+  const underWay = new Set([...session.inProgress, ...session.registered])
+  const passed = new Set(session.completed)
+  const seasonOf = (label: string) => label.replace(/ \d{4}$/, '') as Season
+  return {
+    courseTerms: Object.fromEntries(Object.entries(terms).filter(([c]) => underWay.has(c)).map(([c, label]) => [c, seasonOf(label)])),
+    completedTerms: Object.fromEntries(Object.entries(terms).filter(([c]) => passed.has(c))),
+  }
 }
 
 
@@ -1010,6 +1023,12 @@ function useStudyMax() {
     summerPerTerm,
     internship,
     internshipAY,
+    // Only terms this device actually knows (a transcript's date, one the student picked), never the
+    // "this term" default: the database keeps a stored term for any course left out.
+    courseTerms: {
+      ...Object.fromEntries(Object.entries(completedTerms).filter(([c]) => completed.has(c))),
+      ...Object.fromEntries(inProgressCourses.flatMap((c) => (courseTerms[c] ? [[c, termLabel(courseTerms[c], today)]] : []))),
+    },
     ...(phone.trim() ? { phone: phone.trim() } : {}),
   } satisfies CloudSession)
   const accountUid = account?.uid ?? null
@@ -1185,7 +1204,13 @@ function useStudyMax() {
     setPreferredName(name)
     if (!account) updateGuestCall({ name })
   }
-  const maxLive = useMaxLive({ onCommitted: adoptMaxPlan, onAction: runMaxAction, onName: adoptMaxName, ready: sessionRestored })
+  /** The student told Max when a course is: a course under way takes that season, a passed one that term. */
+  function adoptMaxCourseTerm(code: string, term: string) {
+    const season = term.replace(/ \d{4}$/, '') as Season
+    if (completed.has(code)) setCompletedTerms((prev) => ({ ...prev, [code]: term }))
+    else setCourseTerms((prev) => ({ ...prev, [code]: season }))
+  }
+  const maxLive = useMaxLive({ onCommitted: adoptMaxPlan, onAction: runMaxAction, onName: adoptMaxName, onCourseTerm: adoptMaxCourseTerm, ready: sessionRestored })
 
   // The plan as the roadmap draws it: what's left, plus the courses already under way in their terms.
   const roadmap = useMemo(() => withCurrentCourses(plan, planByTerm, today), [plan, planByTerm, today])
@@ -1460,6 +1485,12 @@ function useStudyMax() {
       const phoneFrom = (session?: CloudSession | null) => {
         if (session?.phone) setPhone((p) => p || session.phone!)
         if (session?.firstName) setPreferredName(session.firstName)
+        // When each course is: the database's record fills any this phone doesn't know.
+        if (session?.courseTerms) {
+          const known = termsFromCloud(session)
+          setCourseTerms((prev) => ({ ...known.courseTerms, ...prev }))
+          setCompletedTerms((prev) => ({ ...known.completedTerms, ...prev }))
+        }
       }
       if (cloud) phoneFrom(cloud.session)
       else void loadCloudSession().then((c) => live && phoneFrom(c?.session))
@@ -1491,7 +1522,14 @@ function useStudyMax() {
       const state = stored ?? snapshot
       if (stored) applySaved(stored)
       if (hasSaved(key) || cloud) setCloudUid(signedIn.uid)
-      const phoneFrom = (session?: CloudSession | null) => session?.phone && setPhone((p) => p || session.phone!)
+      const phoneFrom = (session?: CloudSession | null) => {
+        if (session?.phone) setPhone((p) => p || session.phone!)
+        if (session?.courseTerms) {
+          const known = termsFromCloud(session)
+          setCourseTerms((prev) => ({ ...known.courseTerms, ...prev }))
+          setCompletedTerms((prev) => ({ ...known.completedTerms, ...prev }))
+        }
+      }
       if (cloud) phoneFrom(cloud.session)
       else void loadCloudSession().then((c) => phoneFrom(c?.session))
       setAccount(signedIn)

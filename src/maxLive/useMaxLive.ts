@@ -63,6 +63,8 @@ interface Options {
   onAction?: (action: AppAction) => void
   /** The student told Max a new name to go by. */
   onName?: (name: string) => void
+  /** The student told Max when a course is: the app sets that course's term (App.tsx). */
+  onCourseTerm?: (courseCode: string, term: string) => void
   /** False until the app's own saved session is loaded; nothing is followed (or adopted) before then. */
   ready?: boolean
 }
@@ -113,7 +115,7 @@ function writeAdopted(ids: Set<string>) {
   }
 }
 
-export function useMaxLive({ onCommitted, onAction, onName, ready = true }: Options): MaxLive {
+export function useMaxLive({ onCommitted, onAction, onName, onCourseTerm, ready = true }: Options): MaxLive {
   const [saved, setSaved] = useState<Saved | null>(readSaved)
   const [transport, setTransport] = useState<Transport | null>(null)
   const [callStatus, setCallStatus] = useState<string | null>(null)
@@ -147,6 +149,8 @@ export function useMaxLive({ onCommitted, onAction, onName, ready = true }: Opti
   actionRef.current = onAction
   const nameRef = useRef(onName)
   nameRef.current = onName
+  const termRef = useRef(onCourseTerm)
+  termRef.current = onCourseTerm
 
   const clear = useCallback(() => {
     queue.current = []
@@ -250,6 +254,9 @@ export function useMaxLive({ onCommitted, onAction, onName, ready = true }: Opti
           break
         case 'profile.name':
           nameRef.current?.(event.name)
+          break
+        case 'course.term':
+          termRef.current?.(event.courseCode, event.term)
           break
         case 'seats.checked':
           setWorking(false)
