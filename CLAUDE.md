@@ -160,6 +160,8 @@ Ranked by what actually swings judges, in order of what to protect first:
 
 ## Mobile build
 
+- **Mobile (27 September):** Native image sharing uses Capacitor Share + Filesystem with one private cache image. Share cards use effective completed/in-progress courses after overrides; widgets receive the same effective inputs and chronological plan order. Android system theme reads `StudyMaxAppearancePlugin`, including live configuration changes and resume, because WebView `matchMedia` may stay light.
+
 The same Vite app ships as iOS and Android apps through Capacitor 8 (`capacitor.config.ts`, `ios/`, `android/`; app id `ai.calendue.studymax`). Native Apple and Google sign-in go through `@capacitor-firebase/authentication` against Firebase project `studymax-3a090`; the web uses the Firebase JS SDK only when the four `VITE_FIREBASE_*` vars are set, otherwise it starts as a guest. The native apps call the API at `https://study-max-theta.vercel.app` (`src/platform.ts`). Features that need `OPENAI_API_KEY` or `BLAND_API_KEY` are gated by `/api/features` (`src/features.ts`), so they stay hidden until those keys are in Vercel.
 
 - `npm run build` then `npx cap sync` copies `dist/` into both native projects; open `ios/App/App.xcodeproj` or `android/` to run on a simulator/emulator.

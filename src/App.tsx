@@ -1725,15 +1725,16 @@ function useStudyMax() {
       buildWidgetSnapshot({
         revealed,
         awards: universityId === 'usask' ? rankedAwards : [],
-        hero,
+        hero: computeMatches([hero.spec], planCompleted, activeDegree)[0] ?? hero,
         heroKind,
         topOverlap,
-        inProgress: inProgressCourses,
+        inProgress: planInProgress,
+        planOrder: plan.flatMap((term) => term.courses.map((course) => course.code)),
         // courseTitle()'s lookup, inline: courseTitle itself is a new function every render.
         courseTitle: (code) => selectedProgram?.courseTitles[code] ?? courseInfo[code]?.title ?? catalogueTitle(code),
         now: today,
       }),
-    [revealed, universityId, rankedAwards, hero, heroKind, topOverlap, inProgressCourses, selectedProgram, today],
+    [revealed, universityId, rankedAwards, hero, heroKind, topOverlap, planCompleted, planInProgress, plan, activeDegree, selectedProgram, today],
   )
   useEffect(() => {
     syncWidgets(widgetSnapshot)

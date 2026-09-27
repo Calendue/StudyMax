@@ -72,4 +72,12 @@ assert.deepEqual(Object.keys(snap).sort(), ['credential', 'deadline', 'updatedAt
 assert.deepEqual(Object.keys(snap.deadline!).sort(), ['dueDate', 'id', 'name', 'url', 'value'])
 assert.deepEqual(Object.keys(cred).sort(), ['done', 'kind', 'left', 'name', 'nextCourse', 'total'])
 
+// A replan moves the widget's next action with the effective plan, even if a stale overlap ranks first.
+const replanned = { ...hero, doneCount: 0, totalRequired: 2, remaining: 2,
+  unsatisfied: [{ options: ['CMPT141', 'CMPT145'], need: 2 }] }
+const orderInput = { ...base, hero: replanned, topOverlap: { ...base.topOverlap!, course: 'CMPT141' } }
+assert.equal(buildWidgetSnapshot({ ...orderInput, planOrder: ['CMPT145', 'CMPT141'] })!.credential!.nextCourse!.code, 'CMPT 145')
+assert.equal(buildWidgetSnapshot({ ...orderInput, planOrder: ['CMPT145', 'CMPT141'], inProgress: ['CMPT145'] })!.credential!.nextCourse!.code, 'CMPT 141')
+assert.equal(buildWidgetSnapshot({ ...orderInput, hero: { ...replanned, doneCount: 1, remaining: 1, unsatisfied: [{ options: ['CMPT145'], need: 1 }] } })!.credential!.done, 1)
+assert.equal(buildWidgetSnapshot({ ...orderInput, planOrder: ['CMPT141', 'CMPT145'] })!.credential!.done, 0, 'a failed completed course reduces widget progress')
 console.log('widget snapshot: all checks passed')

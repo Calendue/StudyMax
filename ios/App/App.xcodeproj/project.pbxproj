@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		ED7FAA4300DB40BEB446AB01 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = ED7FAA4300DB40BEB446AB02 /* PrivacyInfo.xcprivacy */; };
 		10C31874BEB3CF791C7ABCD0 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = C40E420CB33CC267D8ED048E /* Theme.swift */; };
 		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
 		31F2DD1A9D3AEB9CF0D47944 /* StudyMaxWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE9177D12E7938F1A14D1D2F /* StudyMaxWidgets.swift */; };
@@ -56,6 +57,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		ED7FAA4300DB40BEB446AB02 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		055944BFCECBF417228F99FF /* StudyMaxWidgets.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = StudyMaxWidgets.entitlements; sourceTree = "<group>"; };
 		0B4ECB6467BAA26BF5D4B93D /* StudyMaxWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = StudyMaxWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		12D4164CB8EE87EA552511CE /* CredentialViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CredentialViews.swift; sourceTree = "<group>"; };
@@ -142,6 +144,7 @@
 				504EC30E1FED79650016851F /* Assets.xcassets */,
 				504EC3101FED79650016851F /* LaunchScreen.storyboard */,
 				504EC3131FED79650016851F /* Info.plist */,
+				ED7FAA4300DB40BEB446AB02 /* PrivacyInfo.xcprivacy */,
 				2FAD9762203C412B000D30F8 /* config.xml */,
 				50B271D01FEDC1A000F3C39B /* public */,
 				5132E3B7DB3E467A764EC7C6 /* GoogleService-Info.plist */,
@@ -272,6 +275,7 @@
 				504EC30F1FED79650016851F /* Assets.xcassets in Resources */,
 				50379B232058CBB4000EE86E /* capacitor.config.json in Resources */,
 				504EC30D1FED79650016851F /* Main.storyboard in Resources */,
+				ED7FAA4300DB40BEB446AB01 /* PrivacyInfo.xcprivacy in Resources */,
 				2FAD9763203C412B000D30F8 /* config.xml in Resources */,
 				8D6C914120EF0C2D60CA90DE /* GoogleService-Info.plist in Resources */,
 			);
