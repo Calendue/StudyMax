@@ -4,7 +4,7 @@ import { computeMatches, computeCourseOverlap } from '../src/lib/match.ts'
 import { completedCourses, inProgressCourses } from '../src/data/transcript.ts'
 import { catalogueCourses } from '../src/data/courses.ts'
 import { specializations } from '../src/data/specializations.ts'
-import { computerScienceDegree } from '../src/data/programs/computerScienceDegree.ts'
+import { computerScienceBsc4 } from '../src/data/degrees/computerScience.ts'
 
 const completed = new Set(completedCourses)
 const matches = computeMatches(specializations, completed)
@@ -37,7 +37,7 @@ assert.ok(
   assert.ok(ranked.slice(firstUnavailable).some((m) => m.spec.id === 'dead'), 'an unavailable specialization ranks last')
   // A first-year is 6 courses from several; the tie goes to the one sharing most with the degree,
   // not the alphabet (Computational Modelling, which needs the dropped BINF 451).
-  const firstYear = computeMatches(specializations, new Set(), computerScienceDegree)
+  const firstYear = computeMatches(specializations, new Set(), computerScienceBsc4)
   assert.equal(firstYear[0].spec.id, 'social-computing', 'first-year default breaks the tie by the degree')
 }
 

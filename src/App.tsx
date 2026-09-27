@@ -22,7 +22,9 @@ import {
   type TermStart,
 } from './lib/plan.ts'
 import { computeCredentials } from './lib/credentials.ts'
+import { treeDegreeProgress } from './lib/degreeProgress.ts'
 import { bookedByTerm, seasonNow, takingNow, termLabels, termsAfterUpload, withCurrentCourses } from './lib/currentTerms.ts'
+import { academicYearOfDegreeYear, currentTermOf } from './lib/skillTree.ts'
 import { searchCourses, catalogueTitle } from './lib/courseSearch.ts'
 import { courseInfo } from './data/prereqs.ts'
 import { artsAndScienceSubjects, catalogueCourses } from './data/courses.ts'
@@ -33,7 +35,7 @@ import { currentDeadlineWatch, startDeadlineWatch, stopDeadlineWatch, syncWidget
 import { useClassTracker } from './useClassTracker.ts'
 import { currentAccount, isAuthConfigured, signIn, signInErrorMessage, signOut, type Account, type Provider } from './auth.ts'
 import { loadCloudSession, saveCloudSession } from './cloudSync.ts'
-import type { CloudSession } from './lib/cloudSession.ts'
+import type { CloudInternship, CloudSession } from './lib/cloudSession.ts'
 import { ModelContext } from './model.ts'
 import { useTheme } from './theme.ts'
 import type { Destination } from './ui/layout.ts'
@@ -60,6 +62,7 @@ import { RevealScreen } from './screens/RevealScreen.tsx'
 import { ResultsScreen } from './screens/ResultsScreen.tsx'
 import { CallScreen } from './screens/CallScreen.tsx'
 import { PingMaxScreen } from './screens/PingMaxScreen.tsx'
+import { RegisterScreen } from './screens/RegisterScreen.tsx'
 import { AppShell, CoursesFocus, Wizard } from './shell/AppShell.tsx'
 import { useLayoutMode } from './ui/layout.ts'
 import './App.css'
@@ -88,6 +91,9 @@ type UniversityChoice = '' | 'usask' | 'other'
  * already answers (goals, this term's courses, the course list). Results is tabbed; the call is the
  * last step.
  */
+/** The internship question's answers: the year of the degree it takes, or no year to set aside. */
+export type Internship = CloudInternship
+
 export type Screen =
   | 'landing'
   | 'welcome'
@@ -103,6 +109,7 @@ export type Screen =
   | 'results'
   | 'call'
   | 'ping-max'
+  | 'register'
 export type Tab = 'overview' | 'plan' | 'awards' | 'classes'
 /** First-years have no courses to add yet, so they go from onboarding straight to the reveal. */
 export type StudentType = 'first-year' | 'existing'
@@ -148,6 +155,8 @@ export interface ProgramOption {
 }
 
 const SAVE_KEY = 'studymax:v1'
+/** The degree variant a plan is for until the student picks another: the Four-year B.Sc. */
+const DEFAULT_DEGREE_VARIANT = 'bsc-4'
 
 interface SavedState {
   universityId: UniversityChoice
@@ -167,6 +176,8 @@ interface SavedState {
   registered?: string[]
   /** Whether the plan may use Spring/Summer terms. */
   springSummer?: boolean
+  /** When the student plans an internship: a year of their degree (3 or 4), not sure, or none. */
+  internship?: Internship | null
   /** The most courses the plan puts in a Fall/Winter term, and in a Spring/Summer term. */
   coursesPerTerm?: number
   /** Whether the student picked coursesPerTerm; older saves hold the old default of 2 without it. */
@@ -176,6 +187,8 @@ interface SavedState {
   courseTerms?: Record<string, Season>
   /** The term ("Fall 2024") each completed course was passed in, where the transcript dates it. Device-only. */
   completedTerms?: Record<string, string>
+  /** Which variant of the degree the plan is for ('bsc-4', 'bsc-honours', 'bsc-3'). Device-only, like gradYear. */
+  degreeVariant?: string
 }
 
 
@@ -247,8 +260,10 @@ function useStudyMax() {
   const [minorId, setMinorId] = useState<string | null>(saved.minorId ?? null)
   const [concentrationIds, setConcentrationIds] = useState<string[]>(saved.concentrationIds ?? [])
   const [gradYear, setGradYear] = useState<number | null>(saved.gradYear ?? null)
+  const [degreeVariant, setDegreeVariant] = useState(saved.degreeVariant ?? DEFAULT_DEGREE_VARIANT)
   const [registered, setRegistered] = useState<string[]>(() => registeredFrom(saved.registered))
   const [springSummer, setSpringSummer] = useState(saved.springSummer ?? false)
+  const [internship, setInternship] = useState<Internship | null>(saved.internship ?? null)
   // The plan's load limits: the most courses per Fall/Winter term, and per Spring/Summer term. Only a
   // load the student picked is kept; otherwise it's the program's (see coursesPerTerm below).
   const [chosenPerTerm, setCoursesPerTerm] = useState<number | null>(() => chosenLoad(saved))
@@ -272,6 +287,9 @@ function useStudyMax() {
       : universityId === 'other'
         ? OTHER_PROGRAM
         : null
+  // The degree the plan is for: the variant the student chose (Four-year, Honours, Three-year) where the
+  // program has more than one, otherwise the program's own.
+  const activeDegree = selectedProgram?.degrees?.find((d) => d.variant === degreeVariant) ?? selectedProgram?.degree
   // A full load (15 credit units, five courses) unless the student chose otherwise.
   const coursesPerTerm = chosenPerTerm ?? selectedProgram?.coursesPerTerm ?? DEFAULT_COURSES_PER_TERM
 
@@ -387,8 +405,10 @@ function useStudyMax() {
     gradYear,
     registered,
     springSummer,
+    internship,
     courseTerms,
     completedTerms,
+    degreeVariant,
     coursesPerTerm,
     coursesPerTermChosen: chosenPerTerm !== null,
     summerPerTerm,
@@ -422,6 +442,7 @@ function useStudyMax() {
     springSummer,
     coursesPerTerm,
     summerPerTerm,
+    internship,
     ...(phone.trim() ? { phone: phone.trim() } : {}),
   } satisfies CloudSession)
   const accountUid = account?.uid ?? null
@@ -434,8 +455,8 @@ function useStudyMax() {
   }, [accountUid, cloudUid, cloudJson])
 
   const matches = useMemo(
-    () => computeMatches(selectedProgram?.specializations ?? [], completed, selectedProgram?.degree),
-    [selectedProgram, completed],
+    () => computeMatches(selectedProgram?.specializations ?? [], completed, activeDegree),
+    [selectedProgram, completed, activeDegree],
   )
 
   const [heroId, setHeroId] = useState<string | null>(() => seedOf(saved)[0] ?? null)
@@ -478,7 +499,7 @@ function useStudyMax() {
       const doneHeroId = hero.spec.id
       const promoteId = setTimeout(() => {
         // Already in the hero order (computeMatches: available first, fewest left, most shared with the degree).
-        const next = computeMatches(selectedProgram?.specializations ?? [], completedRef.current, selectedProgram?.degree).filter(
+        const next = computeMatches(selectedProgram?.specializations ?? [], completedRef.current, activeDegree).filter(
           (m) => m.spec.id !== doneHeroId && m.remaining > 0,
         )[0]
         if (next) setHeroId(next.spec.id)
@@ -486,7 +507,7 @@ function useStudyMax() {
       return () => clearTimeout(promoteId)
     }
     prevRemaining.current = hero.remaining
-  }, [hero.spec.id, hero.remaining, selectedProgram])
+  }, [hero.spec.id, hero.remaining, selectedProgram, activeDegree])
 
   const topOverlap = useMemo(() => {
     const overlap = computeCourseOverlap(selectedProgram?.specializations ?? [], completed)
@@ -598,6 +619,11 @@ function useStudyMax() {
     () => takingNow(uploadInProgress, registered, completed),
     [uploadInProgress, registered, completed],
   )
+
+  function chooseInternship(value: Internship) {
+    haptic.selection()
+    setInternship(value)
+  }
 
   function chooseMinor(id: string | null) {
     haptic.selection()
@@ -890,6 +916,23 @@ function useStudyMax() {
   const startTerm = chosenStart ?? (completed.size === 0 && inProgressCourses.length === 0 ? nextFall(today) : startChoices[0])
   // What the student is already taking, by term: it fills part of each term's courses-per-term.
   const booked = useMemo(() => bookedByTerm(currentByTerm, today), [currentByTerm, today])
+  // The internship year, as the academic year the plan leaves empty. The tree numbers years the same way.
+  const internshipYear = typeof internship === 'number' ? internship : null
+  const internshipAY = useMemo(
+    () =>
+      internshipYear === null
+        ? null
+        : academicYearOfDegreeYear(internshipYear, {
+            completed,
+            inProgress: inProgressCourses,
+            currentTerm: currentTermOf(today),
+            completedTerms,
+            termLoad: coursesPerTerm,
+            // Year 1 of a student who hasn't started is the plan's first term, as on the tree.
+            firstTerm: startTerm,
+          }),
+    [internshipYear, completed, inProgressCourses, today, completedTerms, coursesPerTerm, startTerm],
+  )
   const plan = useMemo(
     () =>
       buildStudentPlan(
@@ -899,12 +942,17 @@ function useStudyMax() {
         inProgressCourses,
         coursesPerTerm,
         startTerm,
-        { springSummer, summerPerTerm, degree: selectedProgram?.degree, booked },
+        { springSummer, summerPerTerm, degree: activeDegree, booked, away: internshipAY },
       ),
-    [targets, planningSpecs, completed, inProgressCourses, coursesPerTerm, startTerm, springSummer, summerPerTerm, selectedProgram, booked],
+    [targets, planningSpecs, completed, inProgressCourses, coursesPerTerm, startTerm, springSummer, summerPerTerm, activeDegree, booked, internshipAY],
   )
   // The plan as the roadmap draws it: what's left, plus the courses already under way in their terms.
   const roadmap = useMemo(() => withCurrentCourses(plan, currentByTerm, today), [plan, currentByTerm, today])
+  // The degree in credit units for the tree's readout and milestones: done, under way and planned.
+  const treeDegree = useMemo(
+    () => (activeDegree ? treeDegreeProgress(activeDegree, completed, inProgressCourses, plan) : undefined),
+    [activeDegree, completed, inProgressCourses, plan],
+  )
   const [planCopied, setPlanCopied] = useState(false)
   // Clipboard writes are blocked in some browsers and contexts. Rather than a button that appears to
   // do nothing, the plan text is shown for the student to select by hand.
@@ -1111,8 +1159,11 @@ function useStudyMax() {
     setMinorId(state.minorId ?? null)
     setConcentrationIds(state.concentrationIds ?? [])
     setGradYear(state.gradYear ?? null)
+    setDegreeVariant(state.degreeVariant ?? DEFAULT_DEGREE_VARIANT)
     setRegistered(registeredFrom(state.registered))
     setSpringSummer(state.springSummer ?? false)
+    // A session from an app build before the question has no answer: keep this device's.
+    if (state.internship !== undefined) setInternship(state.internship)
     setCoursesPerTerm(chosenLoad(state))
     setSummerPerTerm(state.summerPerTerm ?? DEFAULT_SUMMER_COURSES)
     setUploadStatus('idle')
@@ -1392,6 +1443,7 @@ function useStudyMax() {
     setSpringSummer(false)
     setCoursesPerTerm(null)
     setStartTerm(null)
+    setInternship(null)
     setSummerPerTerm(DEFAULT_SUMMER_COURSES)
     setUniversityId('')
     setProgramId('')
@@ -1509,6 +1561,9 @@ function useStudyMax() {
       case 'ping-max':
         go('results', -1)
         return true
+      case 'register':
+        navigate('plan')
+        return true
       case 'courses':
         // Once there are results, Courses is a destination beside them, not a step of onboarding.
         if (revealed) {
@@ -1582,6 +1637,9 @@ function useStudyMax() {
     updateMajor,
     updateMinor,
     updateGradYear,
+    activeDegree,
+    degreeVariant,
+    setDegreeVariant,
     registered,
     registeredQuery,
     setRegisteredQuery,
@@ -1589,6 +1647,10 @@ function useStudyMax() {
     toggleRegistered,
     springSummer,
     setSpringSummer,
+    internship,
+    internshipYear,
+    internshipAY,
+    chooseInternship,
     summerPerTerm,
     setSummerPerTerm,
     removeRegistered,
@@ -1616,6 +1678,7 @@ function useStudyMax() {
     removeInProgress,
     inProgressTerms,
     completedTerms,
+    treeDegree,
     roadmap,
     resultsStale,
     matches,
@@ -1713,6 +1776,7 @@ const SCREENS: Record<Screen, ComponentType> = {
   results: ResultsScreen,
   call: CallScreen,
   'ping-max': PingMaxScreen,
+  register: RegisterScreen,
 }
 
 // A screen change runs on ONE timeline: the outgoing screen is gone before the incoming one is
@@ -1759,7 +1823,9 @@ function App() {
   // the dashboard shell; before that, courses get the desktop page and every other step the wizard.
   const wide = layout !== 'tabs'
   const inShell =
-    wide && model.revealed && (model.screen === 'results' || model.screen === 'courses' || model.screen === 'call' || model.screen === 'ping-max')
+    wide &&
+    model.revealed &&
+    (model.screen === 'results' || model.screen === 'courses' || model.screen === 'call' || model.screen === 'ping-max' || model.screen === 'register')
   const coursesFocus = wide && !inShell && model.screen === 'courses'
   const frame = inShell ? 'shell' : coursesFocus ? 'courses-focus' : model.screen
   const Current = SCREENS[model.screen]

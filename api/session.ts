@@ -7,7 +7,7 @@
 // completed, in-progress and registered codes) and
 // StudentProfile (present once onboarding has reached the results, removed on a reset).
 import { Prisma } from '@prisma/client'
-import { cleanCloudSession, USASK_INSTITUTION, type CloudSession } from '../src/lib/cloudSession.js'
+import { cleanCloudSession, internshipFrom, USASK_INSTITUTION, type CloudSession } from '../src/lib/cloudSession.js'
 import { regenerate, validate } from '../src/lib/max/planningAdapter.js'
 import { upcomingTerm } from '../src/lib/plan.js'
 import { db, hasDatabase } from './_db.js'
@@ -92,6 +92,7 @@ async function load(uid: string): Promise<CloudSession | null> {
     // A full load when nothing's stored (the column's own default is the old 2).
     coursesPerTerm: profile?.maxCoursesPerTerm ?? 5,
     summerPerTerm: profile?.maxSummerCourses ?? 2,
+    internship: internshipFrom(profile?.internship),
   }
 }
 
@@ -128,6 +129,8 @@ async function save(user: VerifiedUser, session: CloudSession) {
     springSummer: session.springSummer,
     maxCoursesPerTerm: session.coursesPerTerm,
     maxSummerCourses: session.summerPerTerm,
+    // An app build from before the question sends none: the stored answer stays.
+    ...(session.internship !== undefined ? { internship: session.internship === null ? null : String(session.internship) } : {}),
   }
 
   const rows = [

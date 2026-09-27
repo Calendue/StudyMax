@@ -1,8 +1,9 @@
 // Sanity check for the term planner. Run: node --experimental-strip-types --experimental-loader ./scripts/_resolve-ts-loader.mjs scripts/check-plan.ts
 import assert from 'node:assert/strict'
 import { computeMatches } from '../src/lib/match.ts'
-import { buildPlan, selectCourses, withPrerequisites, courseLevel, upcomingTerm, buildStudentPlan, termsFrom, isElective } from '../src/lib/plan.ts'
-import { computerScienceDegree } from '../src/data/programs/computerScienceDegree.ts'
+import { buildPlan, selectCourses, withPrerequisites, courseLevel, upcomingTerm, buildStudentPlan, termsFrom, isElective, academicYearOf } from '../src/lib/plan.ts'
+import { computerScienceBsc4 } from '../src/data/degrees/computerScience.ts'
+import { auditDegree } from '../src/lib/degree.ts'
 import { courseInfo } from '../src/data/prereqs.ts'
 import { completedCourses } from '../src/data/transcript.ts'
 import { specializations } from '../src/data/specializations.ts'
@@ -205,27 +206,25 @@ assert.deepEqual(upcomingTerm(new Date('2026-10-01')), { season: 'Winter', year:
 
 // --- degree: a CS plan is the whole B.Sc., its open slots unnamed, and every pick fits the degree ---
 {
-  const degree = computerScienceDegree
+  const degree = computerScienceBsc4
   const start = { season: 'Fall', year: 2026 } as const
   for (const spec of specializations) {
     const plan = buildStudentPlan([spec], specializations, new Set(), [], 5, start, { degree })
     const courses = plan.flatMap((t) => t.courses)
     const named = courses.filter((c) => !isElective(c.code)).map((c) => c.code)
-    // First-year: the plan is exactly the degree's 40 courses (120 cu). Courses no slot uses (a
-    // prerequisite the degree doesn't list) take free-elective room first, and only go over it once
-    // that room is full.
+    // First-year: the plan is the whole degree in credit units, every group met, 120 cu with 66 senior.
     const everything = new Set(named)
-    const unused = everything.size - computeMatches([degree], everything)[0].doneCount
-    const freeRoom = degree.totalCourses - degree.requirements.reduce((n, g) => n + g.need, 0)
-    assert.equal(courses.length, degree.totalCourses + Math.max(0, unused - freeRoom), `${spec.id}: a whole degree`)
+    const whole = auditDegree(degree, courses.map((c) => c.code))
+    assert.equal(whole.remainingCu, 0, `${spec.id}: a whole degree (120 cu)`)
+    assert.equal(whole.remainingSeniorCu, 0, `${spec.id}: 66 cu at the 200 level or higher`)
+    assert.ok(whole.groups.every((g) => g.remainingCu === 0), `${spec.id}: every requirement met`)
+    assert.ok(courses.length <= 41, `${spec.id}: no more than a degree's worth of courses`)
     // The specialization is finished and every named degree slot is filled, by a course or a slot.
     // (Short only the courses the 2026-27 catalogue dropped, for a specialization marked unavailable.)
     const dropped = spec.unavailable ? spec.requirements.filter((g) => g.courses.every((c) => !courseInfo[c])).reduce((n, g) => n + g.need, 0) : 0
     assert.equal(computeMatches([spec], everything)[0].remaining, dropped, `${spec.id}: specialization complete`)
-    const degreeLeft = computeMatches([degree], everything)[0].unsatisfied
-    assert.ok(degreeLeft.every((g) => g.label), `${spec.id}: only open-choice slots are left for unnamed electives`)
-    const unnamed = courses.filter((c) => isElective(c.code)).length
-    assert.ok(unnamed >= degreeLeft.reduce((n, g) => n + g.need, 0), `${spec.id}: every open slot has an unnamed elective`)
+    const left = auditDegree(degree, everything).groups.filter((g) => g.remainingCu > 0)
+    assert.ok(left.every((g) => g.group.open), `${spec.id}: only open-choice requirements are left for unnamed electives`)
     assert.equal(new Set(courses.map((c) => c.code)).size, courses.length, `${spec.id}: no course twice`)
   }
   // The program's own picks, never an Engineering route or a course the catalogue dropped (CMPT 215
@@ -270,8 +269,21 @@ assert.deepEqual(upcomingTerm(new Date('2026-10-01')), { season: 'Winter', year:
   assert.ok(!winter || winter.courses.every((c) => !seniorCmpt(c.code)), 'Winter 2027 already has three senior CMPT booked')
 
   // A done course counts once, even when two slots list it (ENG 111: writing and breadth).
-  const once = computeMatches([degree], new Set(['ENG111']))[0]
-  assert.equal(once.doneCount, 1, 'one course fills one slot')
+  const once = auditDegree(degree, ['ENG111'])
+  assert.equal(once.groups.reduce((n, g) => n + g.courses.length, 0), 1, 'one course fills one slot')
+}
+
+// --- internship: the academic year away holds nothing, and the plan picks up after it ---
+{
+  const target = computeMatches(specializations, new Set()).reduce((a, b) => (b.remaining > a.remaining ? b : a))
+  const start = { season: 'Fall' as const, year: 2026 }
+  const plain = buildStudentPlan([target.spec], specializations, new Set(), [], 2, start, { springSummer: true })
+  const away = buildStudentPlan([target.spec], specializations, new Set(), [], 2, start, { springSummer: true, away: 2027 })
+  const termOf = (label: string) => ({ season: label.slice(0, label.lastIndexOf(' ')) as 'Fall', year: Number(label.slice(label.lastIndexOf(' ') + 1)) })
+  assert.ok(plain.some((t) => academicYearOf(termOf(t.label)) === 2027), 'without an internship the plan uses 2027–28')
+  assert.ok(!away.some((t) => academicYearOf(termOf(t.label)) === 2027), 'nothing is planned in the internship year')
+  const count = (p: typeof plain) => p.reduce((n, t) => n + t.courses.length, 0)
+  assert.equal(count(away), count(plain), 'the internship moves courses later, never drops them')
 }
 
 console.log('check-plan.ts: all assertions passed')

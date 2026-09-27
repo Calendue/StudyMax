@@ -1,10 +1,10 @@
 import type { Specialization } from '../data/specializations.js'
-import type { Degree } from '../data/programs/types.js'
+import type { Degree } from '../data/degrees/types.js'
 import { courseInfo } from '../data/prereqs.js'
 import { creditPrereqs } from '../data/creditPrereqs.js'
 import { offerings as scrapedOfferings } from '../data/offerings.js'
 import { computeCourseOverlap, computeMatches, type SpecializationMatch } from './match.js'
-import { cuOf, FREE_ELECTIVE, levelOf, planDegree, type DegreeSlot } from './planDegree.js'
+import { cuOf, degreeTarget, FREE_ELECTIVE, levelOf, planDegree, SENIOR_ELECTIVE, type DegreeSlot } from './planDegree.js'
 
 // Sources for the load rules below: "Normally students register in a maximum of 30 credit units
 // (15 credit units per term) in Fall and Winter Terms" (programs.usask.ca/arts-and-science/
@@ -73,6 +73,8 @@ export interface PlanOptions {
   maxCu?: number
   /** 300/400-level CMPT courses a term may hold, booked courses included. */
   maxSeniorCmpt?: number
+  /** An academic year (by its Fall's calendar year) spent away on an internship: nothing is planned in it. */
+  away?: number | null
 }
 
 /** An unnamed elective slot in a plan. It has no prerequisites, no catalogue page and no sections. */
@@ -105,10 +107,15 @@ function prerequisiteGroups(code: string): { options: string[]; concurrent: bool
 }
 
 /** AND-groups of OR-options from the catalogue, minus anything already satisfied or unknown. */
+/** "Students with credit for X may not take this course": never planned once X is done or under way. */
+const barred = (code: string, done: Set<string>) => (courseInfo[code]?.antirequisites ?? []).some((a) => done.has(a))
+/** Has the course, or credit that rules it out (CME 331 for CMPT 215), which stands in for it as a prerequisite. */
+const credited = (done: Set<string>, code: string) => done.has(code) || barred(code, done)
+
 function unmetPrerequisites(code: string, satisfied: Set<string>): string[][] {
   return prerequisiteGroups(code)
     .map((g) => g.options)
-    .filter((options) => !options.some((option) => satisfied.has(option)))
+    .filter((options) => !options.some((option) => credited(satisfied, option)))
 }
 
 /**
@@ -235,7 +242,7 @@ export function selectCourses(
     // Never a course the 2026-27 catalogue doesn't list (BINF 451): a slot with no live option stays
     // unplanned, and the specialization says why it can't be finished (Specialization.unavailable).
     const ranked = rank(
-      slot.options.filter((code) => !pickedCodes.has(code) && courseInfo[code] !== undefined),
+      slot.options.filter((code) => !pickedCodes.has(code) && courseInfo[code] !== undefined && !barred(code, completed)),
       slot.specId,
     )
 
@@ -277,7 +284,11 @@ export function withPrerequisites(
   while (queue.length > 0) {
     const code = queue.shift()!
     for (const options of unmetPrerequisites(code, satisfied)) {
-      const choice = rank(options, undefined, satisfied)[0]
+      // An option the student's credit rules out isn't planned; with none left, it's the
+      // department's call (CME 331 standing in for CMPT 215), not a course to add.
+      const allowed = options.filter((o) => !barred(o, completed))
+      if (allowed.length === 0) continue
+      const choice = rank(allowed, undefined, satisfied)[0]
       if (seen.has(choice)) continue
 
       seen.add(choice)
@@ -306,6 +317,11 @@ export function nextTerm({ season, year }: TermStart, springSummer = false): Ter
 }
 
 /** Terms in calendar order: Winter, then Spring/Summer, then Fall, within a year. */
+/** The academic year a term belongs to, by its Fall: Fall 2026, Winter 2027 and Spring/Summer 2027 are 2026. */
+export function academicYearOf({ season, year }: TermStart): number {
+  return season === 'Fall' ? year : year - 1
+}
+
 function termOrder({ season, year }: TermStart): number {
   return year * 10 + (season === 'Winter' ? 0 : season === 'Spring/Summer' ? 1 : 2)
 }
@@ -372,6 +388,7 @@ export function buildPlan(
     offerings = scrapedOfferings,
     maxCu = DEFAULT_MAX_CU,
     maxSeniorCmpt = DEFAULT_MAX_SENIOR_CMPT,
+    away = null,
   }: PlanOptions & { includePrerequisites?: boolean } = {},
 ): PlannedTerm[] {
   const perTerm = Math.max(1, Math.floor(coursesPerTerm))
@@ -485,7 +502,8 @@ export function buildPlan(
 
   // --- whether a course may go in a term ---
   const runsIn = (code: string, season: Season) => {
-    if (isElective(code)) return true
+    // No 300- or 400-level CMPT course ran in a Spring/Summer term in 2025-27 (USask's class search).
+    if (isElective(code)) return season !== 'Spring/Summer' || !/410 or higher|senior cmpt/i.test(electiveLabel(code))
     const usable = (seasons: Season[]) => seasons.filter((s) => springSummer || s !== 'Spring/Summer')
     const banner = usable(offerings[code] ?? [])
     if (banner.length > 0) return banner.includes(season)
@@ -529,6 +547,8 @@ export function buildPlan(
     return bound
   }
   const critical = (item: Item, at: number) => item.named && latest(item.course.code) <= at
+  const isLooseSlot = (item: Item) =>
+    !item.named && ([FREE_ELECTIVE, SENIOR_ELECTIVE].includes(electiveLabel(item.course.code)) || /^breadth/i.test(electiveLabel(item.course.code)))
 
   const terms: PlannedTerm[] = []
   let pending = [...items]
@@ -545,6 +565,12 @@ export function buildPlan(
         passed.add(code)
         gateCu += cuOf(code)
       }
+    }
+    if (away !== null && academicYearOf(term) === away) {
+      // On the internship: what this year would have held moves on to the terms after it. Not idle
+      // time, so the load rules don't start relaxing.
+      term = nextTerm(term, springSummer)
+      continue
     }
     const label = `${term.season} ${term.year}`
     const summer = term.season === 'Spring/Summer'
@@ -566,6 +592,7 @@ export function buildPlan(
       if (item.seniorCmpt && senior >= seniorLimit && relax < 3) return false
       if (!item.named) {
         if (relax >= 2) return true
+        if (!runsIn(item.course.code, term.season)) return false
         // An unnamed senior CMPT slot waits for the plan's 200-level CMPT courses, which every
         // 300-level CMPT course needs.
         if (item.seniorCmpt && pending.some((p) => p.named && p.level === 2 && subjectOf(p.course.code) === 'CMPT')) return false
@@ -581,7 +608,7 @@ export function buildPlan(
       if (relax < 3) {
         const alongside = new Set([...passed, ...chosen.map((c) => c.course.code)])
         for (const g of prerequisiteGroups(code)) {
-          if (!g.options.some((o) => passed.has(o) || (g.concurrent && alongside.has(o)))) return false
+          if (!g.options.some((o) => credited(passed, o) || (g.concurrent && alongside.has(o)))) return false
         }
       }
       return true
@@ -595,6 +622,9 @@ export function buildPlan(
           // The advising sheet's own year before chain length: Year 1's writing, Indigenous learning and
           // science keep their seats ahead of a Year-2 chain's prerequisite (MATH 116 for STAT 242).
           (a.course.year ?? a.due) - (b.course.year ?? b.due) ||
+          // A Year-2 requirement's slot (the third science, business) before a free elective of the same
+          // year; breadth takes turns with free electives (the sheet's Year 2 is 'business, breadth or science').
+          Number(isLooseSlot(a)) - Number(isLooseSlot(b)) ||
           b.chain - a.chain ||
           a.due - b.due ||
           Number(!a.named) - Number(!b.named) ||
@@ -682,9 +712,10 @@ export function buildStudentPlan(
   const done = new Set([...completed, ...inProgress])
   // With the degree mapped, the plan is the whole degree: the targets and the degree's own slots
   // together, so every pick has to fit the degree too, and its open slots become unnamed electives.
-  const open = computeMatches(degree ? [...targets, degree] : targets, done).filter((m) => m.remaining > 0)
+  const whole = degree ? degreeTarget(degree) : null
+  const open = computeMatches(whole ? [...targets, whole] : targets, done).filter((m) => m.remaining > 0)
   if (!degree && open.length === 0) return []
-  return buildPlan(open, degree ? [...allSpecializations, degree] : allSpecializations, done, coursesPerTerm, start, options)
+  return buildPlan(open, whole ? [...allSpecializations, whole] : allSpecializations, done, coursesPerTerm, start, options)
 }
 
 /** `count` consecutive terms from `start`, for a start-term picker. */

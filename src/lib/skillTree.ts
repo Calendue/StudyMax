@@ -1,4 +1,5 @@
 import { courseInfo } from '../data/prereqs.ts'
+import { creditPrereqs } from '../data/creditPrereqs.ts'
 import type { RequirementGroup } from '../data/specializations.ts'
 import type { SpecializationMatch } from './match.ts'
 import { courseLevel, currentTermOf, DEFAULT_SUMMER_COURSES, isElective, type PlannedTerm, type Season, type TermStart } from './plan.ts'
@@ -65,6 +66,8 @@ export interface SkillTreeInput {
   /** The Spring/Summer cap (default 2). */
   summerLoad?: number
   degree?: TreeDegreeProgress
+  /** The year of the degree spent on an internship (3 or 4): its band is marked, and the plan leaves it empty. */
+  internshipYear?: number | null
   /** Leaves, in order: the hero first. Only the first MAX_LEAVES are drawn. */
   targets: SkillTreeTarget[]
   /** The best next course (the app's top-overlap course), when it's in the plan and unlocked. */
@@ -84,6 +87,8 @@ export interface TreeBand {
   current: boolean
   /** Each lane's head ("Fall", "Winter 2027", "Spring/Summer 2027"), `y` from the band's top. */
   heads: { lane: TreeLane; label: string; y: number }[]
+  /** The internship year. */
+  internship: boolean
 }
 
 export interface TreeNode {
@@ -107,6 +112,8 @@ export interface TreeNode {
   cu: number
   /** The degree requirement it counts toward, when the degree is mapped: "C4 Major: Senior core". */
   degreeGroup: string | null
+  /** A credit-count prerequisite still unmet by what's done or under way: "6 cu of 100-level CMPT". */
+  needsCredits: string | null
   /** Leaf indexes this course counts toward. */
   creds: number[]
   /** A requirement slot where any `need` of `of` courses count: drawn as a dashed elective. */
@@ -278,18 +285,31 @@ interface Draft {
 /** A full-time term's load: the default cap, and the most an undated finished term is given. */
 const TERM_LOAD = 5
 
-export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
-  const g = geometry(Math.max(300, input.width))
-  const width = Math.max(300, Math.round(input.width))
+/** The Fall/Winter lanes of `year` that are already over when the student is in Year `now`. */
+function finishedLanesOf(year: number, now: number, current: TermStart): ('fall' | 'winter')[] {
+  return year < now ? ['fall', 'winter'] : year > now || current.season === 'Fall' ? [] : current.season === 'Winter' ? ['fall'] : ['fall', 'winter']
+}
+
+/** What decides which year of their degree a student is in now. */
+export interface StudentYearInput {
+  completed: Iterable<string>
+  inProgress: Iterable<string>
+  currentTerm: TermStart
+  completedTerms?: Record<string, string>
+  termLoad?: number
+  /** The plan's first term: Year 1 for a student who hasn't started yet. */
+  firstTerm?: TermStart | null
+}
+
+/**
+ * Which year of their degree the student is in now, and the academic year that is (`baseAY`). The
+ * tree numbers its years with it and the plan finds the internship year with it, so they agree.
+ */
+export function studentYear(input: StudentYearInput) {
   const completed = new Set(input.completed)
-  const inProgress = [...new Set(input.inProgress)].filter((c) => !completed.has(c)).sort()
-  const doneOrNow = new Set([...completed, ...inProgress])
+  const inProgress = [...new Set(input.inProgress)].filter((c) => !completed.has(c))
   const current = input.currentTerm
-  const targets = input.targets.slice(0, MAX_LEAVES)
   const termLoad = Math.max(1, Math.floor(input.termLoad ?? TERM_LOAD))
-  const summerLoad = Math.max(1, Math.floor(input.summerLoad ?? DEFAULT_SUMMER_COURSES))
-  // A finished term the transcript didn't date held at most a full-time load, whatever the student
-  // plans to take now: a part-time plan doesn't make their first years part-time.
   const pastLoad = Math.max(termLoad, TERM_LOAD)
   const currentAY = academicYear(current)
 
@@ -310,9 +330,7 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
   const cuYear = Math.floor(doneCu / 30 - elapsed + 0.25) + 1
   const topLevel = Math.max(0, ...[...completed].map((c) => Math.min(4, courseLevel(c))))
   const knownYear = Math.max(1, ...[...knownDone.values()].map((t) => currentAY - academicYear(t) + 1))
-  /** The Fall/Winter lanes of `year` that are already over when the student is in Year `now`. */
-  const finishedLanes = (year: number, now: number): ('fall' | 'winter')[] =>
-    year < now ? ['fall', 'winter'] : year > now || current.season === 'Fall' ? [] : current.season === 'Winter' ? ['fall'] : ['fall', 'winter']
+  const finishedLanes = (year: number, now: number) => finishedLanesOf(year, now, current)
   const knownIn = (ay: number, lane: TreeLane) =>
     [...knownDone.values()].filter((t) => academicYear(t) === ay && laneOf(t.season) === lane).length
   const room = (now: number) => {
@@ -323,12 +341,42 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
     return free
   }
   let currentYear = Math.max(1, cuYear, topLevel, knownYear)
-  while (room(currentYear) < undated.length) currentYear++
+  // On a transcript that dates nearly everything (a real USask one dates every course it taught), the
+  // few undated courses are transfer or placement credit, never taken in one of these terms: they
+  // don't need a term's room, and mustn't add a year the transcript doesn't have. A mostly undated
+  // list (courses added by hand, a DegreeWorks audit) is placed by room, as before.
+  const transferOnly = knownDone.size > 0 && knownDone.size >= 2 * undated.length
+  if (!transferOnly) while (room(currentYear) < undated.length) currentYear++
   // A student who hasn't started (nothing done, nothing registered) starts Year 1 with their plan's
   // first term, not with the calendar: a plan from Fall 2027 is Year 1 from Fall 2027.
   const started = completed.size > 0 || inProgress.length > 0
-  const firstTerm = input.plan.map((t) => parseTerm(t.label)).find((t) => t !== null)
+  const firstTerm = input.firstTerm
   const baseAY = !started && firstTerm ? Math.max(currentAY, academicYear(firstTerm)) : currentAY
+  return { knownDone, undated, transferOnly, currentYear, started, baseAY }
+}
+
+/** The academic year (by its Fall) that is Year `year` of the student's degree. */
+export function academicYearOfDegreeYear(year: number, input: StudentYearInput): number {
+  const { baseAY, currentYear } = studentYear(input)
+  return baseAY + year - currentYear
+}
+
+export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
+  const g = geometry(Math.max(300, input.width))
+  const width = Math.max(300, Math.round(input.width))
+  const completed = new Set(input.completed)
+  const inProgress = [...new Set(input.inProgress)].filter((c) => !completed.has(c)).sort()
+  const doneOrNow = new Set([...completed, ...inProgress])
+  const current = input.currentTerm
+  const targets = input.targets.slice(0, MAX_LEAVES)
+  const termLoad = Math.max(1, Math.floor(input.termLoad ?? TERM_LOAD))
+  const summerLoad = Math.max(1, Math.floor(input.summerLoad ?? DEFAULT_SUMMER_COURSES))
+  // A finished term the transcript didn't date held at most a full-time load, whatever the student
+  // plans to take now: a part-time plan doesn't make their first years part-time.
+  const pastLoad = Math.max(termLoad, TERM_LOAD)
+  const firstTerm = input.plan.map((t) => parseTerm(t.label)).find((t) => t !== null) ?? null
+  const { knownDone, undated, transferOnly, currentYear, started, baseAY } = studentYear({ ...input, firstTerm })
+  const finishedLanes = (year: number, now: number) => finishedLanesOf(year, now, current)
   const yearOf = (t: TermStart) => Math.max(1, currentYear + academicYear(t) - baseAY)
   // Completed courses with no date sit in a year that's already over (or in this year's Fall, when it's Winter).
   const lastDoneYear = current.season === 'Fall' ? currentYear - 1 : currentYear
@@ -353,9 +401,10 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
     [...drafts.values()].filter((d) => d.year === year && (d.lane === null || finishedLanes(year, currentYear).includes(d.lane as 'fall' | 'winter'))).length
   const capacity = (year: number) => finishedLanes(year, currentYear).length * pastLoad
   for (const code of undated.sort((a, b) => courseLevel(a) - courseLevel(b) || a.localeCompare(b))) {
-    const want = Math.min(lastDoneYear, Math.max(1, Math.min(4, courseLevel(code))))
+    const want = Math.max(1, Math.min(lastDoneYear, Math.min(4, courseLevel(code))))
     let year = want
-    for (let k = 0; k <= 2 * lastDoneYear; k++) {
+    // Transfer credit beside a dated transcript stays in its level's year, over the load if need be.
+    for (let k = 0; !transferOnly && k <= 2 * lastDoneYear; k++) {
       const y = want + (k % 2 === 1 ? (k + 1) / 2 : -k / 2)
       if (y >= 1 && y <= lastDoneYear && heldIn(y) < capacity(y)) {
         year = y
@@ -399,12 +448,25 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
   }
 
   // ── status: planned, locked, the one beacon ──
+  const needsCredits = new Map<string, string>()
   for (const d of drafts.values()) {
     if (d.status !== 'planned') continue
     const unmet = (courseInfo[d.code]?.requires ?? []).some(
       (options) => options.length > 0 && !options.some((o) => doneOrNow.has(o)),
     )
     if (unmet) d.status = 'locked'
+    // "Completion of at least 6 credit units in 100-level CMPT" (PHIL 232) locks it too.
+    const short = [...(creditPrereqs[d.code] ?? []), ...(courseInfo[d.code]?.creditRequires ?? [])].find((rule) => {
+      if (rule.standing) return false
+      const have = [...doneOrNow]
+        .filter((c) => (!rule.subjects || rule.subjects.includes(c.match(/^[A-Z]+/)?.[0] ?? '')) && (!rule.level || courseLevel(c) * 100 === rule.level))
+        .reduce((n, c) => n + cuOf(c), 0)
+      return have < rule.cu
+    })
+    if (short) {
+      d.status = 'locked'
+      needsCredits.set(d.code, `${short.cu} cu of ${short.level ? `${short.level}-level ` : ''}${short.subjects?.join(' or ') ?? 'courses'}`)
+    }
   }
   // An unnamed elective is never the one course to take next: there's nothing specific to take. A
   // first term of only electives passes the beacon to the first named course after it.
@@ -434,7 +496,7 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
   // the same year went in Fall; the rest alternate to balance the two sides, in code order. Only a
   // lane that's already over, with room: when it's Winter now, this year's can only be the Fall.
   const sameYear = (a: string, b: string) => drafts.get(a)!.year === drafts.get(b)!.year
-  const maxYear = Math.max(4, currentYear, ...[...drafts.values()].map((d) => d.year))
+  const maxYear = Math.max(4, currentYear, input.internshipYear ?? 0, ...[...drafts.values()].map((d) => d.year))
   const seq = links.filter((l) => l.sequencing && drafts.get(l.from)!.status === 'completed' && drafts.get(l.to)!.status === 'completed')
   for (let year = 1; year <= maxYear; year++) {
     const inYear = [...drafts.values()].filter((d) => d.year === year)
@@ -556,14 +618,16 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
 
   // ── bands, top to bottom: canopy, the years from the last down to Year 1, the roots ──
   const bands: TreeBand[] = []
-  bands.push({ key: 'canopy', kind: 'canopy', year: 0, label: 'Canopy', y: 0, h: canopyH, current: false, heads: [] })
+  bands.push({ key: 'canopy', kind: 'canopy', year: 0, label: 'Canopy', y: 0, h: canopyH, current: false, heads: [], internship: false })
   let y = canopyH
   const bandY = new Map<number, { y: number; h: number }>()
   const stackH = (rows: number) => (rows === 0 ? 0 : rows * g.nodeH + (rows - 1) * g.rowGap)
   for (let year = maxYear; year >= 1; year--) {
     const { rows, base, summer } = rowsInYear.get(year) ?? { rows: 0, base: 0, summer: 0 }
     const lift = summer > 0 ? g.summerGap : 0
-    const h = rows === 0 ? g.emptyBand : g.bandTop + stackH(rows) + lift + g.bandBottom
+    const internship = year === input.internshipYear
+    // An internship year with nothing in it still gets a card's worth of room, for its marker.
+    const h = rows === 0 ? (internship ? g.bandTop + g.nodeH + g.bandBottom : g.emptyBand) : g.bandTop + stackH(rows) + lift + g.bandBottom
     // Calendar terms only from this year up: an earlier year's cards are placed by level, not dated.
     const ay = baseAY + year - currentYear
     const head = (season: Season) => (year >= currentYear ? `${season} ${season === 'Fall' ? ay : ay + 1}` : season)
@@ -580,14 +644,17 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
             { lane: 'fall', label: head('Fall'), y: 12 },
             { lane: 'winter', label: head('Winter'), y: 12 },
           ]
-    bands.push({ key: `year-${year}`, kind: 'year', year, label: `Year ${year}`, y, h, current: started && year === currentYear, heads })
+    // A lane with no card this year gets no head ("Winter 2028" over nothing reads as a missing term).
+    const inLane = (lane: TreeLane) => [...drafts.values()].some((d) => d.year === year && d.lane === lane)
+    const shown = heads.some((hd) => inLane(hd.lane)) ? heads.filter((hd) => inLane(hd.lane)) : heads
+    bands.push({ key: `year-${year}`, kind: 'year', year, label: `Year ${year}`, y, h, current: started && year === currentYear, heads: shown, internship })
     bandY.set(year, { y, h })
     y += h
   }
   const trunkBase = y
   // A sapling (nothing completed yet) gets a line of encouragement under its roots.
   const rootsH = g.rootsH + (completed.size === 0 ? 44 : 0)
-  bands.push({ key: 'roots', kind: 'roots', year: 0, label: 'Roots', y, h: rootsH, current: false, heads: [] })
+  bands.push({ key: 'roots', kind: 'roots', year: 0, label: 'Roots', y, h: rootsH, current: false, heads: [], internship: false })
   const height = y + rootsH
   const trunkTop = canopyH
 
@@ -612,6 +679,7 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
         current: d.current,
         cu: cuOf(d.code),
         degreeGroup: input.degree?.countsToward[d.code] ?? null,
+        needsCredits: needsCredits.get(d.code) ?? null,
         creds: d.creds.filter((c) => c < leafCount),
         elective: d.elective,
         prereqs: [],

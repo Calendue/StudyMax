@@ -87,10 +87,11 @@ export function SkillTree({
             inProgress: m.inProgressCourses,
             plan: m.plan,
             ...inputs,
+            internshipYear: m.internshipYear,
             width,
           })
         : null,
-    [m.completed, m.inProgressCourses, m.plan, inputs, width],
+    [m.completed, m.inProgressCourses, m.plan, m.internshipYear, inputs, width],
   )
 
   const [selection, setSelection] = useState<TreeSelection | null>(null)
@@ -319,6 +320,34 @@ export function SkillTree({
     />
   ) : null
 
+  // Back to roots and Jump to now live in the pinned bar, so they never sit over a card or a trunk
+  // milestone. They show once you've climbed away from the roots.
+  const jumps = layout && (
+    <div className={`tree__jumps${awayFromRoots ? ' is-on' : ''}`} aria-hidden={!awayFromRoots}>
+      <button
+        type="button"
+        className="tree__jump"
+        tabIndex={awayFromRoots ? 0 : -1}
+        aria-label="Jump to now"
+        title="Jump to now"
+        onClick={() => {
+          const band = layout.bands.find((b) => b.current)
+          if (band) scrollToY(band.y + band.h / 2)
+        }}
+      >
+        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden>
+          <circle cx="8" cy="8" r="5.5" />
+          <circle cx="8" cy="8" r="1.6" />
+        </svg>
+      </button>
+      <button type="button" className="tree__jump" tabIndex={awayFromRoots ? 0 : -1} aria-label="Back to roots" title="Back to roots" onClick={toRoots}>
+        <svg viewBox="0 0 12 12" width="14" height="14" aria-hidden>
+          <path d="M6 2v8M2.5 6.5 6 10l3.5-3.5" />
+        </svg>
+      </button>
+    </div>
+  )
+
   return (
     <section
       ref={sectionRef}
@@ -357,9 +386,13 @@ export function SkillTree({
               <Icon name="chevron" size={14} className="tree__key-chev" />
             </button>
             {chips}
+            {jumps}
           </div>
         ) : (
-          chips
+          <div className="tree__bar-row">
+            {chips}
+            {jumps}
+          </div>
         )}
       </div>
 
@@ -382,10 +415,18 @@ export function SkillTree({
             {layout.bands
               .filter((b) => b.kind === 'year')
               .map((b) => (
-                <div key={b.key} className={`tree__band${b.current ? ' tree__band--now' : ''}`} style={{ top: b.y, height: b.h }} data-band={b.key} aria-hidden>
+                <div
+                  key={b.key}
+                  className={`tree__band${b.current ? ' tree__band--now' : ''}${b.internship ? ' tree__band--internship' : ''}`}
+                  style={{ top: b.y, height: b.h }}
+                  data-band={b.key}
+                  aria-hidden
+                >
                   <span className="tree__year-label">
                     {b.label}
                     {b.current && <span className="tree__now"> · now</span>}
+                    {/* Only when the year has courses: an empty one has its card, and a one-card band is too short for the longer label. */}
+                    {b.internship && layout.nodes.some((n) => n.year === b.year) && <span className="tree__internship-tag"> · internship</span>}
                   </span>
                   {b.heads.map((h) => (
                     <span
@@ -406,6 +447,15 @@ export function SkillTree({
             {layout.milestones.map((ms) => (
               <Milestone key={ms.id} milestone={ms} x={layout.trunkX} />
             ))}
+            {/* The internship year, when the plan left it empty: a card on the trunk says why it's bare. */}
+            {layout.bands
+              .filter((b) => b.internship && !layout.nodes.some((n) => n.year === b.year))
+              .map((b) => (
+                <div key={`${b.key}-internship`} className="tree__internship" role="note" style={{ top: b.y + b.h / 2 + 10, left: layout.trunkX }}>
+                  <strong>Internship year</strong>
+                  <span>No courses this year</span>
+                </div>
+              ))}
             <div className="tree__band-sentinel" style={{ top: 0, height: layout.trunkTop }} data-band="canopy" aria-hidden />
             <div className="tree__band-sentinel" style={{ top: layout.trunkBase, height: layout.height - layout.trunkBase }} data-band="roots" aria-hidden />
 
@@ -516,38 +566,8 @@ export function SkillTree({
         )}
       </div>
 
-      <div className="tree__float" aria-hidden={peek ? undefined : !awayFromRoots}>
+      <div className="tree__float" aria-hidden={peek ? undefined : true}>
         {peek}
-        {/* Two round buttons stacked on the trunk: the one strip of the board no card ever sits on. */}
-        <div
-          className={`tree__float-inner${awayFromRoots && !peek ? ' is-on' : ''}`}
-          hidden={peek !== null}
-          style={layout ? { left: layout.trunkX - layout.width / 2 } : undefined}
-        >
-          {layout && (
-            <button
-              type="button"
-              className="tree__float-btn"
-              tabIndex={awayFromRoots ? 0 : -1}
-              aria-label="Jump to now"
-              title="Jump to now"
-              onClick={() => {
-                const band = layout.bands.find((b) => b.current)
-                if (band) scrollToY(band.y + band.h / 2)
-              }}
-            >
-              <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden>
-                <circle cx="8" cy="8" r="5.5" />
-                <circle cx="8" cy="8" r="1.6" />
-              </svg>
-            </button>
-          )}
-          <button type="button" className="tree__float-btn" tabIndex={awayFromRoots ? 0 : -1} aria-label="Back to roots" title="Back to roots" onClick={toRoots}>
-            <svg viewBox="0 0 12 12" width="14" height="14" aria-hidden>
-              <path d="M6 2v8M2.5 6.5 6 10l3.5-3.5" />
-            </svg>
-          </button>
-        </div>
       </div>
 
       </div>
@@ -648,7 +668,9 @@ function NodeCard({
     status === 'locked'
       ? needs
         ? `Needs ${courseCode(needs)} first`
-        : 'Needs its prerequisites first'
+        : node.needsCredits
+          ? `Needs ${node.needsCredits} first`
+          : 'Needs its prerequisites first'
       : registered
         ? `Registered · ${node.term.replace(' ', '\u00a0')}`
         : isElective(node.code)

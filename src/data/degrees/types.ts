@@ -1,6 +1,7 @@
 // A degree's own requirements in credit units, as the University Catalogue writes them (C1-C5 for an
 // Arts & Science B.Sc.). This is the contract the degree data (src/data/degrees/*), the degree audit
 // (src/lib/degree.ts), the planner and the skill tree share.
+import type { JuniorCap } from './juniorCaps.js'
 
 /** Arts & Science program types and requirement attributes, from Banner's section attributes. */
 export type BreadthType = 'HUM' | 'SOCS' | 'FNAR' | 'SCIE' | 'ELWR' | 'ILRQ' | 'QRRQ'
@@ -35,6 +36,13 @@ export interface DegreeGroup {
   prefer?: string[]
   /** The advising sheet's year tag (1-4): the year advisors put this requirement in. */
   year?: number
+  /** How many of its credit units the year tag covers; the rest fall a year later (two of three sciences in Year 1). */
+  yearCu?: number
+  /**
+   * When its year is full, this is the slot that moves to the next one (the sheet's Year 1 Winter
+   * "Indigenous or breadth").
+   */
+  flexible?: boolean
   /** Areas within the group with a per-area ceiling (C3 junior science: at most 6 cu from one area). */
   areas?: { capCu: number; byArea: Record<string, string[]> }
   /** At least `cu` of this group from these program types (C2: 3 cu of Humanities or Social Science). */
@@ -65,6 +73,11 @@ export interface Degree {
    * Course Requirements in C3", except up to `exception.cu` in one subject across the ELW and IL groups.
    */
   subjectCap?: { cu: number; groups: string[]; exception?: { cu: number; groups: string[] } }
+  /**
+   * The college's "Maximum Junior Credit Units by Subject" (src/data/degrees/juniorCaps.ts): 100-level
+   * credit in a subject past its cap counts toward neither the total nor any requirement.
+   */
+  juniorCaps?: Record<string, JuniorCap>
   milestones?: DegreeMilestone[]
   /** Where every list and number came from (URLs). */
   sources: string[]

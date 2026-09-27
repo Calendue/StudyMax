@@ -1,6 +1,8 @@
 import { useModel } from '../model.ts'
 import { MAX_COURSES_PER_TERM, MAX_SUMMER_COURSES } from '../lib/cloudSession.ts'
 import { KIND_LABEL, plural } from '../format.ts'
+import { isElective } from '../lib/plan.ts'
+import { load as loadRegistration } from '../lib/mockRegistration.ts'
 import { ScreenTitle } from '../ui/chrome.tsx'
 import { Icon } from '../ui/Icon.tsx'
 import { Appear, Button, Group, Ring, Row, SectionLabel } from '../ui/primitives.tsx'
@@ -73,19 +75,59 @@ export function PlanTargets() {
         <Icon name="compare" size={14} />
         What if…
       </button>
+      <RegisterChip />
     </Appear>
+  )
+}
+
+/** Hidden until the first term has a real course to register for (electives don't count). */
+function RegisterChip() {
+  const m = useModel()
+  const term = m.plan[0]
+  const hasCourses = !!term && term.courses.some((c) => !isElective(c.code))
+  if (!hasCourses) return null
+  const registered = !!term && loadRegistration(term.label) !== null
+  return (
+    <button type="button" className="chip chip--add" onClick={() => m.go('register')}>
+      <Icon name="table" size={14} />
+      {registered ? 'View registration' : 'Register with Max'}
+    </button>
   )
 }
 
 /** Spring/Summer: off, or the most courses a Spring/Summer term may take. */
 const SUMMER_CHOICES = [0, ...Array.from({ length: MAX_SUMMER_COURSES }, (_, i) => i + 1)]
 
-/** Courses per term (Fall/Winter and Spring/Summer), and the term it starts in. */
+/** What a degree variant is called in the plan's settings. */
+const VARIANT_LABEL: Record<string, string> = { 'bsc-4': 'Four-year', 'bsc-honours': 'Honours', 'bsc-3': 'Three-year' }
+
+/** The degree (where the program has variants), courses per term (Fall/Winter and Spring/Summer), and the term it starts in. */
 export function PlanControls() {
   const m = useModel()
   const summer = m.springSummer ? m.summerPerTerm : 0
+  const variants = m.selectedProgram?.degrees ?? []
   return (
     <>
+      {variants.length > 1 && (
+        <Appear index={1} className="per-term per-term--wrap">
+          <span id="degree-variant-label">Degree</span>
+          <div className="segmented segmented--labels" role="radiogroup" aria-labelledby="degree-variant-label">
+            {variants.map((d) => (
+              <button
+                key={d.variant}
+                type="button"
+                role="radio"
+                aria-checked={m.activeDegree?.variant === d.variant}
+                aria-label={d.name}
+                className={`segmented__option${m.activeDegree?.variant === d.variant ? ' segmented__option--on' : ''}`}
+                onClick={() => m.setDegreeVariant(d.variant)}
+              >
+                {VARIANT_LABEL[d.variant] ?? d.name}
+              </button>
+            ))}
+          </div>
+        </Appear>
+      )}
       <Appear index={1} className="per-term">
         <span id="per-term-label">Courses per term</span>
         <div className="segmented" role="radiogroup" aria-labelledby="per-term-label">
@@ -127,6 +169,25 @@ export function PlanControls() {
       </Appear>
 
       <Appear index={1} className="per-term">
+        <span id="internship-label">Internship year</span>
+        <div className="segmented" role="radiogroup" aria-labelledby="internship-label">
+          {([null, 3, 4] as const).map((year) => (
+            <button
+              key={year ?? 'off'}
+              type="button"
+              role="radio"
+              aria-checked={m.internshipYear === year}
+              aria-label={year === null ? 'No internship year' : `Internship in year ${year}`}
+              className={`segmented__option${m.internshipYear === year ? ' segmented__option--on' : ''}`}
+              onClick={() => m.chooseInternship(year ?? 'no')}
+            >
+              {year ?? 'Off'}
+            </button>
+          ))}
+        </div>
+      </Appear>
+
+      <Appear index={1} className="per-term">
         <label htmlFor="start-term">Starting</label>
         {/* ponytail: native select, not a segmented control; six term labels don't fit one row on a phone */}
         <select
@@ -148,13 +209,23 @@ export function PlanControls() {
 
 export function HiddenPrereqsNotice() {
   const m = useModel()
+  if (m.hero.spec.unavailable) {
+    return (
+      <Appear index={2} className="notice">
+        <p>
+          <strong>{m.hero.spec.name} can&rsquo;t be finished from the 2026-27 catalogue.</strong> {m.hero.spec.unavailable}.
+          The plan covers the rest of it; ask the department what replaces it.
+        </p>
+      </Appear>
+    )
+  }
   if (m.hiddenPrereqs.length === 0) return null
   return (
     <Appear index={2} className="notice">
       <p>
         <strong>
           {plural(m.hiddenPrereqs.length, 'course')} below {m.hiddenPrereqs.length === 1 ? "isn't" : "aren't"} on the
-          specialization page.
+          specialization or degree page.
         </strong>{' '}
         {m.hiddenPrereqs.length === 1 ? "It's a prerequisite" : "They're prerequisites"} you need before you can register
         for the ones that are. That&rsquo;s the real cost.
@@ -183,6 +254,9 @@ export function PlanCopy() {
         </>
       )}
       <p className="footnote">
+        {m.activeDegree
+          ? `The plan is the whole ${m.activeDegree.name} from the 2026-27 catalogue: ${m.activeDegree.totalCu} credit units, ${m.activeDegree.minSeniorCu} of them at the 200 level or higher, at most 15 a term. `
+          : "The plan covers your major's requirements; add breadth and electives with an advisor. "}
         Prerequisites come from catalogue.usask.ca verbatim, and each course sits in a term it ran in on USask&rsquo;s class
         search over the last two years. Schedules can change, so confirm with your advisor before you register.
       </p>

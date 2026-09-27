@@ -2,7 +2,7 @@ import { useEffect, useRef, type ReactNode } from 'react'
 import { MAX_COURSES_PER_TERM, MAX_SUMMER_COURSES } from '../lib/cloudSession.ts'
 import { motion, useReducedMotion } from 'motion/react'
 import { useModel } from '../model.ts'
-import type { Screen } from '../App.tsx'
+import type { Internship, Screen } from '../App.tsx'
 import { courseCode } from '../format.ts'
 import { ActionBar, ScreenBody, ScreenTitle, TopBar } from '../ui/chrome.tsx'
 import { Icon, type IconName } from '../ui/Icon.tsx'
@@ -487,9 +487,36 @@ export function DegreeScreen() {
 
 // ─────────────────────────────────────────────────────────────── 4. goals (optional)
 
+const INTERNSHIP_CHOICES: { value: Internship; label: string }[] = [
+  { value: 3, label: 'Year 3' },
+  { value: 4, label: 'Year 4' },
+  { value: 'unsure', label: 'Not sure yet' },
+  { value: 'no', label: 'No' },
+]
+
+/**
+ * When the student plans an internship. A year picked here is kept free of courses in the plan, and
+ * marked on the skill tree. It sits in the goals step, or on the review when a path skips that step.
+ */
+function InternshipField({ index }: { index: number }) {
+  const m = useModel()
+  return (
+    <Field label="Planning an internship?" hint="Optional" index={index}>
+      <div className="opt-chips" role="radiogroup" aria-label="Internship year" data-choices>
+        {INTERNSHIP_CHOICES.map((c) => (
+          <OptionChip key={c.value} selected={m.internship === c.value} onClick={() => m.chooseInternship(c.value)}>
+            {c.label}
+          </OptionChip>
+        ))}
+      </div>
+      <p className="onb-field__note">Most students go in their 3rd or 4th year. Your plan keeps that year free of courses.</p>
+    </Field>
+  )
+}
+
 export function GoalsScreen() {
   const m = useModel()
-  const count = m.concentrationIds.length + (m.minorId ? 1 : 0)
+  const count = m.concentrationIds.length + (m.minorId ? 1 : 0) + (m.internship !== null ? 1 : 0)
   return (
     <Step
       title="Anything else you're aiming for?"
@@ -521,6 +548,7 @@ export function GoalsScreen() {
           </div>
         </Field>
       )}
+      <InternshipField index={2} />
     </Step>
   )
 }
@@ -650,6 +678,8 @@ export function ReviewScreen() {
   const digits = m.phone.replace(/\D/g, '').length
   const phoneOk = digits === 0 || digits >= 7
   const rows = profileRows(m).filter((r) => r.shown)
+  // A path without the goals step (a transcript, or a major with nothing to pick) asks it here.
+  const askInternship = m.universityId === 'usask' && !m.onboardingSteps.includes('goals')
   return (
     <Step
       title="Ready when you are"
@@ -668,8 +698,9 @@ export function ReviewScreen() {
           </div>
         ))}
       </Appear>
+      {askInternship && <InternshipField index={1} />}
       {m.features.call && (
-        <Field label="Want a call before an award closes?" hint="Optional" index={1}>
+        <Field label="Want a call before an award closes?" hint="Optional" index={askInternship ? 2 : 1}>
           <div className="field">
             <Icon name="phone" size={20} className="field__icon" />
             <input

@@ -1,5 +1,6 @@
 import type { RequirementGroup } from '../specializations.js'
 import { catalogueCourses } from '../courses.js'
+import { courseInfo } from '../prereqs.js'
 
 export const single = (course: string): RequirementGroup => ({ courses: [course], need: 1 })
 
@@ -23,3 +24,9 @@ export function subjectAtLevels(subject: string, levels: number[], exclude: stri
 
 /** Every course code a list of groups names, for building an `exclude` list. */
 export const codesIn = (groups: RequirementGroup[]): string[] => groups.flatMap((g) => g.courses)
+
+/**
+ * Leaves out courses under 3 credit units (a 1-cu lab, a 0-cu seminar). A requirement group counts
+ * courses, so where the page counts credit units one of those would pass for a whole course.
+ */
+export const wholeCourses = (codes: string[]): string[] => codes.filter((c) => (courseInfo[c]?.creditUnits ?? 3) >= 3)

@@ -1,6 +1,7 @@
 import type { Degree } from './types.js'
 import { breadth } from '../breadth.js'
 import { catalogueCourses } from '../courses.js'
+import { juniorCaps } from './juniorCaps.js'
 
 // B.Sc. Four-year Computer Science, University Catalogue 2026-27 (effective May 1, 2026 to April 30,
 // 2027), in credit units: https://programs.usask.ca/arts-and-science/computer-science/bsc-4-computer-science.php
@@ -95,6 +96,8 @@ export const computerScienceBsc4: Degree = {
       matches: (code) => /^INDG[234]\d\d$/.test(code),
       open: true,
       year: 1,
+      // The sheet's Year 1 Winter slot is "Indigenous or breadth": what moves when Year 1 is full.
+      flexible: true,
     },
     { id: 'c1-qr', block: 'C1', label: 'Quantitative reasoning', needCu: 6, courses: ['MATH163', 'MATH164'], year: 1 },
 
@@ -122,7 +125,9 @@ export const computerScienceBsc4: Degree = {
       oneOf: [['PHYS117', 'PHYS125']],
       areas: { capCu: 6, byArea: scienceAreas },
       open: true,
+      // A junior science each Year 1 term; the third is Year 2 Fall's "breadth or science".
       year: 1,
+      yearCu: 6,
     },
     {
       id: 'c3-phil',
@@ -229,6 +234,8 @@ export const computerScienceBsc4: Degree = {
     groups: ['c1-writing', 'c1-indigenous', 'c1-qr', 'c2-breadth', 'c3-science'],
     exception: { cu: 9, groups: ['c1-writing', 'c1-indigenous'] },
   },
+  // The policy page's "Maximum Junior Credit Units by Subject" (CMPT 12, ENG 6 plus ENG 120, ...).
+  juniorCaps,
   milestones: [
     {
       id: 'cs-major-admission',
@@ -316,10 +323,75 @@ export const computerScienceHonours: Degree = {
     },
   ],
   subjectCap: computerScienceBsc4.subjectCap,
-  milestones: computerScienceBsc4.milestones,
+  juniorCaps,
+  milestones: [
+    computerScienceBsc4.milestones![0],
+    {
+      id: 'honours-application',
+      label: 'Honours application',
+      afterCu: 60,
+      // "Formal admission requires ... Completion of all mandatory 200-level CMPT courses in the C4 Major
+      // Requirement ... A Cumulative Weighted Average of at least 70% overall and ... in the Major Average."
+      detail:
+        'Apply by May 1 with 60 cu, CMPT 214, 215, 260 or 263, 270 and 280 done, and a 70% average, overall and in Computer Science. CMPT 400 needs it.',
+      source: 'https://programs.usask.ca/arts-and-science/computer-science/bsc-honours-computer-science.php',
+    },
+  ],
   sources: [
     'https://programs.usask.ca/arts-and-science/computer-science/bsc-honours-computer-science.php',
     'https://programs.usask.ca/arts-and-science/policies.php',
     'https://www.cs.usask.ca/documents/advising/2024-bsc-hons-advising.pdf',
   ],
 }
+
+// B.Sc. Three-year Computer Science, University Catalogue 2026-27:
+// https://programs.usask.ca/arts-and-science/computer-science/bsc-3-computer-science.php
+// 90 cu, at least 42 at the 200 level or higher (C5: "to complete the requirements for the 90 credit
+// unit Three-year program, of which at least 42 must be at the 200-level or higher").
+// C1 15 and C2 9 are the Four-year's word for word (the page only recommends PHIL 232 there). C3 is 12:
+// the same 9 cu of junior science (6 cu per area) and MATH 110/133/176, with no PHIL 232/GE 449 and no
+// Business Science. C4 is 33: the seven intro and 200-level courses, "Choose 9 credit units" of
+// "CMPT — 300-Level, 400-Level" with "at most 1 course from CME 332, CME 334, CME 341, CME 342,
+// CME 433, CME 435", and STAT 242/245/EE 216. C5 is the rest, 21 cu to 90.
+// Year tags: https://www.cs.usask.ca/documents/advising/2024-bsc-3y-advising.pdf (dated 2023/08/08):
+// CMPT 141/145 and MATH 110 Y1, the 200-level CMPT and STAT 242 Y2, the 9 cu of CMPT Y3. Its C1, C2
+// and junior-science tags don't extract cleanly, so those reuse the Four-year sheet's (C1 Y1, two
+// junior sciences in Y1, breadth Y2). The page wins where they differ (the sheet still lists PHIL 232
+// and BINF 300; the 2026-27 page doesn't require either).
+const threeYearCme = ['CME332', 'CME334', 'CME341', 'CME342', 'CME433', 'CME435'].filter((code) => active.has(code))
+
+export const computerScienceBsc3: Degree = {
+  id: 'usask-cmpt-bsc-3',
+  name: 'B.Sc. Three-year in Computer Science',
+  variant: 'bsc-3',
+  totalCu: 90,
+  minSeniorCu: 42,
+  groups: [
+    ...shared.filter((g) => g.id !== 'c3-phil' && g.id !== 'c3-business'),
+    ...sharedC4,
+    {
+      id: 'c4-upper',
+      block: 'C4',
+      label: 'Senior CMPT elective',
+      needCu: 9,
+      courses: threeYearCme,
+      // "CMPT — 300-Level, 400-Level"; CMPT 400 itself needs Honours standing, which the planner checks.
+      matches: cmptAtLeast(300),
+      oneOf: [threeYearCme],
+      open: true,
+      year: 3,
+    },
+  ],
+  subjectCap: computerScienceBsc4.subjectCap,
+  juniorCaps,
+  milestones: [computerScienceBsc4.milestones![0]],
+  sources: [
+    'https://programs.usask.ca/arts-and-science/computer-science/bsc-3-computer-science.php',
+    'https://programs.usask.ca/arts-and-science/policies.php',
+    'https://www.cs.usask.ca/documents/advising/2024-bsc-3y-advising.pdf',
+    'https://programs.usask.ca/arts-and-science/computer-science/index.php',
+  ],
+}
+
+/** The CS B.Sc. variants a student can plan, the Four-year first (the default). */
+export const computerScienceDegrees: Degree[] = [computerScienceBsc4, computerScienceHonours, computerScienceBsc3]
