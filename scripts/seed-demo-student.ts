@@ -2,9 +2,10 @@
 // (docs/BayMax/implementation/01-seed-demo-student.md). Idempotent: upserts by the fixed
 // authUid "baymax-demo-student", so re-running it never duplicates rows.
 //
-// Run: node --experimental-strip-types --env-file=.env.local scripts/seed-demo-student.ts
+// Run: node --experimental-strip-types --experimental-loader ./scripts/_resolve-ts-loader.mjs --env-file=.env.local scripts/seed-demo-student.ts
+import { createHash } from 'node:crypto'
 import { PrismaClient } from '@prisma/client'
-import { buildStudentPlan } from '../src/lib/plan.ts'
+import { regenerate } from '../src/lib/max/planningAdapter.ts'
 import { specializations } from '../src/data/specializations.ts'
 import { completedCourses, inProgressCourses } from '../src/data/transcript.ts'
 
@@ -12,15 +13,21 @@ const AUTH_UID = 'baymax-demo-student'
 const USASK_INSTITUTION = 'University of Saskatchewan'
 const TARGET_PROGRAM_ID = 'computer-science'
 const TARGET_SPECIALIZATION_ID = 'software-development'
-const COURSES_PER_TERM = 4
+// The app's default full load, no Spring/Summer: the same settings api/session.ts plans with, and
+// the plan is the whole Four-year degree (the program's default), as the app draws it.
+const COURSES_PER_TERM = 5
+const SPRING_SUMMER = false
+const SUMMER_PER_TERM = 2
 // Hardcoded (not upcomingTerm(new Date())) so the seeded plan always matches the exact,
 // hand-verified demo numbers regardless of what day this is re-run (see 01-seed-demo-student.md
-// step 5 and 6): Winter 2027 baseline, and dropping CMPT370 pushes graduation to Winter 2028 —
+// step 5 and 6): Winter 2027 baseline (CMPT 371, 470 and three degree electives at 5 a term), and
+// dropping CMPT370 pushes graduation to Winter 2028 —
 // re-verified after src/lib/plan.ts became offerings-aware (src/data/offerings.ts): CMPT371/CMPT470
 // only run in Winter, so they can no longer land in the very next (Fall) term once CMPT370 isn't
 // done — a full year out, not one term (originally verified as Fall 2027, before that change).
 const START = { season: 'Winter' as const, year: 2027 }
-const PLANNER_VERSION = 'lib/plan.ts@buildStudentPlan-v2'
+// Keep in step with api/_planVersion.ts.
+const PLANNER_VERSION = 'lib/planner@exact-v3'
 
 const prisma = new PrismaClient()
 
@@ -56,6 +63,9 @@ await prisma.studentProfile.upsert({
     majorProgramId: TARGET_PROGRAM_ID,
     minorProgramId: null,
     concentrationIds: [],
+    springSummer: SPRING_SUMMER,
+    maxCoursesPerTerm: COURSES_PER_TERM,
+    maxSummerCourses: SUMMER_PER_TERM,
     startingTermSeason: null,
     startingTermYear: null,
     goals: null,
@@ -68,6 +78,9 @@ await prisma.studentProfile.upsert({
     majorProgramId: TARGET_PROGRAM_ID,
     minorProgramId: null,
     concentrationIds: [],
+    springSummer: SPRING_SUMMER,
+    maxCoursesPerTerm: COURSES_PER_TERM,
+    maxSummerCourses: SUMMER_PER_TERM,
   },
 })
 
@@ -84,13 +97,20 @@ await prisma.$transaction([
   }),
 ])
 
-const completed = new Set(completedCourses)
-const inProgress = new Set(inProgressCourses)
-const terms = buildStudentPlan([targetSpec], specializations, completed, inProgress, COURSES_PER_TERM, START)
+const { terms, inputs } = regenerate({
+  completed: new Set(completedCourses),
+  inProgress: new Set(inProgressCourses),
+  targetProgramId: TARGET_PROGRAM_ID,
+  targetSpecializationIds: [targetSpec.id],
+  coursesPerTerm: COURSES_PER_TERM,
+  springSummer: SPRING_SUMMER,
+  summerPerTerm: SUMMER_PER_TERM,
+  start: START,
+})
 
 if (terms.length === 0) {
   throw new Error(
-    'buildStudentPlan produced an empty plan for the seeded transcript + software-development target — ' +
+    'regenerate produced an empty plan for the seeded transcript + software-development target — ' +
       'the demo drop-CMPT370 scenario depends on this NOT being empty. Check src/data/transcript.ts and ' +
       'src/data/specializations.ts for drift before seeding.',
   )
@@ -143,7 +163,7 @@ await prisma.planVersion.upsert({
     projectedGradYear: Number(projectedGradYearStr),
     validation: { ok: true, issues: [] },
     plannerVersion: PLANNER_VERSION,
-    inputsHash: 'backfill',
+    inputsHash: createHash('sha256').update(JSON.stringify(inputs)).digest('hex'),
     createdBy: 'backfill',
   },
 })

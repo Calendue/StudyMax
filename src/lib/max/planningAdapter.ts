@@ -9,6 +9,7 @@
 // `validate` below is intentionally close to a no-op.
 import { programs } from '../../data/programs/index.js'
 import { buildStudentPlan, type PlannedTerm, type TermStart } from '../plan.js'
+import { clampLoad, summerLoadOf } from '../planner/loads.js'
 
 /** "computer-science" -> "Computer Science", for anything Max says out loud — never speak a raw
  * Program.id slug. Falls back to the id itself if it's somehow unknown, rather than throwing. */
@@ -29,12 +30,46 @@ export interface AdapterInput {
   /** StudentProfile.majorProgramId, e.g. "computer-science". */
   targetProgramId: string
   targetSpecializationIds: string[]
-  /** A ceiling, not an exact fill (spec 03 decision 5) — passed straight to buildPlan's perTerm cap. */
+  /** Fall/Winter courses per term (1-5, clamped) — a ceiling, not an exact fill (spec 03 decision 5). */
   coursesPerTerm: number
   start: TermStart
   /** StudentProfile.internshipAcademicYear: an academic year away on an internship, left empty. */
   away?: number | null
+  /** StudentProfile.springSummer: Spring/Summer terms on. Omitted = off. */
+  springSummer?: boolean
+  /** StudentProfile.maxSummerCourses: courses per Spring/Summer term (0-2; 0 = off, like springSummer false). */
+  summerPerTerm?: number
+  /** Registered courses fixed in their terms, by term label ("Fall 2026"), counted against that term's load. */
+  booked?: Record<string, string[]>
+  /**
+   * The degree variant ('bsc-4', 'bsc-honours', 'bsc-3'). The app's pick is device-only, so the
+   * server omits it and gets the program's default degree (the Four-year for CS), as the app does.
+   */
+  degreeVariant?: string
 }
+
+/**
+ * Every input the planner reads for one plan, normalised and sorted so the same student always
+ * gives the same JSON: what PlanVersion.inputsHash hashes (api/_planVersion.ts).
+ */
+export interface PlanInputs {
+  program: string
+  specializations: string[]
+  completed: string[]
+  inProgress: string[]
+  /** [term label, sorted codes], by term label. */
+  booked: [string, string[]][]
+  /** Fall/Winter courses per term, 1-5. */
+  load: number
+  /** Spring/Summer courses per term, 0-2; 0 = no Spring/Summer terms. */
+  summer: number
+  /** Degree.id ('usask-cmpt-bsc-4'); null for a program with no degree model. */
+  degree: string | null
+  start: TermStart
+  away: number | null
+}
+
+const sorted = (codes: Iterable<string>) => [...new Set(codes)].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
 
 export type ValidationSeverity = 'WARNING' | 'ERROR'
 
@@ -65,23 +100,45 @@ export interface RoadmapDiff {
 }
 
 /**
- * Translates AdapterInput into what buildStudentPlan expects and runs it — no planning logic of
- * its own. Throws if targetProgramId doesn't match a known program; returns an empty plan if none
- * of targetSpecializationIds resolve (matches buildStudentPlan's own "no targets = no plan" rule).
+ * Translates AdapterInput into what buildStudentPlan expects and runs it the way App.tsx does (the
+ * program's degree, the chosen loads, booked courses, the internship year) — no planning logic of
+ * its own. Returns the plan and its normalised inputs (for PlanVersion.inputsHash). Throws if
+ * targetProgramId doesn't match a known program; returns an empty plan if none of
+ * targetSpecializationIds resolve (matches buildStudentPlan's own "no targets = no plan" rule).
  */
-export function regenerate(input: AdapterInput): { terms: PlannedTerm[] } {
+export function regenerate(input: AdapterInput): { terms: PlannedTerm[]; inputs: PlanInputs } {
   const program = programs.find((p) => p.id === input.targetProgramId)
   if (!program) {
     throw new Error(`planningAdapter.regenerate: unknown targetProgramId "${input.targetProgramId}"`)
   }
-  const targets = program.specializations.filter((s) => input.targetSpecializationIds.includes(s.id))
+  const degree = (input.degreeVariant ? program.degrees?.find((d) => d.variant === input.degreeVariant) : undefined) ?? program.degree
+  const inputs: PlanInputs = {
+    program: program.id,
+    specializations: sorted(input.targetSpecializationIds),
+    completed: sorted(input.completed),
+    inProgress: sorted(input.inProgress),
+    booked: Object.keys(input.booked ?? {})
+      .sort()
+      .map((label): [string, string[]] => [label, sorted(input.booked![label])])
+      .filter(([, codes]) => codes.length > 0),
+    load: clampLoad(input.coursesPerTerm),
+    summer: summerLoadOf(input.springSummer, input.summerPerTerm),
+    degree: degree?.id ?? null,
+    start: { season: input.start.season, year: input.start.year },
+    away: input.away ?? null,
+  }
+  const targets = program.specializations.filter((s) => inputs.specializations.includes(s.id))
   const terms =
     targets.length === 0
       ? []
-      : buildStudentPlan(targets, program.specializations, input.completed, input.inProgress, input.coursesPerTerm, input.start, {
-          away: input.away ?? null,
+      : buildStudentPlan(targets, program.specializations, new Set(inputs.completed), inputs.inProgress, inputs.load, inputs.start, {
+          springSummer: inputs.summer > 0,
+          ...(inputs.summer > 0 ? { summerPerTerm: inputs.summer } : {}),
+          degree,
+          booked: Object.fromEntries(inputs.booked),
+          away: inputs.away,
         })
-  return { terms }
+  return { terms, inputs }
 }
 
 /**
