@@ -15,6 +15,7 @@ import {
   discardScenario,
   normalizeCourseCode,
   droppedAt,
+  loadCurrentSnapshot,
   presentScenario,
   runScenario,
   snapshotFromCall,
@@ -405,11 +406,13 @@ const TOPICS = new Set<OptionTopic>(['specialization', 'pace', 'summer'])
 async function runGetPlanOptions(call: ResolvedCall, args: Record<string, unknown>): Promise<ToolResponse> {
   const about = args.about as OptionTopic
   if (!TOPICS.has(about)) return { ok: false, code: 'UNKNOWN_TOPIC', speakable: 'I can look at your pace, summers, or a different specialization.' }
-  if (!call.planInputs) {
+  // Without the app's plan (a call placed by phone number), compare against the student's saved plan.
+  const snapshot = call.planInputs ? snapshotFromCall(call.planInputs) : (await loadCurrentSnapshot(call.userId, scopeOf(call)))?.snapshot
+  if (!snapshot) {
     return { ok: false, code: 'NO_LIVE_PLAN', speakable: "I can't compare options on this call — open the app and call me from there." }
   }
   const working = publish(call.liveToken, { type: 'max.working', tool: 'get_plan_options' })
-  const result = planOptions(adapterInput(snapshotFromCall(call.planInputs)), about)
+  const result = planOptions(adapterInput(snapshot), about)
   await working
   await publish(call.liveToken, {
     type: 'options.presented',

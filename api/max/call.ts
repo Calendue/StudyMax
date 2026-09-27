@@ -8,7 +8,7 @@ import { randomBytes } from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import { VapiClient } from '@vapi-ai/server-sdk'
 import { db, hasDatabase } from '../_db.js'
-import { resolveMaxUser } from '../_maxIdentity.js'
+import { accountForPhone, resolveMaxUser } from '../_maxIdentity.js'
 import { adapterInput, snapshotFromCall } from './_scenarios.js'
 import { parseCallPlanInputs } from '../../src/lib/max/callInputs.js'
 import type { CallPlanInputs } from '../../src/lib/max/live.js'
@@ -120,14 +120,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return
   }
 
+  // A guest dialling a number that belongs to a student account: the call is that student's, about
+  // their saved plan — not the demo student every guest shares, whose plan the last guest's call may
+  // have saved over. The guest's screen isn't that account's, so its plan inputs are ignored.
+  let account = user
+  let accountSettings = settings
+  let isGuest = resolved.isGuest
+  if (isGuest && dial) {
+    const ownerId = await accountForPhone(dial)
+    const owner = ownerId ? await db().userInfo.findUnique({ where: { userId: ownerId } }) : null
+    if (owner) {
+      account = owner
+      accountSettings = await db().maxSettings.findUnique({ where: { userId: owner.userId } })
+      isGuest = false
+    }
+  }
+  const byPhone = account !== user
+
   const [profile, plan, underWay] = await Promise.all([
-    db().studentProfile.findUnique({ where: { userId: user.userId } }),
-    db().generatedPlan.findUnique({ where: { userId: user.userId } }),
+    db().studentProfile.findUnique({ where: { userId: account.userId } }),
+    db().generatedPlan.findUnique({ where: { userId: account.userId } }),
     // Transcript in-progress and onboarding's "registered this term" are both what they're taking now.
-    db().studentCourse.findMany({ where: { userId: user.userId, status: { in: ['in_progress', 'registered'] } } }),
+    db().studentCourse.findMany({ where: { userId: account.userId, status: { in: ['in_progress', 'registered'] } } }),
   ])
   if (!profile || !plan) {
-    if (resolved.isGuest) {
+    if (isGuest) {
       res.status(500).json({ error: 'demo student has no profile/plan — run npm run db:seed:demo-student' })
     } else {
       res.status(409).json({ error: 'NO_PROFILE' })
@@ -143,7 +160,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Term by term when the app said which term each is in; else one list (a saved plan has no seasons).
   let currentLine: string | null = null
   let programId = profile.majorProgramId
-  const parsed = body.planInputs === undefined ? null : parseCallPlanInputs(body.planInputs)
+  const parsed = body.planInputs === undefined || byPhone ? null : parseCallPlanInputs(body.planInputs)
   if (parsed && 'inputs' in parsed) {
     planInputs = parsed.inputs
     const terms = regenerate(adapterInput(snapshotFromCall(planInputs))).terms
@@ -165,16 +182,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // A guest's name is the one they gave this session, or none — never the shared demo student's
   // ("Demo", or whatever the last guest asked to be called). And every guest meets Max for the first
   // time: "has met Max" on the shared account belongs to whoever called last.
-  const guestName = resolved.isGuest && typeof body.name === 'string' ? body.name.trim().slice(0, 60) : ''
-  const firstName = resolved.isGuest ? guestName || null : (user.firstName ?? null)
-  const isFirstCall = resolved.isGuest ? true : !settings?.hasMetMax
+  const guestName = isGuest && typeof body.name === 'string' ? body.name.trim().slice(0, 60) : ''
+  const firstName = isGuest ? guestName || null : (account.firstName ?? null)
+  const isFirstCall = isGuest ? true : !accountSettings?.hasMetMax
 
   // A call row that never heard its end (a lost webhook) would hold max_call_one_active_uq forever
   // and lock this student out of Max. No call outlives MAX_CALL_SECONDS (45 min), so anything
   // still "active" after an hour is dead.
   await db().maxCall.updateMany({
     where: {
-      userId: user.userId,
+      userId: account.userId,
       status: { in: ['queued', 'ringing', 'in_progress'] },
       createdAt: { lt: new Date(Date.now() - STALE_CALL_MS) },
     },
@@ -188,7 +205,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     call = await db().maxCall.create({
       data: {
-        userId: user.userId,
+        userId: account.userId,
         status: 'queued',
         liveToken,
         ...(planInputs ? { planInputs: planInputs as unknown as Prisma.InputJsonValue } : {}),
@@ -197,10 +214,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch {
     // max_call_one_active_uq: already queued/ringing/in_progress for this student. Every guest is the
     // same demo student, so for a guest it's someone else's call, not theirs.
-    res.status(409).json({ error: resolved.isGuest ? 'MAX_BUSY' : 'ALREADY_ON_A_CALL' })
+    res.status(409).json({ error: isGuest ? 'MAX_BUSY' : 'ALREADY_ON_A_CALL' })
     return
   }
-  console.log(`[Max] call ${call.callId} placed${dryRun ? ' (dry run)' : ''} — ${planInputs ? `app inputs, parity=${parity}` : 'saved plan'}`)
+  console.log(`[Max] call ${call.callId} placed${dryRun ? ' (dry run)' : ''} — ${byPhone ? `guest → account ${account.userId} by phone, ` : ''}${planInputs ? `app inputs, parity=${parity}` : 'saved plan'}`)
 
   if (dryRun) {
     // No phone: the rehearsal script plays Vapi's webhooks against this row.
