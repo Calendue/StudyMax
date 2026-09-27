@@ -453,7 +453,11 @@ export function PhoneScreen() {
             aria-label="Your phone number"
           />
         </div>
-        <p className="footnote">Max only calls when you ask. Your number isn&rsquo;t saved.</p>
+        <p className="footnote">
+          {m.account
+            ? 'Saved to your account so Max can reach you. Max only calls when you ask.'
+            : 'Max only calls when you ask. Your number isn\u2019t saved.'}
+        </p>
       </Appear>
     </Step>
   )

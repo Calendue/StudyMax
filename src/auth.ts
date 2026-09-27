@@ -90,6 +90,18 @@ export async function signIn(provider: Provider): Promise<Account> {
   return toAccount(result.user, nameFrom(sdk.getAdditionalUserInfo(result)?.profile))
 }
 
+/** The signed-in user's Firebase ID token for our own API, or null for a guest. Refreshed when stale. */
+export async function idToken(): Promise<string | null> {
+  if (!isAuthConfigured) return null
+  try {
+    if (isNative) return (await (await native()).FirebaseAuthentication.getIdToken()).token || null
+    const { auth } = await web()
+    return (await auth.currentUser?.getIdToken()) ?? null
+  } catch {
+    return null
+  }
+}
+
 export async function signOut() {
   if (isNative) await (await native()).FirebaseAuthentication.signOut()
   else if (webAuth) await (await webAuth).auth.signOut()

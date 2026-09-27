@@ -21,6 +21,8 @@ import { buildWidgetSnapshot } from './lib/widgetSnapshot.ts'
 import { currentDeadlineWatch, startDeadlineWatch, stopDeadlineWatch, syncWidgets, watchFailureMessage } from './widgets.ts'
 import { useClassTracker } from './useClassTracker.ts'
 import { currentAccount, isAuthConfigured, signIn, signInErrorMessage, signOut, type Account, type Provider } from './auth.ts'
+import { loadCloudSession, saveCloudSession } from './cloudSync.ts'
+import type { CloudSession } from './lib/cloudSession.ts'
 import { ModelContext } from './model.ts'
 import { courseCode, registeredCode, type TargetKind } from './format.ts'
 import { DUR, INSTANT, SETTLE } from './ui/motion.ts'
@@ -170,7 +172,7 @@ function seedOf(state: Pick<Partial<SavedState>, 'concentrationIds' | 'minorId'>
 }
 
 // Intake selections survive a refresh so a half-finished session isn't lost. The phone number is
-// deliberately excluded: it never touches storage. A signed-in student's state is kept under their
+// deliberately excluded: it never touches localStorage (a signed-in student's goes to their account). A signed-in student's state is kept under their
 // Firebase uid, so two people on one phone don't see each other's courses.
 function saveKeyFor(uid: string | null) {
   return uid ? `${SAVE_KEY}:${uid}` : SAVE_KEY
@@ -342,6 +344,34 @@ function useStudyMax() {
       // storage full or blocked (private mode): the app works fine without persistence
     }
   }, [saveKey, snapshotJson])
+
+  // Onboarding's phone number, for Max's call. Never in localStorage; a signed-in student's is saved
+  // to their account below, so it follows them to another phone.
+  const [phone, setPhone] = useState('')
+
+  // A signed-in student's session is also kept in the database, so another phone can pick it up.
+  // Saved a moment after the last change, not on every tick; a failed save is simply retried by the next.
+  const cloudJson = JSON.stringify({
+    universityId,
+    programId,
+    completed: snapshot.completed,
+    inProgress: uploadInProgress,
+    revealed,
+    studentType,
+    degree,
+    minorId,
+    concentrationIds,
+    registered,
+    ...(phone.trim() ? { phone: phone.trim() } : {}),
+  } satisfies CloudSession)
+  const accountUid = account?.uid ?? null
+  // Only once this phone's session is known to be theirs: their own save here, or the database answered.
+  const [cloudUid, setCloudUid] = useState<string | null>(null)
+  useEffect(() => {
+    if (!accountUid || accountUid !== cloudUid) return
+    const timer = setTimeout(() => void saveCloudSession(JSON.parse(cloudJson)), 1500)
+    return () => clearTimeout(timer)
+  }, [accountUid, cloudUid, cloudJson])
 
   const matches = useMemo(
     () => computeMatches(selectedProgram?.specializations ?? [], completed),
@@ -868,7 +898,6 @@ function useStudyMax() {
   )
   const callFallbackScript = useMemo(() => buildCallScript(callContext), [callContext])
 
-  const [phone, setPhone] = useState('')
   const [callStatus, setCallStatus] = useState<'idle' | 'calling' | 'success' | 'error'>('idle')
 
   async function callMe() {
@@ -924,10 +953,19 @@ function useStudyMax() {
   useEffect(() => {
     if (!isAuthConfigured) return
     let live = true
-    void currentAccount().then((existing) => {
+    void currentAccount().then(async (existing) => {
       if (!live || !existing) return
-      const state = loadSaved(saveKeyFor(existing.uid))
+      const key = saveKeyFor(existing.uid)
+      // Nothing saved on this phone yet: their session from another device, if there is one.
+      const cloud = hasSaved(key) ? null : await loadCloudSession()
+      const state = hasSaved(key) ? loadSaved(key) : (cloud?.session ?? {})
+      if (!live) return
+      if (hasSaved(key) || cloud) setCloudUid(existing.uid)
       applySavedRef.current(state)
+      // The phone number is only ever in the database, so it's fetched even when the rest is local.
+      const phoneFrom = (session?: CloudSession | null) => session?.phone && setPhone((p) => p || session.phone!)
+      if (cloud) phoneFrom(cloud.session)
+      else void loadCloudSession().then((c) => live && phoneFrom(c?.session))
       setAccount(existing)
       setDirection(1)
       setScreen(resumeScreen(state))
@@ -945,9 +983,16 @@ function useStudyMax() {
       const signedIn = await signIn(provider)
       // Their own saved session if they have one on this phone; otherwise what they've done so far
       // carries over into their account.
+      // Failing that, their session from another device; failing that, what they've done here.
       const key = saveKeyFor(signedIn.uid)
-      const state = hasSaved(key) ? loadSaved(key) : snapshot
-      if (hasSaved(key)) applySaved(state)
+      const cloud = hasSaved(key) ? null : await loadCloudSession()
+      const stored = hasSaved(key) ? loadSaved(key) : cloud?.session
+      const state = stored ?? snapshot
+      if (stored) applySaved(stored)
+      if (hasSaved(key) || cloud) setCloudUid(signedIn.uid)
+      const phoneFrom = (session?: CloudSession | null) => session?.phone && setPhone((p) => p || session.phone!)
+      if (cloud) phoneFrom(cloud.session)
+      else void loadCloudSession().then((c) => phoneFrom(c?.session))
       setAccount(signedIn)
       haptic.light()
       go(resumeScreen(state))
@@ -974,6 +1019,8 @@ function useStudyMax() {
       // the local session ends regardless
     }
     setAccount(null)
+    // Their number came from their account; it doesn't stay behind for whoever uses the phone next.
+    setPhone('')
     applySaved(loadSaved(SAVE_KEY))
     go('welcome', -1)
   }

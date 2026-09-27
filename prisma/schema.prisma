@@ -10,13 +10,16 @@ datasource db {
 }
 
 model UserInfo {
-  userId    BigInt   @id @default(autoincrement())
-  authUid   String   @unique @db.VarChar // Firebase Auth uid (see src/lib/auth.ts's AuthUser.uid)
-  firstName String?  @db.VarChar
-  lastName  String?  @db.VarChar
-  email     String?  @db.VarChar
-  createdAt DateTime @default(now()) @db.Timestamp(6)
-  updatedAt DateTime @updatedAt @db.Timestamp(6)
+  userId      BigInt   @id @default(autoincrement())
+  authUid     String   @unique @db.VarChar // Firebase Auth uid (see src/lib/auth.ts's AuthUser.uid)
+  firstName   String?  @db.VarChar
+  lastName    String?  @db.VarChar
+  email       String?  @db.VarChar
+  // What the student typed on onboarding's phone step, for Max's call. Signed-in students only;
+  // a guest's number never leaves the device. Validated app-side (api/session.ts), not normalized.
+  phoneNumber String?  @db.VarChar
+  createdAt   DateTime @default(now()) @db.Timestamp(6)
+  updatedAt   DateTime @updatedAt @db.Timestamp(6)
 
   profile StudentProfile?
   courses StudentCourse[]
@@ -54,7 +57,9 @@ model StudentCourse {
   studentCourseId BigInt   @id @default(autoincrement())
   userId          BigInt
   courseCode      String   @db.VarChar // matches static catalogue codes, e.g. "CMPT145"
-  status          String   @db.VarChar // "completed" | "in_progress" — validated app-side
+  // "completed" | "in_progress" | "registered" — validated app-side. "registered" is onboarding's
+  // "What courses have you registered for?" list (this term), kept apart from the transcript's in-progress codes.
+  status          String   @db.VarChar
   source          String   @default("manual") @db.VarChar // "manual" | "transcript_upload"
   createdAt       DateTime @default(now()) @db.Timestamp(6)
   updatedAt       DateTime @updatedAt @db.Timestamp(6)
