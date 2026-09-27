@@ -7,16 +7,18 @@ export interface Features {
   ai: boolean
   /** The phone call about the award closing soonest (Bland). */
   call: boolean
+  /** Ping Max — the voice planning agent's outbound call (Vapi). */
+  max: boolean
 }
 
-const OFF: Features = { ai: false, call: false }
+const OFF: Features = { ai: false, call: false, max: false }
 const CACHE_KEY = 'studymax:features'
 
 /** The last answer this device saw, so a relaunch doesn't flicker features in; off on first launch. */
 export function cachedFeatures(): Features {
   try {
     const parsed = JSON.parse(localStorage.getItem(CACHE_KEY) ?? 'null')
-    return parsed ? { ai: parsed.ai === true, call: parsed.call === true } : OFF
+    return parsed ? { ai: parsed.ai === true, call: parsed.call === true, max: parsed.max === true } : OFF
   } catch {
     return OFF
   }
@@ -31,7 +33,7 @@ export async function fetchFeatures(): Promise<Features | null> {
   try {
     const res = await fetch(api('/api/features'), { cache: 'no-store' })
     const data = res.ok ? await res.json().catch(() => OFF) : OFF
-    const features: Features = { ai: data.ai === true, call: data.call === true }
+    const features: Features = { ai: data.ai === true, call: data.call === true, max: data.max === true }
     try {
       localStorage.setItem(CACHE_KEY, JSON.stringify(features))
     } catch {

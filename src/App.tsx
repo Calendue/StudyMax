@@ -34,6 +34,8 @@ import { LandingScreen } from './screens/LandingScreen.tsx'
 import { LandingPage } from './components/landing/LandingPage.tsx'
 import { WelcomeScreen } from './screens/WelcomeScreen.tsx'
 import { AccountSheet } from './screens/AccountSheet.tsx'
+import { EditConcentrationsSheet, EditGradYearSheet, EditMajorSheet, EditMinorSheet } from './screens/EditProfileSheets.tsx'
+import { EditMaxNameSheet } from './screens/EditMaxNameSheet.tsx'
 import {
   DegreeScreen,
   GoalsScreen,
@@ -47,6 +49,7 @@ import { ReadingScreen } from './screens/ReadingScreen.tsx'
 import { RevealScreen } from './screens/RevealScreen.tsx'
 import { ResultsScreen } from './screens/ResultsScreen.tsx'
 import { CallScreen } from './screens/CallScreen.tsx'
+import { PingMaxScreen } from './screens/PingMaxScreen.tsx'
 import { AppShell, CoursesFocus, Wizard } from './shell/AppShell.tsx'
 import { useLayoutMode } from './ui/layout.ts'
 import './App.css'
@@ -89,6 +92,7 @@ export type Screen =
   | 'reveal'
   | 'results'
   | 'call'
+  | 'ping-max'
 export type Tab = 'overview' | 'plan' | 'awards' | 'classes'
 /** First-years have no courses to add yet, so they go from onboarding straight to the reveal. */
 export type StudentType = 'first-year' | 'existing'
@@ -575,6 +579,33 @@ function useStudyMax() {
   function toggleConcentration(id: string) {
     haptic.selection()
     setConcentrationIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]))
+  }
+
+  // --- editing onboarding answers from Settings, after the reveal ---
+  // Same state changes as the onboarding handlers above, minus requestAdvance(): there's no flow to
+  // advance through here, just a value to change and a sheet to close.
+  function updateMajor(id: string) {
+    if (id === programId) return
+    haptic.selection()
+    setProgramId(id)
+    if (!fromTranscript) {
+      setCompleted(new Set())
+      setUploadInProgress([])
+      setUploadStatus('idle')
+    }
+    setHeroId(null)
+    setExtraTargetIds([])
+    setConcentrationIds([]) // they belong to the major they were picked from
+  }
+
+  function updateMinor(id: string | null) {
+    haptic.selection()
+    setMinorId(id)
+  }
+
+  function updateGradYear(year: number) {
+    haptic.selection()
+    setGradYear(year)
   }
 
   const minorOptions = useMemo(() => availablePrograms.filter((p) => p.kind === 'minor'), [availablePrograms])
@@ -1425,6 +1456,9 @@ function useStudyMax() {
         if (callStatus === 'calling') return true
         go('results', -1)
         return true
+      case 'ping-max':
+        go('results', -1)
+        return true
       case 'courses':
         // Once there are results, Courses is a destination beside them, not a step of onboarding.
         if (revealed) {
@@ -1494,6 +1528,10 @@ function useStudyMax() {
     toggleConcentration,
     gradYear,
     chooseGradYear,
+    // editing onboarding answers post-reveal (Settings)
+    updateMajor,
+    updateMinor,
+    updateGradYear,
     registered,
     registeredQuery,
     setRegisteredQuery,
@@ -1621,6 +1659,7 @@ const SCREENS: Record<Screen, ComponentType> = {
   reveal: RevealScreen,
   results: ResultsScreen,
   call: CallScreen,
+  'ping-max': PingMaxScreen,
 }
 
 // A screen change runs on ONE timeline: the outgoing screen is gone before the incoming one is
@@ -1666,7 +1705,8 @@ function App() {
   // Wider than a phone, the results (and the courses and the call, once there are results) live in
   // the dashboard shell; before that, courses get the desktop page and every other step the wizard.
   const wide = layout !== 'tabs'
-  const inShell = wide && model.revealed && (model.screen === 'results' || model.screen === 'courses' || model.screen === 'call')
+  const inShell =
+    wide && model.revealed && (model.screen === 'results' || model.screen === 'courses' || model.screen === 'call' || model.screen === 'ping-max')
   const coursesFocus = wide && !inShell && model.screen === 'courses'
   const frame = inShell ? 'shell' : coursesFocus ? 'courses-focus' : model.screen
   const Current = SCREENS[model.screen]
@@ -1700,6 +1740,11 @@ function App() {
         {launched && (wizard ? <Wizard>{screens}</Wizard> : screens)}
       </div>
       <AccountSheet />
+      <EditMajorSheet open={model.sheet === 'edit-major'} onClose={() => model.setSheet(null)} />
+      <EditMinorSheet open={model.sheet === 'edit-minor'} onClose={() => model.setSheet(null)} />
+      <EditConcentrationsSheet open={model.sheet === 'edit-concentrations'} onClose={() => model.setSheet(null)} />
+      <EditGradYearSheet open={model.sheet === 'edit-gradyear'} onClose={() => model.setSheet(null)} />
+      <EditMaxNameSheet open={model.sheet === 'edit-max-name'} onClose={() => model.setSheet(null)} />
       <Intro onReveal={() => setLaunched(true)} />
     </ModelContext.Provider>
   )

@@ -102,6 +102,16 @@ export async function idToken(): Promise<string | null> {
   }
 }
 
+/**
+ * The Authorization header for a signed-in request, or an empty object for a guest — never blocks
+ * the request either way (unlike cloudSync.ts's own use of idToken(), api/max/* routes fall back to
+ * the seeded demo student when there's no token, so a guest is a valid caller, not an error).
+ */
+export async function authHeader(): Promise<Record<string, string>> {
+  const token = await idToken()
+  return token ? { authorization: `Bearer ${token}` } : {}
+}
+
 export async function signOut() {
   if (isNative) await (await native()).FirebaseAuthentication.signOut()
   else if (webAuth) await (await webAuth).auth.signOut()
@@ -135,6 +145,51 @@ export function signInErrorMessage(provider: Provider, err: unknown): string | n
     return "Sign in with Apple isn't available right now. Check you're signed in to your Apple Account in Settings, or continue another way."
   }
   return "Sign in with Apple didn't work this time. Try again, or continue without an account."
+}
+
+// --- Max's phone verification (docs/BayMax/implementation/06-vapi-voice-integration.md) ---
+// Uses linkWithPhoneNumber against whatever Firebase session is already active, not
+// signInWithPhoneNumber, so verifying a phone number never signs the device out of its current
+// account — phone sign-in would create/switch to a DIFFERENT Firebase user. Falls back to
+// signInWithPhoneNumber only when there is no session to preserve (a guest, per isAuthConfigured).
+
+export interface PhoneVerificationSession {
+  /** Resolves once Firebase accepts the code; throws (e.g. "auth/invalid-verification-code") otherwise. */
+  confirm(code: string): Promise<void>
+}
+
+/** Starts phone verification. `recaptchaContainerId` is only used on the web (an invisible reCAPTCHA). */
+export async function startPhoneVerification(phoneE164: string, recaptchaContainerId: string): Promise<PhoneVerificationSession> {
+  if (isNative) {
+    const plugin = (await native()).FirebaseAuthentication
+    const { user } = await plugin.getCurrentUser()
+    let verificationId: string | null = null
+    const listener = await plugin.addListener('phoneCodeSent', (event) => {
+      verificationId = event.verificationId
+    })
+    try {
+      if (user) await plugin.linkWithPhoneNumber({ phoneNumber: phoneE164 })
+      else await plugin.signInWithPhoneNumber({ phoneNumber: phoneE164 })
+    } catch (e) {
+      await listener.remove()
+      throw e
+    }
+    // phoneCodeSent fires asynchronously off the native SDK; give it a moment before giving up.
+    const deadline = Date.now() + 15_000
+    while (!verificationId && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 200))
+    await listener.remove()
+    if (!verificationId) throw new Error('auth/phone-code-timeout')
+    const id: string = verificationId
+    return { confirm: async (code) => void (await plugin.confirmVerificationCode({ verificationId: id, verificationCode: code })) }
+  }
+
+  if (!isAuthConfigured) throw new Error('auth/not-configured')
+  const { auth, sdk } = await web()
+  const verifier = new sdk.RecaptchaVerifier(auth, recaptchaContainerId, { size: 'invisible' })
+  const confirmationResult = auth.currentUser
+    ? await sdk.linkWithPhoneNumber(auth.currentUser, phoneE164, verifier)
+    : await sdk.signInWithPhoneNumber(auth, phoneE164, verifier)
+  return { confirm: async (code) => void (await confirmationResult.confirm(code)) }
 }
 
 export function firstName(account: Account | null): string | null {
