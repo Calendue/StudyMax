@@ -2,7 +2,7 @@
 // cleaned, and how a spoken confirmation is classified before a plan is saved. No database needed.
 // Run: node --experimental-strip-types --experimental-loader ./scripts/_resolve-ts-loader.mjs scripts/check-max.ts
 import assert from 'node:assert/strict'
-import { adapterInput, applyPlanOps, checkAffirmative, cleanOps, normalizeCourseCode, resolveSpecialization, type Snapshot } from '../api/max/_scenarios.ts'
+import { adapterInput, applyPlanOps, checkAffirmative, checkDecline, cleanOps, normalizeCourseCode, resolveSpecialization, type Snapshot } from '../api/max/_scenarios.ts'
 import { parseCallPlanInputs } from '../src/lib/max/callInputs.ts'
 import { finishShift, planOptions } from '../src/lib/max/options.ts'
 import { planHash, regenerate, validate } from '../src/lib/max/planningAdapter.ts'
@@ -36,6 +36,14 @@ assert.equal(refused([{ op: 'DROP_COURSE' }]), 'INVALID_COURSE')
 assert.equal(refused([{ op: 'DROP_COURSE', courseCode: 'the hard one' }]), 'INVALID_COURSE')
 assert.equal(refused([{ op: 'RESTORE_VERSION', versionNumber: 0 }]), 'UNKNOWN_VERSION')
 assert.equal(refused([{ op: 'RESTORE_VERSION', versionNumber: 'two' }]), 'UNKNOWN_VERSION')
+
+// --- a plain no leaves the proposal (the app's Not now); a no that still asks to save stays ambiguous ---
+for (const no of ['no', 'No.', 'nope', 'nah, leave it', 'not now', "Don't save that", 'um, no thanks', 'never mind', 'no, forget it']) {
+  assert.ok(checkDecline(no), `a no: "${no}"`)
+}
+for (const notNo of ['no, save it', 'yes', 'no worries, go ahead', 'okay', 'sure, keep it', "I'm not sure"]) {
+  assert.ok(!checkDecline(notNo), `not a plain no: "${notNo}"`)
+}
 
 // --- a clear yes saves; anything else re-asks (a false no costs one question, a false yes a plan) ---
 const yes = [

@@ -10,6 +10,7 @@ import { Prisma } from '@prisma/client'
 import { db, hasDatabase } from '../_db.js'
 import {
   adapterInput,
+  checkDecline,
   commitScenario,
   discardScenario,
   normalizeCourseCode,
@@ -282,6 +283,19 @@ async function runRunScenario(call: ResolvedCall, args: Record<string, unknown>)
   const scenarioId = args.scenarioId === undefined || args.scenarioId === null || args.scenarioId === '' ? undefined : scenarioIdOf(args.scenarioId)
   if (scenarioId === null) return UNKNOWN_SCENARIO
 
+  // A new proposal (no scenarioId) replaces any still open from earlier in this call: that one was
+  // passed over, so it's left — the app's Not now — rather than kept tappable under the new one.
+  if (scenarioId === undefined) {
+    const stale = await db().scenario.findMany({
+      where: { userId: call.userId, callId: call.callId, status: { in: ['computed', 'presented'] } },
+      select: { scenarioId: true },
+    })
+    for (const s of stale) {
+      await discardScenario(call.userId, s.scenarioId)
+      await publish(call.liveToken, { type: 'scenario.discarded', scenarioId: String(s.scenarioId) })
+    }
+  }
+
   // "Max is looking…" on the student's screen while the plans are built (not awaited against the tool).
   const working = publish(call.liveToken, { type: 'max.working', tool: 'run_scenario' })
   const result = await runScenario(call.userId, args.ops, { scenarioId, scope: scopeOf(call) })
@@ -342,6 +356,14 @@ async function runCommitScenario(call: ResolvedCall, args: Record<string, unknow
   }
   const scenarioId = scenarioIdOf(args.scenarioId)
   if (scenarioId === null) return UNKNOWN_SCENARIO
+  // Their words were a no: leave the proposal, exactly as tapping Not now would.
+  const utterance = typeof args.confirmationUtterance === 'string' ? args.confirmationUtterance : ''
+  if (checkDecline(utterance)) {
+    const left = await discardScenario(call.userId, scenarioId)
+    if ('code' in left) return left
+    await publish(call.liveToken, { type: 'scenario.discarded', scenarioId: String(scenarioId) })
+    return { ok: true, saved: false, discarded: true, speakable: "Okay, I've left your plan as it was." }
+  }
   const result = await commitScenario(call.userId, scenarioId, String(args.presentedHash), {
     channel: 'voice',
     utterance: typeof args.confirmationUtterance === 'string' ? args.confirmationUtterance : '',
@@ -416,6 +438,8 @@ async function runUpdateName(call: ResolvedCall, args: Record<string, unknown>):
   if (!NAME_RE.test(name)) return { ok: false, code: 'INVALID_NAME', speakable: "I didn't catch a usable name there." }
   // A guest is the demo student every guest shares: saving their name there would greet the next guest
   // by it. The tool result alone carries it through this call.
+  // The app shows it too (a guest's only for their session, kept in the app, not on the shared account).
+  await publish(call.liveToken, { type: 'profile.name', name })
   if (call.isGuest) return { ok: true, name }
   const user = await db().userInfo.update({ where: { userId: call.userId }, data: { firstName: name } })
   return { ok: true, name: user.firstName }

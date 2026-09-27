@@ -922,6 +922,20 @@ export function checkAffirmative(utterance: string): AffirmativeCheck {
   return { ok: false, reason: 'no_match' }
 }
 
+// A plain no to the save question ("no", "not now", "leave it", "nah, never mind") — so a commit_scenario
+// the model sent with the student's no leaves the proposal, as the app's Not now does. Anything that
+// also says save/keep/yes is not a plain no ("no, save it"): that stays ambiguous and re-asks.
+const DECLINE_RE = /^\s*(?:(?:um+|uh+|oh|well|so)[\s,.!]+)*(no|nope|nah|not now|not yet|don['’]?t|do not|leave it|never ?mind|cancel|skip it|forget it)\b/i
+const STILL_WANTS_RE = /\b(yes|yeah|yep|save|keep|go ahead|do it|sure|okay|ok)\b/i
+
+export function checkDecline(utterance: string): boolean {
+  const m = utterance.match(DECLINE_RE)
+  if (!m) return false
+  const rest = utterance.slice(m[0].length)
+  // "Don't save that": the save is what's being turned down.
+  return !(/^do/i.test(m[1]) ? /\b(yes|yeah|go ahead|but)\b/i : STILL_WANTS_RE).test(rest)
+}
+
 // commitPlanVersion (the one write path to GeneratedPlan, spec 03) lives in ../_planVersion.ts —
 // shared with api/session.ts, which uses the same helper to keep a real signed-in student's plan
 // current on every onboarding save.

@@ -1,9 +1,9 @@
 // The name Max calls the student by. For a guest it's kept in their session and sent with the call
 // (maxLive/guestCall.ts) — never written to the demo student every guest shares. For a signed-in
-// account it's an override on top of whatever their Google/Apple name set — note a later onboarding
-// save (api/session.ts) resets firstName back to that account name, so this override is closer to
-// "for this call" than a permanent rename.
+// account it's saved as their first name (UserInfo.firstName), which a later save no longer puts the
+// Google/Apple name back over (api/session.ts). Either way the app greets them by it (m.displayName).
 import { useEffect, useState } from 'react'
+import { useModel } from '../model.ts'
 import { authHeader } from '../auth.ts'
 import { readGuestCall, updateGuestCall } from '../maxLive/guestCall.ts'
 import { api } from '../platform.ts'
@@ -14,6 +14,7 @@ export function EditMaxNameSheet({ open, onClose }: { open: boolean; onClose: ()
   const [name, setName] = useState('')
   const [busy, setBusy] = useState(false)
   const [guest, setGuest] = useState(false)
+  const m = useModel()
 
   useEffect(() => {
     if (!open) return
@@ -34,6 +35,7 @@ export function EditMaxNameSheet({ open, onClose }: { open: boolean; onClose: ()
     // A guest's name is theirs for this session, sent with the call — never the shared demo student's.
     if (guest) {
       updateGuestCall({ name: trimmed.slice(0, 60) })
+      m.setPreferredName(trimmed.slice(0, 60))
       onClose()
       return
     }
@@ -44,7 +46,10 @@ export function EditMaxNameSheet({ open, onClose }: { open: boolean; onClose: ()
         headers: { 'content-type': 'application/json', ...(await authHeader()) },
         body: JSON.stringify({ name: trimmed }),
       })
-      if (res.ok) onClose()
+      if (res.ok) {
+        m.setPreferredName(trimmed)
+        onClose()
+      }
     } finally {
       setBusy(false)
     }

@@ -47,6 +47,8 @@ interface Options {
   onCommitted: (inputs: LiveInputs, terms: PlannedTerm[]) => void
   /** Max doing something in the app outside the plan (open a tab, look up a class). */
   onAction?: (action: AppAction) => void
+  /** The student told Max a new name to go by. */
+  onName?: (name: string) => void
 }
 
 interface Saved {
@@ -74,7 +76,7 @@ function writeSaved(s: Saved | null) {
   }
 }
 
-export function useMaxLive({ onCommitted, onAction }: Options): MaxLive {
+export function useMaxLive({ onCommitted, onAction, onName }: Options): MaxLive {
   const [saved, setSaved] = useState<Saved | null>(readSaved)
   const [transport, setTransport] = useState<Transport | null>(null)
   const [callStatus, setCallStatus] = useState<string | null>(null)
@@ -98,6 +100,8 @@ export function useMaxLive({ onCommitted, onAction }: Options): MaxLive {
   committedRef.current = onCommitted
   const actionRef = useRef(onAction)
   actionRef.current = onAction
+  const nameRef = useRef(onName)
+  nameRef.current = onName
 
   const clear = useCallback(() => {
     queue.current = []
@@ -174,6 +178,9 @@ export function useMaxLive({ onCommitted, onAction }: Options): MaxLive {
         case 'app.action':
           setWorking(false)
           actionRef.current?.(event.action)
+          break
+        case 'profile.name':
+          nameRef.current?.(event.name)
           break
       }
     },

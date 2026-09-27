@@ -32,7 +32,10 @@ interface VercelResponse {
 }
 
 const PHONE_RE = /^\+?[0-9()\-.\s]{7,20}$/
-const STALE_CALL_MS = 30 * 60 * 1000
+/** The longest a Max call runs (Vapi hangs up at this); also pushed by scripts/configure-max-assistant.ts. */
+const MAX_CALL_SECONDS = 45 * 60
+// A call row still "active" well past the longest call is one whose end event never came.
+const STALE_CALL_MS = MAX_CALL_SECONDS * 1000 + 15 * 60 * 1000
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -164,8 +167,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const isFirstCall = resolved.isGuest ? true : !settings?.hasMetMax
 
   // A call row that never heard its end (a lost webhook) would hold max_call_one_active_uq forever
-  // and lock this student out of Max. No call outlives maxDurationSeconds (20 min), so anything
-  // still "active" after 30 is dead.
+  // and lock this student out of Max. No call outlives MAX_CALL_SECONDS (45 min), so anything
+  // still "active" after an hour is dead.
   await db().maxCall.updateMany({
     where: {
       userId: user.userId,
@@ -224,6 +227,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           ? `Hi${firstName ? ` ${firstName}` : ''}, this is Max from StudyMax — I help you plan your degree. I've got your roadmap in front of me. What's on your mind?`
           : `Hi${firstName ? ` ${firstName}` : ''}, it's Max. What can I help with?`,
         metadata: { callRowId: String(call.callId) },
+        // Per call, so a deploy changes it without re-running scripts/configure-max-assistant.ts.
+        maxDurationSeconds: MAX_CALL_SECONDS,
       },
     })
     const vapiCallId = 'id' in vapiCall ? vapiCall.id : vapiCall.results[0]?.id

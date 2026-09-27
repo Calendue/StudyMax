@@ -34,6 +34,11 @@ export interface CloudSession {
    * by app builds from before it, which leaves a stored one as is.
    */
   internshipAY?: number | null
+  /**
+   * The name the student goes by (UserInfo.firstName): their account's first name until they pick
+   * another, in Settings or by telling Max. Sent by the server on load only; a save never changes it.
+   */
+  firstName?: string
 }
 
 /** The internship question's answers, as the app keeps them (App.tsx's Internship). */

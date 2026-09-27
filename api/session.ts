@@ -86,6 +86,7 @@ async function load(uid: string): Promise<CloudSession | null> {
     concentrationIds: profile?.concentrationIds ?? [],
     registered: codesWith('registered'),
     ...(row.phoneNumber ? { phone: row.phoneNumber } : {}),
+    ...(row.firstName ? { firstName: row.firstName } : {}),
     // No profile yet: the columns' own defaults.
     springSummer: profile?.springSummer ?? false,
     // A full load when nothing's stored (the column's own default is the old 2).
@@ -98,8 +99,11 @@ async function load(uid: string): Promise<CloudSession | null> {
 async function save(user: VerifiedUser, session: CloudSession) {
   const prisma = db()
   const [firstName, ...rest] = (user.name ?? '').trim().split(/\s+/)
+  // The account's first name only seeds it: once there's one (or the student picked another, in
+  // Settings or by telling Max), a save never puts the account's back over it.
+  const existing = await prisma.userInfo.findUnique({ where: { authUid: user.uid }, select: { firstName: true } })
   const names = {
-    firstName: firstName || null,
+    ...(existing?.firstName ? {} : { firstName: firstName || null }),
     lastName: rest.join(' ') || null,
     email: user.email,
     // No number in the session means none typed on this phone yet, not "forget it".

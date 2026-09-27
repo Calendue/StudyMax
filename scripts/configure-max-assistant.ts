@@ -49,8 +49,14 @@ Dropping a course they're currently taking must also be done with the registrar 
 # Boundaries
 You are not an official advisor; the university's rules and advisors have the final say. You don't register students for courses. Politely redirect anything off-topic (course content help, essays, grades, financial/immigration advice, mental health). If the student sounds distressed, acknowledge it and share: {{wellnessResourceLine}}.
 
+# Turning a change down
+When the student says no to the save question, or "leave it", "not now", "never mind", or otherwise turns down a change you showed, call discard_scenario right away — it clears the proposal from their screen, the same as tapping Not now — then say in a few words that you've left their plan as it was. Never just move on with a proposal still open.
+
+# Holding
+If the student asks you to wait ("hold on", "one sec", "give me a minute", "hang on, Max") or says they're talking to someone else, reply only "Sure, take your time." and then say nothing until they speak to you again. Don't answer anything said to someone else in the meantime, don't ask questions, don't summarize. When they come back ("okay", "I'm back", "sorry about that"), pick up exactly where you left off: repeat your last open question in one short sentence. A hold never ends the call.
+
 # Ending the call
-End the call once the student's question is actually answered and they have nothing more to add — after a plain "thanks"/"that's all"/"bye" to a direct "anything else?", or after they decline further help. Ask "anything else I can help with?" before ending unless they've already said goodbye first. Never end mid-question, mid-explanation, or right after asking them something yourself. Don't say your own goodbye line — ending the call speaks it for you.
+Never end the call on a guess. Before ending, ask exactly "Is there anything else, or are we all set?" as a turn of its own — never tacked onto another question. Call endCall only after the student's answer to that exact question says they're done ("that's all", "we're good", "no, that's it", "all set", "bye"). A "thanks", "thank you", "okay" or "no" after any other question is NOT a goodbye: answer it, then ask the question above. If they say goodbye first, say "Okay, you're all set — talk soon." and then end the call. Never end mid-question, mid-explanation, during a hold, or right after saving something. Don't add your own goodbye line after that — ending the call speaks it for you.
 
 # Skills
 Opening is handled for you: first call -> introduce yourself and ask what's on their mind; returning call -> "Hi {{name}}, it's Max. What can I help with?" Don't recap the whole roadmap unprompted.
@@ -275,10 +281,23 @@ const tools: import('@vapi-ai/server-sdk').Vapi.OpenAiModelToolsItem[] = [
   },
   {
     // Vapi's built-in end-call tool (spec 09: "endCall / transfer use Vapi's built-in tools") — no
-    // server webhook needed. The rejection plan is a cheap guard against hanging up mid-question.
+    // server webhook needed. The rejection plan refuses to hang up (any one of these is enough) when
+    // the student's last words were a question or a "hold on", or when Max's own last turn wasn't the
+    // wrap-up question ("…or are we all set?", or "…you're all set" after their goodbye). The real
+    // calls it answers: "Yes, save it. Thank you." and "Uh, no." to an unrelated question both hung up.
     type: 'endCall',
     rejectionPlan: {
-      conditions: [{ type: 'regex', regex: '\\?', target: { position: -1, role: 'user' } }],
+      conditions: [
+        {
+          type: 'group',
+          operator: 'OR',
+          conditions: [
+            { type: 'regex', regex: '\\?', target: { position: -1, role: 'user' } },
+            { type: 'regex', regex: '[Hh]old on|[Hh]ang on|[Oo]ne sec|[Aa] sec\\b|[Aa] second|[Aa] minute|[Ww]ait|talking to', target: { position: -1, role: 'user' } },
+            { type: 'regex', regex: '[Aa]ll set', target: { position: -1, role: 'assistant' }, negate: true },
+          ],
+        },
+      ],
     },
   },
 ]
@@ -291,8 +310,17 @@ const updated = await client.assistants.update({
   voicemailMessage: "Hi, this is Max from StudyMax returning your request. Open the app whenever you'd like to talk.",
   // Not "everything's in the app": the app draws its own plan and doesn't show what Max saves.
   endCallMessage: 'Talk soon — call me back any time.',
-  maxDurationSeconds: 1200,
+  maxDurationSeconds: 2700, // 45 min; api/max/call.ts also sets it on every call (MAX_CALL_SECONDS)
   server: { url: WEBHOOK_URL, headers: AUTH_HEADERS },
+  // A hold or a long think: a gentle "still here" every 25 seconds of silence rather than dead air
+  // (and a quiet line never reads as the call being over). The count resets whenever they speak.
+  hooks: [
+    {
+      on: 'customer.speech.timeout',
+      options: { timeoutSeconds: 25, triggerMaxCount: 8, triggerResetMode: 'onUserSpeech' },
+      do: [{ type: 'say', exact: ["I'm still here — take your time.", "No rush — I'm here when you're ready."] }],
+    },
+  ],
   model: {
     provider: 'openai',
     model: 'gpt-4.1',

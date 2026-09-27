@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { useModel } from '../model.ts'
-import { firstName } from '../auth.ts'
 import { KIND_LABEL, WHY_IT_MATTERS, WHY_SHORT, courseCode, plural } from '../format.ts'
 import { withoutRegistered, type SpecializationMatch } from '../lib/match.ts'
 import { heroNextCourse } from '../lib/widgetSnapshot.ts'
@@ -69,7 +68,7 @@ export function OverviewTab() {
   const m = useModel()
   const hero = m.hero
   const done = hero.remaining === 0
-  const name = firstName(m.account)
+  const name = m.displayName
   const next = heroNextCourse(hero, m.topOverlap, m.plan.flatMap((t) => t.courses.map((c) => c.code)), m.inProgressCourses)
   const registered = withoutRegistered(hero.unsatisfied, m.inProgressCourses).registered.length
   const nextOverlap = m.topOverlap && m.topOverlap.course === next ? m.topOverlap : null

@@ -44,8 +44,13 @@ picks up a saved plan while it's open on this call.
 If `commit_scenario` comes back with `AMBIGUOUS_CONFIRMATION`, the server didn't hear a clear yes in
 their words — ask the save question again rather than retrying with the same words.
 
-**A clear "keep it"** → `commit_scenario` (same rules as above). **"Leave it" / a no** →
-`discard_scenario`, which has no effect on the real plan.
+**A clear "keep it"** → `commit_scenario` (same rules as above). **"Leave it" / a no / "not now"** →
+call `discard_scenario` right away, every time: it clears the proposal off their screen (the same as
+tapping Not now) and has no effect on the real plan. Then say you've left it as it was. Never say
+"I haven't saved that" without calling it — the proposal would stay on their screen.
+
+After a save or a discard, don't wrap up the call: ask what else they'd like, and only end it the way
+the system prompt says (a separate "…or are we all set?" and a clear answer).
 
 **Registrar note:** if the change involves dropping a course they're currently taking, say once, right
 after describing the change (not as a separate follow-up), that they still need to do this with the

@@ -38,7 +38,8 @@ import { cachedFeatures, fetchFeatures } from './features.ts'
 import { buildWidgetSnapshot } from './lib/widgetSnapshot.ts'
 import { currentDeadlineWatch, startDeadlineWatch, stopDeadlineWatch, syncWidgets, watchFailureMessage } from './widgets.ts'
 import { useClassTracker } from './useClassTracker.ts'
-import { currentAccount, isAuthConfigured, signIn, signInErrorMessage, signOut, type Account, type Provider } from './auth.ts'
+import { currentAccount, firstName, isAuthConfigured, signIn, signInErrorMessage, signOut, type Account, type Provider } from './auth.ts'
+import { updateGuestCall } from './maxLive/guestCall.ts'
 import { loadCloudSession, saveCloudSession } from './cloudSync.ts'
 import type { CloudInternship, CloudSession } from './lib/cloudSession.ts'
 import { ModelContext } from './model.ts'
@@ -200,6 +201,8 @@ interface SavedState {
   pinned?: Record<string, string[]>
   /** Courses the student had Max add in no particular term (PlanOptions.added). Device-only. */
   addedCourses?: string[]
+  /** The name the student goes by, when they picked one (Settings, or telling Max); else the account's. */
+  preferredName?: string | null
   /** Which variant of the degree the plan is for ('bsc-4', 'bsc-honours', 'bsc-3'). Device-only, like gradYear. */
   degreeVariant?: string
   /** What changed: failed, withdrew, not running, later (src/lib/overrides.ts). Device-only. */
@@ -301,6 +304,7 @@ function useStudyMax() {
   const [overrides, setOverrides] = useState<CourseOverride[]>(() => storedOverrides(saved.overrides))
   const [pinned, setPinned] = useState<Record<string, string[]>>(saved.pinned ?? {})
   const [addedCourses, setAddedCourses] = useState<string[]>(saved.addedCourses ?? [])
+  const [preferredName, setPreferredName] = useState<string | null>(saved.preferredName ?? null)
 
   const selectedSchool = universityId === 'usask' ? usask : null
   const availablePrograms = useMemo(() => selectedSchool?.programs ?? [], [selectedSchool])
@@ -448,6 +452,7 @@ function useStudyMax() {
     overrides,
     pinned,
     addedCourses,
+    preferredName,
   }
   const snapshotJson = JSON.stringify(snapshot)
   useEffect(() => {
@@ -1075,7 +1080,12 @@ function useStudyMax() {
       void classes.lookUp(action.courseCode)
     }
   }
-  const maxLive = useMaxLive({ onCommitted: adoptMaxPlan, onAction: runMaxAction })
+  /** "Call me Sam" on a call: the app goes by it too (a guest's also rides along with their next call). */
+  function adoptMaxName(name: string) {
+    setPreferredName(name)
+    if (!account) updateGuestCall({ name })
+  }
+  const maxLive = useMaxLive({ onCommitted: adoptMaxPlan, onAction: runMaxAction, onName: adoptMaxName })
 
   // The plan as the roadmap draws it: what's left, plus the courses already under way in their terms.
   const roadmap = useMemo(() => withCurrentCourses(plan, planByTerm, today), [plan, planByTerm, today])
@@ -1318,6 +1328,7 @@ function useStudyMax() {
     setSummerPerTerm(clampSummer(state.summerPerTerm ?? DEFAULT_SUMMER_COURSES, DEFAULT_SUMMER_COURSES))
     setOverrides(storedOverrides(state.overrides))
     setLastChange(null)
+    setPreferredName(state.preferredName ?? null)
     setUploadStatus('idle')
     seedTargets(seedOf(state))
     setLookup(null)
@@ -1341,7 +1352,11 @@ function useStudyMax() {
       if (hasSaved(key) || cloud) setCloudUid(existing.uid)
       applySavedRef.current(state)
       // The phone number is only ever in the database, so it's fetched even when the rest is local.
-      const phoneFrom = (session?: CloudSession | null) => session?.phone && setPhone((p) => p || session.phone!)
+      // So is the name they go by, which Max may have changed on a call from another phone.
+      const phoneFrom = (session?: CloudSession | null) => {
+        if (session?.phone) setPhone((p) => p || session.phone!)
+        if (session?.firstName) setPreferredName(session.firstName)
+      }
       if (cloud) phoneFrom(cloud.session)
       else void loadCloudSession().then((c) => live && phoneFrom(c?.session))
       setAccount(existing)
@@ -1762,6 +1777,9 @@ function useStudyMax() {
     setThemePref,
     // account
     account,
+    // The name to greet them by: the one they picked (Settings or Max), else their account's first name.
+    displayName: preferredName ?? firstName(account),
+    setPreferredName,
     authBusy,
     authError,
     signInWith,

@@ -1,5 +1,4 @@
 import { useModel } from '../model.ts'
-import { firstName } from '../auth.ts'
 import { KIND_LABEL, courseCode, plural } from '../format.ts'
 import { daysUntil } from '../lib/resources.ts'
 import { heroNextCourse } from '../lib/widgetSnapshot.ts'
@@ -29,7 +28,7 @@ function WelcomeCard() {
   const m = useModel()
   const hero = m.hero
   const done = hero.remaining === 0
-  const name = firstName(m.account)
+  const name = m.displayName
   const registered = withoutRegistered(hero.unsatisfied, m.inProgressCourses).registered.length
   const next = heroNextCourse(hero, m.topOverlap, m.plan.flatMap((t) => t.courses.map((c) => c.code)), m.inProgressCourses)
   return (

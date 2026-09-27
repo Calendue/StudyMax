@@ -92,6 +92,8 @@ export type LiveEvent =
   | { type: 'scenario.discarded'; seq: number; scenarioId: string }
   | { type: 'options.presented'; seq: number; about: string; options: LiveOption[]; recommended: string | null }
   | { type: 'app.action'; seq: number; action: AppAction }
+  /** The student asked Max to call them something else: the app shows that name from now on. */
+  | { type: 'profile.name'; seq: number; name: string }
 
 /** Something Max does in the app itself, outside the plan: open a tab, or look a course up in the Class Tracker. */
 export type AppAction = { kind: 'open_tab'; tab: 'overview' | 'plan' | 'awards' | 'classes' } | { kind: 'find_class'; courseCode: string }
