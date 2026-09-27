@@ -8,6 +8,13 @@ import { mathematicalModellingCertificate } from './mathematicalModellingCertifi
 import { formalReasoningCertificate } from './formalReasoningCertificate.js'
 import { astronomyCertificate } from './astronomyCertificate.js'
 import { statisticsMinor } from './statisticsMinor.js'
+import { economicsMinor } from './economicsMinor.js'
+import { philosophyMinor } from './philosophyMinor.js'
+import { psychologyMinor } from './psychologyMinor.js'
+import { sociologyMinor } from './sociologyMinor.js'
+import { englishMinor } from './englishMinor.js'
+import { biologyMinor } from './biologyMinor.js'
+import { physicsMinor } from './physicsMinor.js'
 import { math } from './math.js'
 import { statistics } from './statistics.js'
 import { biology } from './biology.js'
@@ -35,6 +42,13 @@ export const programs: Program[] = [
   formalReasoningCertificate,
   astronomyCertificate,
   statisticsMinor,
+  economicsMinor,
+  philosophyMinor,
+  psychologyMinor,
+  sociologyMinor,
+  englishMinor,
+  biologyMinor,
+  physicsMinor,
   math,
   statistics,
   biology,
