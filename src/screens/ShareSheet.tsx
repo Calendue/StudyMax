@@ -11,7 +11,7 @@ import { Sheet } from '../ui/Sheet.tsx'
 // "Share my result": the closest credential and the plan as one branded image, previewed first, then
 // handed to the system share sheet (or downloaded where sharing files isn't supported).
 
-const SITE = 'study-max-theta.vercel.app'
+const SITE = 'www.studymax.study'
 
 export function ShareSheet() {
   const m = useModel()
@@ -20,7 +20,7 @@ export function ShareSheet() {
   const [image, setImage] = useState<{ blob: Blob; url: string } | null>(null)
   const [status, setStatus] = useState<'idle' | 'shared' | 'downloaded' | 'failed'>('idle')
 
-  const { hero, heroKind, plan, roadmap, completed, inProgressCourses } = m
+  const { hero, heroKind, plan, roadmap, planCompleted: completed, planInProgress: inProgressCourses, activeDegree } = m
   useEffect(() => {
     if (!open) return
     let live = true
@@ -28,15 +28,16 @@ export function ShareSheet() {
     setStatus('idle')
     setImage(null)
     // What's truly left once this term's courses are passed, the same count the plan works from.
-    const afterInProgress = computeMatches([hero.spec], new Set([...completed, ...inProgressCourses]))[0]
+    const effectiveHero = computeMatches([hero.spec], completed, activeDegree)[0] ?? hero
+    const afterInProgress = computeMatches([hero.spec], new Set([...completed, ...inProgressCourses]), activeDegree)[0]
     const remaining = afterInProgress?.remaining ?? hero.remaining
     // The first course the plan itself schedules, so "Start with" always matches the plan.
     const next = plan.flatMap((t) => t.courses)[0]?.code
     void drawShareCard({
       kindLabel: KIND_LABEL[heroKind],
       name: hero.spec.name,
-      doneCount: hero.doneCount,
-      inProgressCount: hero.remaining - remaining,
+      doneCount: effectiveHero.doneCount,
+      inProgressCount: effectiveHero.remaining - remaining,
       totalRequired: hero.totalRequired,
       remaining,
       plan: roadmap,
@@ -57,15 +58,16 @@ export function ShareSheet() {
       live = false
       if (url) URL.revokeObjectURL(url)
     }
-  }, [open, hero, heroKind, plan, roadmap, completed, inProgressCourses])
+  }, [open, hero, heroKind, plan, roadmap, completed, inProgressCourses, activeDegree])
 
   async function share() {
     if (!image) return
     haptic.light()
+    const effectiveHero = computeMatches([hero.spec], completed, activeDegree)[0] ?? hero
     const result = await shareOrDownload(
       image.blob,
       'studymax-result.png',
-      `I'm ${hero.remaining === 0 ? 'done with' : `${hero.remaining} away from`} the ${hero.spec.name}. See what your school hides: https://${SITE}`,
+      `I'm ${effectiveHero.remaining === 0 ? 'done with' : `${effectiveHero.remaining} away from`} the ${hero.spec.name}. See what your school hides: https://${SITE}`,
     )
     if (result !== 'cancelled') setStatus(result)
   }
@@ -86,7 +88,7 @@ export function ShareSheet() {
         <Wordmark height={96} />
       </span>
       {status === 'failed' ? (
-        <p className="empty">Couldn&rsquo;t make the image on this device.</p>
+        <p className="empty">Couldn&rsquo;t share the image. Close this sheet and try again.</p>
       ) : image ? (
         <img className="share-preview" src={image.url} alt={`Share card: ${hero.spec.name}, ${hero.remaining} courses to go.`} />
       ) : (

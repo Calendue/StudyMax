@@ -519,7 +519,7 @@ export function snapshotFromCall(p: CallPlanInputs): Snapshot {
   }
 }
 
-async function loadCurrentSnapshot(
+export async function loadCurrentSnapshot(
   userId: bigint,
   scope?: CallScope,
 ): Promise<{ plan: GeneratedPlan; snapshot: Snapshot; baselineTerms: PlannedTerm[] } | null> {

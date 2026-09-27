@@ -17,6 +17,7 @@ WORK="${WORK_DIR:-$ROOT/ios/App/build/adhoc}"
 ARCHIVE="$WORK/StudyMax.xcarchive"
 EXPORT="$WORK/export"
 NAME="StudyMax-1.0.0-1.ipa"
+DERIVED="${DERIVED_DATA_PATH:-/Volumes/DevDrive/StudyMax-build/dd-release}"
 
 cd "$ROOT"
 if [[ "${1:-}" == "--web" ]]; then npm run build; fi
@@ -26,7 +27,7 @@ rm -rf "$ARCHIVE" "$EXPORT"
 mkdir -p "$WORK" "$OUT_DIR"
 
 xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
-  -destination 'generic/platform=iOS' -archivePath "$ARCHIVE" \
+  -derivedDataPath "$DERIVED" -destination 'generic/platform=iOS' -archivePath "$ARCHIVE" \
   -allowProvisioningUpdates archive
 
 xcodebuild -exportArchive -archivePath "$ARCHIVE" \

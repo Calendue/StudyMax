@@ -11,6 +11,7 @@ public class MainActivity extends BridgeActivity {
     protected void onCreate(Bundle savedInstanceState) {
         // Local plugins register before super.onCreate, which builds the bridge.
         registerPlugin(StudyMaxWidgetsPlugin.class);
+        registerPlugin(StudyMaxAppearancePlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

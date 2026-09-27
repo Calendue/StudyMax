@@ -1,4 +1,5 @@
 import type { PlannedTerm } from './plan.ts'
+import { isNative } from '../platform.ts'
 import { courseCode } from '../format.ts'
 
 // The share card: a student's result as one branded 1080×1350 image (a 4:5 post), drawn on a plain
@@ -246,7 +247,11 @@ export function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob | null> {
  * Hands the image to the system share sheet where the platform supports sharing files; otherwise
  * downloads it. Returns what happened, so the button can say so.
  */
-export async function shareOrDownload(blob: Blob, fileName: string, text: string): Promise<'shared' | 'downloaded' | 'cancelled'> {
+export async function shareOrDownload(blob: Blob, fileName: string, text: string): Promise<'shared' | 'downloaded' | 'cancelled' | 'failed'> {
+  if (isNative) {
+    const { shareNativeImage } = await import('./nativeShare.ts')
+    return shareNativeImage(blob, fileName, text)
+  }
   const file = new File([blob], fileName, { type: 'image/png' })
   if (typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
     try {

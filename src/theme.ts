@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { StatusBar, Style } from '@capacitor/status-bar'
-import { SystemBars, SystemBarsStyle } from '@capacitor/core'
+import { Capacitor, registerPlugin, type PluginListenerHandle, SystemBars, SystemBarsStyle } from '@capacitor/core'
 import { isNative } from './platform.ts'
 
 // Light, dark, or whatever the device says. The choice lives in localStorage; index.html reads the
@@ -12,6 +12,10 @@ export type Theme = 'light' | 'dark'
 
 const KEY = 'studymax:theme'
 const DARK_QUERY = '(prefers-color-scheme: dark)'
+const AndroidAppearance = registerPlugin<{
+  getSystemTheme(): Promise<{ dark: boolean }>
+  addListener(event: 'change', callback: (event: { dark: boolean }) => void): Promise<PluginListenerHandle>
+}>('StudyMaxAppearance')
 
 function readPref(): ThemePref {
   try {
@@ -61,6 +65,13 @@ export function useTheme() {
   const theme: Theme = pref === 'system' ? system : pref
 
   useEffect(() => {
+    if (Capacitor.getPlatform() === 'android') {
+      let live = true
+      const update = ({ dark }: { dark: boolean }) => { if (live) setSystem(dark ? 'dark' : 'light') }
+      void AndroidAppearance.getSystemTheme().then(update).catch(() => {})
+      const listener = AndroidAppearance.addListener('change', update)
+      return () => { live = false; void listener.then((handle) => handle.remove()).catch(() => {}) }
+    }
     const query = window.matchMedia(DARK_QUERY)
     const onChange = () => setSystem(query.matches ? 'dark' : 'light')
     query.addEventListener('change', onChange)
