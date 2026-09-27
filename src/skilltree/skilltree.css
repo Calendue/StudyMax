@@ -460,6 +460,18 @@
   -webkit-line-clamp: 1;
 }
 
+/* An unnamed slot reads by its label, over two lines if it needs them. */
+.tree-node__code--slot {
+  display: -webkit-box;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.2;
+  white-space: normal;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
 .tree-node__glyph {
   flex: none;
   width: 12px;
@@ -486,6 +498,12 @@
 .tree-node__tag--now {
   background: var(--accent-tint);
   color: var(--tree-now);
+}
+
+/* The term a Spring/Summer card was (or will be) taken in: quiet, it's a fact, not a status. */
+.tree-node__tag--term {
+  background: var(--selected);
+  color: var(--ink-2);
 }
 
 .tree-node__dots {
@@ -704,6 +722,162 @@
   top: 12px;
   font-size: var(--fs-caption);
   color: var(--ink-2);
+  white-space: nowrap;
+}
+
+/* ── the degree: credit units and C1-C5 above the leaves, milestones on the trunk ── */
+.tree-degree {
+  position: absolute;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 3px;
+  padding: 8px 12px;
+  border-radius: var(--r2);
+  background: var(--card);
+  box-shadow: var(--shadow-card);
+  text-align: center;
+}
+
+.tree-degree__name {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: var(--fs-caption);
+  color: var(--ink-2);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.tree-degree__total {
+  font: 600 var(--fs-small) / 1.2 var(--font-brand);
+  color: var(--ink);
+}
+
+.tree-degree__total strong {
+  font-size: 1.25rem;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.tree-degree__total span {
+  font-size: var(--fs-caption);
+  font-weight: 500;
+  color: var(--ink-2);
+}
+
+.tree-degree__blocks {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tree-degree__block {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.tree-degree__id {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.tree-degree__block--done {
+  border-color: var(--accent-edge);
+  background: var(--accent-tint);
+  color: var(--accent);
+}
+
+.tree-degree__block--done .tree-degree__id {
+  color: var(--accent);
+}
+
+.tree-degree__block--planned {
+  border: 1px dashed var(--tree-planned);
+  background: var(--card);
+}
+
+.tree-degree__tick {
+  width: 11px;
+  height: 11px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* A milestone: a pin on the trunk, on the line between the years where it falls. */
+.tree-ms {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  margin-top: -11px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.tree-ms.is-open {
+  z-index: 4;
+}
+
+.tree-ms__pin {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px 2px 6px;
+  border: 1px solid var(--accent-edge);
+  border-radius: 999px;
+  background: var(--card);
+  box-shadow: var(--shadow-card);
+  font: 600 11.5px / 1.4 var(--font-brand);
+  color: var(--ink);
+  white-space: nowrap;
+  pointer-events: auto;
+}
+
+.tree-ms__dot {
+  width: 9px;
+  height: 9px;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  background: var(--card);
+}
+
+.tree-ms--reached .tree-ms__dot {
+  background: var(--accent);
+}
+
+.tree-ms__cu {
+  font-weight: 500;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.tree-ms__detail {
+  max-width: 240px;
+  padding: 8px 12px;
+  border-radius: var(--r2);
+  background: var(--card);
+  box-shadow: var(--shadow-card-hover);
+  font-size: var(--fs-caption);
+  color: var(--ink-2);
+  text-align: center;
+  pointer-events: auto;
 }
 
 /* ── the roots ── */
@@ -901,7 +1075,9 @@
 }
 
 .tree__float-inner {
+  position: relative; /* `left` puts it on the trunk, which sits a little right of the board's centre */
   display: flex;
+  flex-direction: column;
   gap: var(--s2);
   opacity: 0;
   transform: translateY(8px);
@@ -919,9 +1095,10 @@
 .tree__float-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 38px;
-  padding: 0 16px;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
   border-radius: 999px;
   background: var(--raised);
   color: var(--ink);
@@ -1095,7 +1272,8 @@
   list-style: none;
 }
 
-.tree-detail__creds .inline-link {
+.tree-detail__creds .inline-link,
+.tree-detail__degree {
   display: inline-flex;
   align-items: center;
   gap: var(--s2);

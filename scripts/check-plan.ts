@@ -2,7 +2,8 @@
 import assert from 'node:assert/strict'
 import { computeMatches } from '../src/lib/match.ts'
 import { buildPlan, selectCourses, withPrerequisites, courseLevel, upcomingTerm, buildStudentPlan, termsFrom, isElective } from '../src/lib/plan.ts'
-import { computerScienceDegree } from '../src/data/programs/computerScienceDegree.ts'
+import { computerScienceBsc4 } from '../src/data/degrees/computerScience.ts'
+import { auditDegree } from '../src/lib/degree.ts'
 import { courseInfo } from '../src/data/prereqs.ts'
 import { completedCourses } from '../src/data/transcript.ts'
 import { specializations } from '../src/data/specializations.ts'
@@ -26,7 +27,11 @@ assert.equal(courseInfo.CMPT141.creditUnits, 3)
 // --- selection covers exactly the outstanding requirement, never a completed course ---
 for (const match of matches) {
   const picked = selectCourses(match, specializations, completed)
-  assert.equal(picked.length, match.remaining, `${match.spec.id}: one pick per outstanding course`)
+  // A course the 2026-27 catalogue dropped (BINF 451) is never picked: an unavailable
+  // specialization is one short, and says why.
+  const dead = match.unsatisfied.filter((g) => !g.label && g.options.every((c) => !courseInfo[c])).reduce((n, g) => n + g.need, 0)
+  assert.equal(picked.length, match.remaining - dead, `${match.spec.id}: one pick per outstanding course`)
+  if (dead > 0) assert.ok(match.spec.unavailable, `${match.spec.id}: a dropped course means it's marked unavailable`)
   assert.ok(
     picked.every((p) => !completed.has(p.code)),
     `${match.spec.id}: never plans a course already taken`,
@@ -186,13 +191,13 @@ assert.ok(buildPlan(matches[0], specializations, completed, 0, { season: 'Fall',
 // --- load limits: Fall/Winter take up to coursesPerTerm, Spring/Summer up to its own cap ---
 {
   const big = matches.reduce((a, b) => (b.remaining > a.remaining ? b : a))
-  const loaded = buildStudentPlan([big.spec], specializations, new Set(), [], 3, { season: 'Fall', year: 2026 }, true, 1)
+  const loaded = buildStudentPlan([big.spec], specializations, new Set(), [], 3, { season: 'Fall', year: 2026 }, { springSummer: true, summerPerTerm: 1 })
   assert.ok(loaded.some((t) => t.label.startsWith('Spring/Summer')), 'Spring/Summer terms appear when on')
   for (const term of loaded) {
     const cap = term.label.startsWith('Spring/Summer') ? 1 : 3
     assert.ok(term.courses.length <= cap, `${term.label} holds at most ${cap}`)
   }
-  const off = buildStudentPlan([big.spec], specializations, new Set(), [], 3, { season: 'Fall', year: 2026 }, false, 1)
+  const off = buildStudentPlan([big.spec], specializations, new Set(), [], 3, { season: 'Fall', year: 2026 }, { summerPerTerm: 1 })
   assert.ok(!off.some((t) => t.label.startsWith('Spring/Summer')), 'no Spring/Summer terms when off')
 }
 
@@ -201,30 +206,71 @@ assert.deepEqual(upcomingTerm(new Date('2026-10-01')), { season: 'Winter', year:
 
 // --- degree: a CS plan is the whole B.Sc., its open slots unnamed, and every pick fits the degree ---
 {
-  const degree = computerScienceDegree
+  const degree = computerScienceBsc4
   const start = { season: 'Fall', year: 2026 } as const
   for (const spec of specializations) {
-    const plan = buildStudentPlan([spec], specializations, new Set(), [], 5, start, false, 2, degree)
+    const plan = buildStudentPlan([spec], specializations, new Set(), [], 5, start, { degree })
     const courses = plan.flatMap((t) => t.courses)
     const named = courses.filter((c) => !isElective(c.code)).map((c) => c.code)
-    // First-year: the plan is exactly the degree's 40 courses (120 cu). Courses no slot uses (a
-    // prerequisite the degree doesn't list) take free-elective room first, and only go over it once
-    // that room is full.
+    // First-year: the plan is the whole degree in credit units, every group met, 120 cu with 66 senior.
     const everything = new Set(named)
-    const unused = everything.size - computeMatches([degree], everything)[0].doneCount
-    const freeRoom = degree.totalCourses - degree.requirements.reduce((n, g) => n + g.need, 0)
-    assert.equal(courses.length, degree.totalCourses + Math.max(0, unused - freeRoom), `${spec.id}: a whole degree`)
+    const whole = auditDegree(degree, courses.map((c) => c.code))
+    assert.equal(whole.remainingCu, 0, `${spec.id}: a whole degree (120 cu)`)
+    assert.equal(whole.remainingSeniorCu, 0, `${spec.id}: 66 cu at the 200 level or higher`)
+    assert.ok(whole.groups.every((g) => g.remainingCu === 0), `${spec.id}: every requirement met`)
+    assert.ok(courses.length <= 41, `${spec.id}: no more than a degree's worth of courses`)
     // The specialization is finished and every named degree slot is filled, by a course or a slot.
-    assert.equal(computeMatches([spec], everything)[0].remaining, 0, `${spec.id}: specialization complete`)
-    const degreeLeft = computeMatches([degree], everything)[0].unsatisfied
-    assert.ok(degreeLeft.every((g) => g.label), `${spec.id}: only open-choice slots are left for unnamed electives`)
-    const unnamed = courses.filter((c) => isElective(c.code)).length
-    assert.ok(unnamed >= degreeLeft.reduce((n, g) => n + g.need, 0), `${spec.id}: every open slot has an unnamed elective`)
+    // (Short only the courses the 2026-27 catalogue dropped, for a specialization marked unavailable.)
+    const dropped = spec.unavailable ? spec.requirements.filter((g) => g.courses.every((c) => !courseInfo[c])).reduce((n, g) => n + g.need, 0) : 0
+    assert.equal(computeMatches([spec], everything)[0].remaining, dropped, `${spec.id}: specialization complete`)
+    const left = auditDegree(degree, everything).groups.filter((g) => g.remainingCu > 0)
+    assert.ok(left.every((g) => g.group.open), `${spec.id}: only open-choice requirements are left for unnamed electives`)
     assert.equal(new Set(courses.map((c) => c.code)).size, courses.length, `${spec.id}: no course twice`)
   }
+  // The program's own picks, never an Engineering route or a course the catalogue dropped (CMPT 215
+  // over CME 331, STAT 242 over STAT 245, CMPT 263 over CMPT 260, CMPT 141 over CMPT 111), a full
+  // load of five in 8 Fall/Winter terms, and the load rules in every term.
+  const seniorCmpt = (code: string) => /^CMPT[34]/.test(code) || /Senior CMPT|CMPT elective/.test(code)
+  for (const spec of specializations.filter((s) => !s.requirements.some((g) => g.courses.every((c) => !courseInfo[c])))) {
+    const plan = buildStudentPlan([spec], specializations, new Set(), [], 5, { season: 'Fall', year: 2027 }, { degree })
+    const codes = plan.flatMap((t) => t.courses.map((c) => c.code))
+    for (const bad of ['GE152', 'EE232', 'CME331', 'CMPT111', 'MATH121', 'CMPT260', 'STAT245']) {
+      assert.ok(!codes.includes(bad), `${spec.id}: plans ${bad}`)
+    }
+    for (const good of ['CMPT215', 'CMPT263', 'STAT242']) assert.ok(codes.includes(good), `${spec.id}: plans ${good}`)
+    assert.equal(plan.length, 8, `${spec.id}: a first-year at five a term takes 8 terms`)
+    const year1 = plan.slice(0, 2).flatMap((t) => t.courses.map((c) => c.code))
+    for (const code of ['CMPT141', 'CMPT145', 'MATH163', 'MATH164']) assert.ok(year1.includes(code), `${spec.id}: ${code} in Year 1`)
+    assert.ok(year1.filter((c) => c.endsWith(':English writing')).length === 2, `${spec.id}: English writing in Year 1`)
+    const year2 = plan.slice(2, 4).flatMap((t) => t.courses.map((c) => c.code))
+    for (const code of ['CMPT214', 'CMPT215', 'CMPT263', 'CMPT270', 'CMPT280']) assert.ok(year2.includes(code), `${spec.id}: ${code} in Year 2`)
+    for (const term of plan) {
+      assert.ok(term.courses.length <= 5, `${spec.id} ${term.label}: at most five courses`)
+      assert.ok(term.courses.reduce((n, c) => n + (c.cu ?? 3), 0) <= 15, `${spec.id} ${term.label}: at most 15 cu`)
+      assert.ok(term.courses.filter((c) => seniorCmpt(c.code)).length <= 3, `${spec.id} ${term.label}: at most three senior CMPT`)
+    }
+    // PHIL 232 needs 6 cu of 100-level CMPT first; nothing at the 300 level before 30 cu.
+    const termOf = (code: string) => plan.findIndex((t) => t.courses.some((c) => c.code === code))
+    if (codes.includes('PHIL232')) assert.ok(termOf('PHIL232') > termOf('CMPT145'), `${spec.id}: PHIL232 after CMPT145`)
+    assert.ok(plan.slice(0, 2).every((t) => t.courses.every((c) => isElective(c.code) || courseLevel(c.code) < 3)), `${spec.id}: no senior course in Year 1`)
+  }
+
+  // Without the degree (What if, Max), a prerequisite choice still skips the replaced CMPT 260.
+  for (const spec of specializations) {
+    const codes = buildStudentPlan([spec], specializations, new Set(), [], 5, { season: 'Winter', year: 2027 }).flatMap((t) => t.courses.map((c) => c.code))
+    assert.ok(!codes.includes('CMPT260'), `${spec.id}: no CMPT260 without the degree either`)
+  }
+
+  // Booked courses fill their own term: the sample's Winter 2027 already holds three.
+  const booked = { 'Fall 2026': ['CMPT332', 'CMPT360', 'CMPT370', 'MATH266'], 'Winter 2027': ['CMPT340', 'CMPT353', 'CMPT434'] }
+  const sample = buildStudentPlan([specializations.find((s) => s.id === 'social-computing')!], specializations, completed, Object.values(booked).flat(), 5, { season: 'Winter', year: 2027 }, { degree, booked })
+  const winter = sample.find((t) => t.label === 'Winter 2027')
+  assert.ok(!winter || winter.courses.length <= 2, 'Winter 2027 adds at most two to the three booked')
+  assert.ok(!winter || winter.courses.every((c) => !seniorCmpt(c.code)), 'Winter 2027 already has three senior CMPT booked')
+
   // A done course counts once, even when two slots list it (ENG 111: writing and breadth).
-  const once = computeMatches([degree], new Set(['ENG111']))[0]
-  assert.equal(once.doneCount, 1, 'one course fills one slot')
+  const once = auditDegree(degree, ['ENG111'])
+  assert.equal(once.groups.reduce((n, g) => n + g.courses.length, 0), 1, 'one course fills one slot')
 }
 
 console.log('check-plan.ts: all assertions passed')

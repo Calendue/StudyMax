@@ -1,4 +1,5 @@
 import type { RequirementGroup, Specialization } from '../data/specializations.js'
+import type { Degree } from '../data/degrees/types.js'
 
 export interface UnsatisfiedGroup {
   /** Courses in this slot the student hasn't completed yet (any one/N of them would count). */
@@ -47,11 +48,31 @@ function matchOne(spec: Specialization, completed: Set<string>): SpecializationM
   return { spec, totalRequired, doneCount, remaining: totalRequired - doneCount, unsatisfied }
 }
 
-/** Ranks all specializations by fewest remaining courses first. */
-export function computeMatches(specializations: Specialization[], completed: Set<string>): SpecializationMatch[] {
-  return specializations
-    .map((spec) => matchOne(spec, completed))
-    .sort((a, b) => a.remaining - b.remaining || a.spec.name.localeCompare(b.spec.name))
+/**
+ * The order targets are offered in: one that can be finished from the current catalogue before one
+ * that can't (`unavailable`), then fewest remaining courses, then the most courses the degree itself
+ * names (a first-year is equally far from several; the one that shares most with the degree wins),
+ * then name.
+ */
+export function compareMatches(degree?: Degree): (a: SpecializationMatch, b: SpecializationMatch) => number {
+  // The degree's named courses: its open-choice lists are electives, not what it names.
+  const named = new Set(degree?.groups.filter((g) => !g.open).flatMap((g) => g.courses) ?? [])
+  const shared = (m: SpecializationMatch) => new Set(m.spec.requirements.flatMap((g) => g.courses).filter((c) => named.has(c))).size
+  return (a, b) =>
+    Number(Boolean(a.spec.unavailable)) - Number(Boolean(b.spec.unavailable)) ||
+    a.remaining - b.remaining ||
+    shared(b) - shared(a) ||
+    a.spec.name.localeCompare(b.spec.name)
+}
+
+/** Ranks all specializations by fewest remaining courses first (see compareMatches). */
+export function computeMatches(
+  specializations: Specialization[],
+  completed: Set<string>,
+  /** The program's degree, where it's mapped: breaks ties toward what it names. */
+  degree?: Degree,
+): SpecializationMatch[] {
+  return specializations.map((spec) => matchOne(spec, completed)).sort(compareMatches(degree))
 }
 
 export interface CourseOverlap {

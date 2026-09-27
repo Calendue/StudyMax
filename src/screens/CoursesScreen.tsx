@@ -169,7 +169,8 @@ const SEASONS: Season[] = ['Fall', 'Winter', 'Spring/Summer']
 
 /**
  * What the student is taking, grouped by term (this term first). The transcript says which term a
- * course is in where it can; otherwise it's taken as this term, and the student can move it.
+ * course is in where it can; otherwise it's taken as this term, and the student can move it or,
+ * like a completed course, remove it.
  */
 export function InProgressList({ label = true }: { label?: boolean }) {
   const m = useModel()
@@ -191,18 +192,21 @@ export function InProgressList({ label = true }: { label?: boolean }) {
                 title={courseCode(code)}
                 subtitle={m.courseTitle(code)}
                 trailing={
-                  <select
-                    className="term-select"
-                    value={group.season}
-                    aria-label={`Term for ${courseCode(code)}`}
-                    onChange={(e) => m.setCourseTerm(code, e.target.value as Season)}
-                  >
-                    {SEASONS.map((season) => (
-                      <option key={season} value={season}>
-                        {season}
-                      </option>
-                    ))}
-                  </select>
+                  <>
+                    <select
+                      className="term-select"
+                      value={group.season}
+                      aria-label={`Term for ${courseCode(code)}`}
+                      onChange={(e) => m.setCourseTerm(code, e.target.value as Season)}
+                    >
+                      {SEASONS.map((season) => (
+                        <option key={season} value={season}>
+                          {season}
+                        </option>
+                      ))}
+                    </select>
+                    <IconButton icon="close" label={`Remove ${courseCode(code)}`} onClick={() => m.removeInProgress(code)} />
+                  </>
                 }
               />
             ))}

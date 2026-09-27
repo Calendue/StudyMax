@@ -1,14 +1,15 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
-import { isElective } from '../lib/plan.ts'
+import { electiveLabel, isElective } from '../lib/plan.ts'
 import { createPortal } from 'react-dom'
 import { useReducedMotion } from 'motion/react'
 import { useModel } from '../model.ts'
 import { courseCode, KIND_LABEL } from '../format.ts'
 import { haptic } from '../platform.ts'
-import { layoutSkillTree, pathThrough, type SkillTreeLayout, type TreeNode } from '../lib/skillTree.ts'
+import { laneSeason, layoutSkillTree, pathThrough, type SkillTreeLayout, type TreeMilestone, type TreeNode } from '../lib/skillTree.ts'
 import { Icon } from '../ui/Icon.tsx'
 import { Sheet } from '../ui/Sheet.tsx'
 import { useTreeInputs, type TreeSelection } from './planView.ts'
+import { DegreeReadout } from './DegreeReadout.tsx'
 import { TreeDetail } from './TreeDetail.tsx'
 import { TreePeek } from './TreePeek.tsx'
 import './skilltree.css'
@@ -85,9 +86,7 @@ export function SkillTree({
             completed: m.completed,
             inProgress: m.inProgressCourses,
             plan: m.plan,
-            currentTerm: inputs.currentTerm,
-            targets: inputs.targets,
-            bestNext: inputs.bestNext,
+            ...inputs,
             width,
           })
         : null,
@@ -388,14 +387,25 @@ export function SkillTree({
                     {b.label}
                     {b.current && <span className="tree__now"> · now</span>}
                   </span>
-                  <span className="tree__lane-head tree__lane-head--fall" style={{ right: layout.width - layout.trunkX + layout.trunkWidth / 2 + 14 }}>
-                    Fall
-                  </span>
-                  <span className="tree__lane-head tree__lane-head--winter" style={{ left: layout.trunkX + layout.trunkWidth / 2 + 14 }}>
-                    Winter
-                  </span>
+                  {b.heads.map((h) => (
+                    <span
+                      key={h.lane}
+                      className={`tree__lane-head tree__lane-head--${h.lane}`}
+                      style={
+                        h.lane === 'fall'
+                          ? { top: h.y, right: layout.width - layout.trunkX + layout.trunkWidth / 2 + 14 }
+                          : { top: h.y, left: layout.trunkX + layout.trunkWidth / 2 + 14 }
+                      }
+                    >
+                      {h.label}
+                    </span>
+                  ))}
                 </div>
               ))}
+            {layout.degree && <DegreeReadout box={layout.degree} />}
+            {layout.milestones.map((ms) => (
+              <Milestone key={ms.id} milestone={ms} x={layout.trunkX} />
+            ))}
             <div className="tree__band-sentinel" style={{ top: 0, height: layout.trunkTop }} data-band="canopy" aria-hidden />
             <div className="tree__band-sentinel" style={{ top: layout.trunkBase, height: layout.height - layout.trunkBase }} data-band="roots" aria-hidden />
 
@@ -508,26 +518,35 @@ export function SkillTree({
 
       <div className="tree__float" aria-hidden={peek ? undefined : !awayFromRoots}>
         {peek}
-        <div className={`tree__float-inner${awayFromRoots && !peek ? ' is-on' : ''}`} hidden={peek !== null}>
-          <button type="button" className="tree__float-btn" tabIndex={awayFromRoots ? 0 : -1} onClick={toRoots}>
-            <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden>
-              <path d="M6 2v8M2.5 6.5 6 10l3.5-3.5" />
-            </svg>
-            Back to roots
-          </button>
+        {/* Two round buttons stacked on the trunk: the one strip of the board no card ever sits on. */}
+        <div
+          className={`tree__float-inner${awayFromRoots && !peek ? ' is-on' : ''}`}
+          hidden={peek !== null}
+          style={layout ? { left: layout.trunkX - layout.width / 2 } : undefined}
+        >
           {layout && (
             <button
               type="button"
               className="tree__float-btn"
               tabIndex={awayFromRoots ? 0 : -1}
+              aria-label="Jump to now"
+              title="Jump to now"
               onClick={() => {
                 const band = layout.bands.find((b) => b.current)
                 if (band) scrollToY(band.y + band.h / 2)
               }}
             >
-              Jump to now
+              <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden>
+                <circle cx="8" cy="8" r="5.5" />
+                <circle cx="8" cy="8" r="1.6" />
+              </svg>
             </button>
           )}
+          <button type="button" className="tree__float-btn" tabIndex={awayFromRoots ? 0 : -1} aria-label="Back to roots" title="Back to roots" onClick={toRoots}>
+            <svg viewBox="0 0 12 12" width="14" height="14" aria-hidden>
+              <path d="M6 2v8M2.5 6.5 6 10l3.5-3.5" />
+            </svg>
+          </button>
         </div>
       </div>
 
@@ -549,6 +568,37 @@ export function SkillTree({
           </Sheet>
         )}
     </section>
+  )
+}
+
+/**
+ * A milestone on the trunk (admission to the major, the Honours application), on the line where the
+ * tree's credit units reach it. A tap opens what it means.
+ */
+function Milestone({ milestone, x }: { milestone: TreeMilestone; x: number }) {
+  const [open, setOpen] = useState(false)
+  const id = `tree-ms-${milestone.id}`
+  return (
+    <div className={`tree-ms${milestone.reached ? ' tree-ms--reached' : ''}${open ? ' is-open' : ''}`} style={{ top: milestone.y, left: x }}>
+      <button
+        type="button"
+        className="tree-ms__pin"
+        aria-expanded={open}
+        aria-describedby={id}
+        onClick={() => {
+          haptic.selection()
+          setOpen((o) => !o)
+        }}
+      >
+        <span className="tree-ms__dot" aria-hidden />
+        {milestone.label}
+        <span className="tree-ms__cu">{milestone.afterCu} cu</span>
+      </button>
+      <p id={id} className="tree-ms__detail" hidden={!open}>
+        {milestone.detail}
+        {milestone.reached ? ' Passed.' : ''}
+      </p>
+    </div>
   )
 }
 
@@ -581,13 +631,15 @@ function NodeCard({
   if (shown) classes.push('is-in')
   const creds = node.creds.map((c) => layout.leaves[c]?.name).filter(Boolean)
   const where = node.termKnown ? node.term : `${node.term}, placed by course level`
+  const registered = status === 'inProgress' && !node.current
   const label = [
     courseCode(node.code),
     title,
-    `${node.lane === 'fall' ? 'Fall' : 'Winter'} ${node.termKnown ? node.term : `Year ${node.year}`}`,
-    status === 'inProgress' ? 'in progress' : status === 'next' ? 'best next course' : status,
+    node.termKnown ? node.term : `Year ${node.year}, ${laneSeason(node.lane)} side, placed by course level`,
+    registered ? 'registered' : status === 'inProgress' ? 'in progress' : status === 'next' ? 'best next course' : status,
     isElective(node.code) ? 'your choice of course' : node.elective ? `elective, ${node.elective.need} of ${node.elective.of} choices` : '',
     creds.length > 0 ? `counts toward ${creds.join(', ')}` : '',
+    node.degreeGroup ? `fills ${node.degreeGroup}` : '',
   ]
     .filter(Boolean)
     .join(', ')
@@ -596,12 +648,16 @@ function NodeCard({
     status === 'locked'
       ? needs
         ? `Needs ${courseCode(needs)} first`
-        : 'Needs its prerequisites first'
-      : isElective(node.code)
-        ? 'Your choice'
-        : node.elective
-          ? `Elective · ${node.elective.need} of ${node.elective.of}`
-          : title
+        : node.needsCredits
+          ? `Needs ${node.needsCredits} first`
+          : 'Needs its prerequisites first'
+      : registered
+        ? `Registered · ${node.term.replace(' ', '\u00a0')}`
+        : isElective(node.code)
+          ? 'Your choice'
+          : node.elective
+            ? `Elective · ${node.elective.need} of ${node.elective.of}`
+            : title
   const filled = status === 'completed' || status === 'next'
   return (
     <button
@@ -623,9 +679,14 @@ function NodeCard({
       onClick={onSelect}
     >
       <span className="tree-node__head">
-        <span className="tree-node__code">{courseCode(node.code)}</span>
+        {/* An unnamed slot's name is its label ("Breadth: Humanities or Social Science"): it wraps. */}
+        {isElective(node.code) ? (
+          <span className="tree-node__code tree-node__code--slot">{electiveLabel(node.code)}</span>
+        ) : (
+          <span className="tree-node__code">{courseCode(node.code)}</span>
+        )}
         {status === 'next' && <span className="tree-node__tag">Next</span>}
-        {status === 'inProgress' && <span className="tree-node__tag tree-node__tag--now">Now</span>}
+        {status === 'inProgress' && node.current && <span className="tree-node__tag tree-node__tag--now">Now</span>}
         {status === 'completed' && (
           <svg className="tree-node__glyph" viewBox="0 0 12 12" aria-hidden>
             <path d="M2.5 6.3 5 8.7l4.6-5" />

@@ -148,13 +148,23 @@ export function PlanControls() {
 
 export function HiddenPrereqsNotice() {
   const m = useModel()
+  if (m.hero.spec.unavailable) {
+    return (
+      <Appear index={2} className="notice">
+        <p>
+          <strong>{m.hero.spec.name} can&rsquo;t be finished from the 2026-27 catalogue.</strong> {m.hero.spec.unavailable}.
+          The plan covers the rest of it; ask the department what replaces it.
+        </p>
+      </Appear>
+    )
+  }
   if (m.hiddenPrereqs.length === 0) return null
   return (
     <Appear index={2} className="notice">
       <p>
         <strong>
           {plural(m.hiddenPrereqs.length, 'course')} below {m.hiddenPrereqs.length === 1 ? "isn't" : "aren't"} on the
-          specialization page.
+          specialization or degree page.
         </strong>{' '}
         {m.hiddenPrereqs.length === 1 ? "It's a prerequisite" : "They're prerequisites"} you need before you can register
         for the ones that are. That&rsquo;s the real cost.
@@ -183,6 +193,9 @@ export function PlanCopy() {
         </>
       )}
       <p className="footnote">
+        {m.selectedProgram?.degree
+          ? `The plan is the whole ${m.selectedProgram.degree.name} from the 2026-27 catalogue: ${m.selectedProgram.degree.totalCu} credit units, ${m.selectedProgram.degree.minSeniorCu} of them at the 200 level or higher, at most 15 a term. `
+          : "The plan covers your major's requirements; add breadth and electives with an advisor. "}
         Prerequisites come from catalogue.usask.ca verbatim, and each course sits in a term it ran in on USask&rsquo;s class
         search over the last two years. Schedules can change, so confirm with your advisor before you register.
       </p>
