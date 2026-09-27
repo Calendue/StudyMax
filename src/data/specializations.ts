@@ -70,7 +70,9 @@ export const specializations: Specialization[] = [
       { courses: ['CMPT260', 'CMPT263'], need: 1 },
       single('CMPT270'),
       single('CMPT340'),
-      { courses: ['CMPT435', 'CMPT440', 'CMPT442'], need: 2 },
+      // The page's "Choose 6 credit units" also lists CMPT 435, which the 2026-27 catalogue no longer has
+      // (catalogue.usask.ca/CMPT-435 is a 404), so the choice is both of CMPT 440 and CMPT 442.
+      { courses: ['CMPT440', 'CMPT442'], need: 2 },
     ],
   },
   {
@@ -164,6 +166,8 @@ export const specializations: Specialization[] = [
   {
     id: 'computational-modelling',
     name: 'Computational Modelling',
+    // catalogue.usask.ca/BINF-451 is a 404 and the 2026-27 course list has no BINF 451.
+    unavailable: 'BINF 451 is not in the 2026-27 catalogue',
     requirements: [
       single('BINF451'),
       single('CMPT145'),
