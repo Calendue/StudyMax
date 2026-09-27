@@ -21,7 +21,7 @@
     "db:seed:demo-student": "node --experimental-strip-types --experimental-loader ./scripts/_resolve-ts-loader.mjs --env-file=.env.local scripts/seed-demo-student.ts",
     "max:call-log": "node --experimental-strip-types --env-file=.env.local scripts/max-call-log.ts",
     "db:seed": "npm run db:seed:institutions && npm run db:seed:majors",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate && patch-package"
   },
   "dependencies": {
     "@capacitor-firebase/authentication": "^8.5.2",
@@ -52,6 +52,7 @@
     "@vitejs/plugin-react": "^6.0.4",
     "dotenv-cli": "^11.0.0",
     "oxlint": "^1.75.0",
+    "patch-package": "^8.0.1",
     "prisma": "^6.19.3",
     "typescript": "~6.0.2",
     "vite": "^8.2.0"

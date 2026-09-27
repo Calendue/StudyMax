@@ -6,14 +6,17 @@ import { placeSchedule, type ElectiveSlot, type RegPlan, type RegRequest } from 
 // Real class registration, the network part: the sections of every course a RegRequest names, from
 // USask's public class search through /api/classes (never a signed-in Banner session), then
 // pickRealSchedule over them. Banner throttles bursts by answering empty, so at most two requests
-// run at once and an empty answer gets one second look. Each course's last good answer is kept on
-// this device, so a dropped connection falls back to it, and with nothing kept to hash-based practice
-// sections (src/lib/mockRegistration.ts). An 'offline' plan's CRNs are placeholders: never fill them
-// into PAWS.
+// run at once and an empty answer gets one second look. Each request gives up after TIMEOUT_MS. Each
+// course's last good answer is kept on this device, so a dropped (or stalled) connection falls back to
+// it, and with nothing kept to hash-based practice sections (src/lib/mockRegistration.ts). An
+// 'offline' plan's CRNs are placeholders, and so are a preview's (a term Banner hasn't published yet,
+// planned on the same season a year earlier): never fill them into PAWS.
 
 const CACHE_PREFIX = 'studymax:sections:'
 const IN_FLIGHT = 2
 const RETRY_MS = 1200
+/** One request's limit: a stalled one counts as a network failure. */
+const TIMEOUT_MS = 12_000
 /** Candidates looked up for one elective slot before it's left open. */
 const SLOT_TRIES = 6
 
@@ -63,10 +66,56 @@ function limiter(limit: number) {
   }
 }
 
+/**
+ * One GET with its own time limit. Its controller also follows the caller's signal (by hand: WKWebView
+ * before iOS 17.4 has no AbortSignal.any). It rejects with an AbortError only when the caller aborted;
+ * a timeout is a plain failure, like a dropped connection.
+ */
 async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const res = await fetch(api(path), { cache: 'no-store', signal })
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  return (await res.json()) as T
+  if (signal?.aborted) throw abortError()
+  const controller = new AbortController()
+  const forward = () => controller.abort()
+  signal?.addEventListener('abort', forward, { once: true })
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
+  try {
+    const res = await fetch(api(path), { cache: 'no-store', signal: controller.signal })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    return (await res.json()) as T
+  } catch (err) {
+    if (signal?.aborted) throw abortError()
+    throw controller.signal.aborted ? new Error(`No answer in ${TIMEOUT_MS / 1000} seconds`) : err
+  } finally {
+    clearTimeout(timer)
+    signal?.removeEventListener('abort', forward)
+  }
+}
+
+const SEASON_OF_MONTH: Record<string, string> = { '01': 'Winter', '05': 'Spring', '07': 'Summer', '09': 'Fall' }
+
+/** '202609' -> 'Fall 2026' (bannerTermCode backwards). */
+function termLabelOf(code: string): string {
+  return `${SEASON_OF_MONTH[code.slice(4)] ?? 'Term'} ${code.slice(0, 4)}`
+}
+
+/**
+ * Which term's sections to read. Banner's own term when it lists it (open, or view-only); when it
+ * doesn't list it yet, the latest listed term of the same season (202609 for 202709), as a preview.
+ * Unreadable terms leave the request's term, with termOpen unknown. A term Banner doesn't list and no
+ * same-season term to stand in (it lists about three years, so in practice there always is one) reads
+ * as not open.
+ */
+function termToRead(request: RegRequest, terms: Term[] | null): { termCode: string; termOpen: boolean | null; preview?: RegPlan['preview'] } {
+  if (!terms) return { termCode: request.termCode, termOpen: null }
+  const listed = terms.find((t) => t.code === request.termCode)
+  if (listed) return { termCode: request.termCode, termOpen: !listed.viewOnly }
+  const season = request.termCode.slice(4)
+  const stand = terms
+    .map((t) => t.code)
+    .filter((code) => code.slice(4) === season && code < request.termCode)
+    .sort()
+    .at(-1)
+  if (!stand) return { termCode: request.termCode, termOpen: false }
+  return { termCode: stand, termOpen: false, preview: { termCode: stand, termLabel: termLabelOf(stand) } }
 }
 
 // ─────────────────────────────────────────────────────────────── the device cache
@@ -136,12 +185,13 @@ export function offlineSections(code: string, title: string, termCode: string, t
 // ─────────────────────────────────────────────────────────────── loading
 
 /**
- * The request's real schedule. Looks up the term (open or view-only) and every booked and named
- * course's sections, then each elective slot's candidates in order, a couple at a time, until one
- * places (at most SLOT_TRIES per slot). Never rejects for a network failure: a course that can't be read
- * live uses its last kept answer ('cached'), else practice sections ('offline'), and the plan's
- * source is the worst of its courses. It does reject, with an AbortError, when `opts.signal` aborts.
- * `request` comes back as given.
+ * The request's real schedule. Looks up the term first (open, view-only, or not published yet, when
+ * the same season's latest listed term stands in: `preview`), then every booked and named course's
+ * sections, then each elective slot's candidates in order, a couple at a time, until one places (at
+ * most SLOT_TRIES per slot). Never rejects for a network failure: a course that can't be read live
+ * uses its last kept answer ('cached'), else practice sections ('offline'), and the plan's source is
+ * the worst of its courses. It does reject, with an AbortError, when `opts.signal` aborts. `request`
+ * comes back as given.
  */
 export async function loadRegistration(request: RegRequest, opts: { signal?: AbortSignal } = {}): Promise<RegPlan> {
   const { signal } = opts
@@ -150,9 +200,18 @@ export async function loadRegistration(request: RegRequest, opts: { signal?: Abo
     [...request.booked, ...request.courses, ...request.slots.flatMap((s) => s.candidates)].map((c) => [c.code, c.title]),
   )
 
+  // The term decides which timetable is read, so it comes first. Unreadable, it's the request's own.
+  const terms = await run(() => getJson<{ terms?: Term[] }>('/api/classes?op=terms', signal)).then(
+    ({ terms }) => (Array.isArray(terms) ? terms : null),
+    () => null,
+  )
+  if (signal?.aborted) throw abortError()
+  const { termCode, termOpen, preview } = termToRead(request, terms)
+  const termLabel = preview?.termLabel ?? request.termLabel
+
   const readCourse = async (code: string): Promise<CourseData> => {
     const search = () =>
-      run(() => getJson<{ sections?: Section[] }>(`/api/classes?op=search&term=${request.termCode}&course=${encodeURIComponent(code)}`, signal))
+      run(() => getJson<{ sections?: Section[] }>(`/api/classes?op=search&term=${termCode}&course=${encodeURIComponent(code)}`, signal))
     try {
       let answer = await search()
       if (!Array.isArray(answer.sections)) throw new Error('unexpected answer')
@@ -164,18 +223,18 @@ export async function loadRegistration(request: RegRequest, opts: { signal?: Abo
       }
       const fetchedAt = new Date().toISOString()
       if (answer.sections.length > 0) {
-        writeCache(request.termCode, code, answer.sections, fetchedAt)
+        writeCache(termCode, code, answer.sections, fetchedAt)
         return { sections: answer.sections, source: 'live', fetchedAt }
       }
       // Still empty: not running this term, or still throttled. A course seen before keeps that reading.
-      const kept = readCache(request.termCode, code)
+      const kept = readCache(termCode, code)
       return kept ? { ...kept, source: 'cached' } : { sections: [], source: 'live', fetchedAt }
     } catch {
       if (signal?.aborted) throw abortError()
-      const kept = readCache(request.termCode, code)
+      const kept = readCache(termCode, code)
       if (kept) return { ...kept, source: 'cached' }
       return {
-        sections: offlineSections(code, titles.get(code) ?? code, request.termCode, request.termLabel),
+        sections: offlineSections(code, titles.get(code) ?? code, termCode, termLabel),
         source: 'offline',
         fetchedAt: null,
       }
@@ -189,17 +248,6 @@ export async function loadRegistration(request: RegRequest, opts: { signal?: Abo
     return pending
   }
 
-  // Open when Banner lists the term without "(View Only)"; a term it doesn't list isn't open yet.
-  // Never rejects, so an abort mid-load leaves no stray rejection behind.
-  const termsLoad = run(() => getJson<{ terms?: Term[] }>('/api/classes?op=terms', signal)).then(
-    ({ terms }) => {
-      if (!Array.isArray(terms)) return null
-      const term = terms.find((t) => t.code === request.termCode)
-      return term ? !term.viewOnly : false
-    },
-    () => null,
-  )
-
   const data: Record<string, CourseData> = {}
   const fixed = [...new Set([...request.booked, ...request.courses].map((c) => c.code))]
   await Promise.all(fixed.map(async (code) => (data[code] = await load(code))))
@@ -207,6 +255,7 @@ export async function loadRegistration(request: RegRequest, opts: { signal?: Abo
   // Each slot looks candidates up in order, two at a time, until one places; the final schedule is
   // then computed over exactly the candidates each slot tried, so it matches what was decided here.
   const sectionsOf = () => Object.fromEntries(Object.entries(data).map(([code, d]) => [code, d.sections]))
+  const where = preview ? { timetable: preview.termLabel } : {}
   const tried: ElectiveSlot[] = []
   // A course an earlier slot took or tried isn't worth a second try: what's held only grows.
   const seen = new Set<string>()
@@ -219,7 +268,7 @@ export async function loadRegistration(request: RegRequest, opts: { signal?: Abo
       let placed = false
       for (const candidate of batch) {
         attempt.candidates.push(candidate)
-        const detail = placeSchedule({ ...request, slots: [...tried, attempt] }, sectionsOf())
+        const detail = placeSchedule({ ...request, slots: [...tried, attempt] }, sectionsOf(), where)
         if (detail.slotCodes.at(-1)) {
           placed = true
           break
@@ -231,9 +280,8 @@ export async function loadRegistration(request: RegRequest, opts: { signal?: Abo
     tried.push(attempt)
   }
 
-  const termOpen = await termsLoad
   if (signal?.aborted) throw abortError()
-  const schedule = placeSchedule({ ...request, slots: tried }, sectionsOf())
+  const schedule = placeSchedule({ ...request, slots: tried }, sectionsOf(), where)
   // The source and age of what the schedule was built from (a candidate fetched but never tried doesn't count).
   const used = [...fixed, ...tried.flatMap((s) => s.candidates.map((c) => c.code))].map((code) => data[code])
   const source = used.reduce<Source>((worst, d) => (WORST.indexOf(d.source) > WORST.indexOf(worst) ? d.source : worst), 'live')
@@ -243,6 +291,7 @@ export async function loadRegistration(request: RegRequest, opts: { signal?: Abo
     source,
     fetchedAt: times[0] ?? null,
     termOpen,
+    ...(preview ? { preview } : {}),
     picks: schedule.picks,
     booked: schedule.booked,
     unplaced: schedule.unplaced,

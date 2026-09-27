@@ -192,6 +192,16 @@ for (const p of mathAll.picks) assert.equal(opened(raw('MATH110')).find((s) => s
 assert.equal(mathAll.picks[0].section, '02')
 assert.equal(opened(raw('MATH110')).find((s) => s.crn === mathAll.picks[1].crn)!.linkIdentifier, 'L2')
 
+// ── a lecture whose labs all run off the main campus can't be had here: the next lecture, else unplaced ──
+const offCampus = (s: Section) => ({ ...s, campus: "St. Peter's College" })
+const labsAway = pickRealSchedule(req(['CMPT145']), { CMPT145: real.CMPT145.map((s) => (s.scheduleType === 'Laboratory' ? offCampus(s) : s)) })
+assert.deepEqual(labsAway.picks, [], 'no main-campus lab, so no CMPT 145 lecture without one')
+assert.equal(labsAway.unplaced[0].reason, 'not-offered')
+assert.equal(labsAway.unplaced[0].text, "CMPT 145's labs run only off the main campus")
+const l1Away = pickRealSchedule(req(['BIOL120']), { BIOL120: opened(raw('BIOL120')).map((s) => (s.linkIdentifier === 'L1' ? offCampus(s) : s)) })
+assert.equal(l1Away.picks[0].section, '02', "lecture 01's L1 labs are off campus, so lecture 02 (M2)")
+assert.equal(opened(raw('BIOL120')).find((s) => s.crn === l1Away.picks[1].crn)!.linkIdentifier, 'L2')
+
 // ── rows from an older API (no campus, no link identifier) still produce a pick ──
 const oldApi = real.CMPT145.map(({ campus: _c, linkIdentifier: _l, ...s }) => s as Section)
 const old = pickRealSchedule(req(['CMPT145']), { CMPT145: oldApi })
@@ -271,6 +281,23 @@ for (const slot of sample.slots) {
 assert.equal(sample.slots[0].candidates[0].code, 'INDG107', 'Indigenous learning: INDG 107 first')
 const scienceAreas = new Set(['BIOL120', 'BIOL121', 'CHEM112', 'CHEM115', 'CHEM250', 'GEOG120', 'GEOL121', 'GEOL122'])
 assert.ok(sample.slots[1].candidates.every((c) => scienceAreas.has(c.code)), 'Junior science: only the areas its label leaves open')
+// A course booked for the same term is no prerequisite yet (MATH 266 needs MATH 164 passed), but it is
+// "already have it", and an antirequisite (NS 105 rules out INDG 107), like a completed one.
+const slotCandidatesFor = (label: string, booked: string[], taken: string[]) =>
+  registrationRequest({
+    plan: [{ label: 'Winter 2027', courses: [{ code: `elective:0:${label}`, reason: 'elective', alsoAdvances: [] }] }],
+    booked: { 'Winter 2027': booked },
+    degree,
+    taken,
+  })?.slots[0]?.candidates.map((c) => c.code) ?? []
+const passed = slotCandidatesFor('Math or statistics elective', [], ['MATH110', 'MATH164'])
+assert.ok(['MATH266', 'MATH116'].every((c) => passed.includes(c)), `MATH 266 once MATH 164 is passed (${passed.join(' ')})`)
+assert.ok(!slotCandidatesFor('Math or statistics elective', ['MATH164'], ['MATH110']).includes('MATH266'), 'not while MATH 164 is only booked for the same term')
+assert.ok(!slotCandidatesFor('Math or statistics elective', ['MATH116'], ['MATH110', 'MATH164']).includes('MATH116'), 'a booked course is never a slot pick')
+assert.ok(slotCandidatesFor('Indigenous learning', [], []).includes('INDG107'))
+assert.ok(!slotCandidatesFor('Indigenous learning', ['NS105'], []).includes('INDG107'), 'a booked antirequisite rules a pick out')
+// Banner splits Spring/Summer into Spring and Summer terms, so Max doesn't guess which.
+assert.equal(registrationRequest({ plan: [{ label: 'Spring/Summer 2027', courses: [{ code: 'CMPT214', reason: 'required', alsoAdvances: [] }] }], booked: {}, degree, taken: [] }), null)
 // Nothing left to register: null.
 assert.equal(registrationRequest({ plan: [], booked: {}, degree, taken: [] }), null)
 assert.equal(registrationRequest({ plan: [{ label: 'Winter 2027', courses: [{ code: 'elective:0:Free elective', reason: 'elective', alsoAdvances: [] }] }], booked: {}, degree, taken: [] }), null)
@@ -285,25 +312,32 @@ Object.assign(globalThis, {
   },
 })
 const { loadRegistration } = await import('../src/lib/registrationData.ts')
-let mode: 'live' | 'down' | 'empty-once' = 'live'
+let mode: 'live' | 'down' | 'empty-once' | 'hang' = 'live'
+let terms = [{ code: '202701', description: 'Winter 2027', viewOnly: false }]
 let inFlight = 0
 let maxInFlight = 0
 const asked: string[] = []
+const searchedTerms: string[] = []
 const emptied = new Set<string>()
+const abortError = () => Object.assign(new Error('aborted'), { name: 'AbortError' })
 globalThis.fetch = (async (input: string | URL, init?: RequestInit) => {
   const url = new URL(String(input), 'http://localhost')
   inFlight++
   maxInFlight = Math.max(maxInFlight, inFlight)
   try {
+    assert.ok(init?.signal, 'every request carries a signal (its own time limit)')
     await new Promise((r) => setTimeout(r, 5))
-    if (init?.signal?.aborted) throw Object.assign(new Error('aborted'), { name: 'AbortError' })
+    if (init.signal.aborted) throw abortError()
     if (mode === 'down') throw new TypeError('network down')
+    // Stalled: answers only by being aborted.
+    if (mode === 'hang') await new Promise((_, reject) => init.signal!.addEventListener('abort', () => reject(abortError())))
     const body =
       url.searchParams.get('op') === 'terms'
-        ? { terms: [{ code: '202701', description: 'Winter 2027', viewOnly: false }] }
+        ? { terms }
         : (() => {
             const code = url.searchParams.get('course')!
             asked.push(code)
+            searchedTerms.push(url.searchParams.get('term')!)
             if (mode === 'empty-once' && !emptied.has(code)) {
               emptied.add(code)
               return { sections: [] }
@@ -342,6 +376,26 @@ assert.equal(cachedPlan.termOpen, null)
 assert.deepEqual(cachedPlan.crns, live.crns)
 assert.ok(cachedPlan.fetchedAt && cachedPlan.fetchedAt <= live.fetchedAt!)
 
+// A stalled connection times out (12 s, shortened here) and falls back like a dropped one.
+const realSetTimeout = globalThis.setTimeout
+let timeLimit = 20
+globalThis.setTimeout = ((fn: () => void, ms?: number) => realSetTimeout(fn, ms !== undefined && ms >= 10_000 ? timeLimit : ms)) as typeof setTimeout
+mode = 'hang'
+const giveUp = <T>(p: Promise<T>) => Promise.race([p, new Promise<never>((_, reject) => realSetTimeout(() => reject(new Error('a stalled request never timed out')), 5000))])
+const stalled = await giveUp(loadRegistration(slotReq))
+assert.equal(stalled.source, 'cached', 'a timed-out request uses the kept answer')
+assert.equal(stalled.termOpen, null, 'terms that time out are unknown')
+assert.deepEqual(stalled.crns, live.crns)
+// The caller's own abort still rejects as an abort, and at once: it reaches the request in flight.
+timeLimit = 3000
+const stop = new AbortController()
+const stopped = loadRegistration(slotReq, { signal: stop.signal })
+realSetTimeout(() => stop.abort(), 10)
+const t1 = Date.now()
+await assert.rejects(stopped, (e: Error) => e.name === 'AbortError')
+assert.ok(Date.now() - t1 < 1000, 'the abort ends the stalled request, not its time limit')
+globalThis.setTimeout = realSetTimeout
+
 store.clear()
 const offline = await loadRegistration(req(['CMPT370', 'CMPT371'], ['CMPT340']))
 assert.equal(offline.source, 'offline')
@@ -354,6 +408,32 @@ const controller = new AbortController()
 const aborted = loadRegistration(req(['CMPT145', 'CMPT280']), { signal: controller.signal })
 controller.abort()
 await assert.rejects(aborted, (e: Error) => e.name === 'AbortError')
+
+// A term Banner lists as view-only isn't open; no preview.
+terms = [{ code: '202701', description: 'Winter 2027', viewOnly: true }]
+const viewOnly = await loadRegistration(req(['CMPT145']))
+assert.equal(viewOnly.termOpen, false)
+assert.equal(viewOnly.preview, undefined)
+
+// A term Banner hasn't published (Fall 2027) is planned on the same season's latest listed term.
+terms = [
+  { code: '202707', description: 'Summer 2027', viewOnly: false },
+  { code: '202705', description: 'Spring 2027', viewOnly: false },
+  { code: '202701', description: 'Winter 2027', viewOnly: false },
+  { code: '202609', description: 'Fall 2026', viewOnly: true },
+  { code: '202509', description: 'Fall 2025', viewOnly: true },
+]
+store.clear()
+searchedTerms.length = 0
+const fallReq: RegRequest = { ...req(['CMPT145', 'CMPT214']), termLabel: 'Fall 2027', termCode: '202709' }
+const preview = await loadRegistration(fallReq)
+assert.deepEqual(preview.preview, { termCode: '202609', termLabel: 'Fall 2026' }, 'Fall 2027 is previewed on Fall 2026')
+assert.equal(preview.termOpen, false)
+assert.deepEqual(preview.request, fallReq, 'the request is still Fall 2027')
+assert.ok(searchedTerms.length > 0 && searchedTerms.every((t) => t === '202609'), "every section read is Fall 2026's")
+assert.ok(store.has('studymax:sections:202609:CMPT145') && ![...store.keys()].some((k) => k.includes('202709')), 'kept under the term actually read')
+assert.deepEqual(preview.crns, ['27177', '26267'])
+assert.equal(preview.unplaced[0].text, "CMPT 214 isn't on Fall 2026's timetable", "a preview's missing course isn't said to be not running in Fall 2027")
 
 const s = pickRealSchedule(big, real)
 console.log(

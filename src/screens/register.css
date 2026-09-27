@@ -46,11 +46,6 @@
   color: var(--accent);
 }
 
-.reg-max__note {
-  font-size: var(--fs-caption);
-  color: var(--ink-2);
-}
-
 .reg-max__quiet {
   justify-self: start;
   font-size: var(--fs-caption);
@@ -372,6 +367,13 @@
   font-weight: 600;
 }
 
+/* A preview's timetable ("on Fall 2026's timetable"), beside the term it stands in for. */
+.reg-search__note {
+  margin-left: 6px;
+  font-weight: 400;
+  color: var(--reg-ink-2);
+}
+
 .reg-search__form {
   display: flex;
   flex-wrap: wrap;
@@ -431,6 +433,32 @@
 
 .reg-btn--submit:not(:disabled) {
   background: var(--reg-tab);
+}
+
+/* Max has filled the summary: Submit is outlined in the app's rose for the student to press. */
+.reg-btn--ready {
+  outline: 3px solid var(--accent-fill);
+  outline-offset: 3px;
+  animation: reg-ready 2.4s var(--settle) infinite;
+  cursor: pointer;
+}
+
+@keyframes reg-ready {
+  0% {
+    box-shadow: 0 0 0 0 var(--accent-edge);
+  }
+  70% {
+    box-shadow: 0 0 0 10px transparent;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reg-btn--ready {
+    animation: none;
+  }
 }
 
 .reg-btn--add {

@@ -91,6 +91,12 @@ export interface RegPlan {
   fetchedAt: string | null
   /** Banner lists the term as open for registration (not view-only); null when unknown. */
   termOpen: boolean | null
+  /**
+   * Set when Banner hasn't published the request's term yet: the sections are the latest listed term
+   * of the same season (Fall 2026's for Fall 2027), a preview whose sections, times and CRNs will
+   * change, so never filled into PAWS. termOpen is false then.
+   */
+  preview?: { termCode: string; termLabel: string }
   /** Each course's lecture followed by its linked sections, in course order. */
   picks: RegPick[]
   /** The booked courses' assumed sections, for the schedule view (context only). */
@@ -146,18 +152,19 @@ function runsIn(code: string, season: Season | null): 0 | 1 | 2 {
 }
 
 /**
- * Whether a student with `taken` (completed, in progress and booked) may register for `code`: every
- * earlier-term prerequisite group met, no antirequisite taken, and the credit-count rules met the way
- * the planner counts them. Same-term corequisites aren't checked (Banner allows them together).
+ * Whether a student may register for `code`: every earlier-term prerequisite group met and the
+ * credit-count rules met the way the planner counts them, from `prior` (completed and in progress:
+ * a course booked for the same term isn't passed yet), and no antirequisite in `all` (prior and
+ * booked). Same-term corequisites aren't checked (Banner allows them together).
  */
-function eligible(code: string, taken: Set<string>, honours: boolean): boolean {
+function eligible(code: string, prior: Set<string>, all: Set<string>, honours: boolean): boolean {
   const info = courseInfo[code]
-  if (info?.antirequisites?.some((a) => taken.has(a))) return false
-  if (info?.requires.some((options) => options.length > 0 && !options.some((o) => taken.has(o)))) return false
+  if (info?.antirequisites?.some((a) => all.has(a))) return false
+  if (info?.requires.some((options) => options.length > 0 && !options.some((o) => prior.has(o)))) return false
   return [...(creditPrereqs[code] ?? []), ...(info?.creditRequires ?? [])].every((rule) => {
     if (rule.standing === 'honours') return honours
     let cu = 0
-    for (const c of taken) {
+    for (const c of prior) {
       if (rule.subjects && !rule.subjects.includes(subjectOf(c))) continue
       if (rule.level && levelOf(c) * 100 !== rule.level) continue
       cu += courseCu(c)
@@ -187,6 +194,7 @@ function slotCandidates(
   slotCode: string,
   degree: Degree,
   season: Season | null,
+  prior: Set<string>,
   taken: Set<string>,
   exclude: Set<string>,
 ): RegCourse[] {
@@ -214,7 +222,7 @@ function slotCandidates(
   const seasons = (code: string) => offerings[code]?.length ?? 0
 
   return unique(pool)
-    .filter((c) => !taken.has(c) && !exclude.has(c) && !takenAlternative(c) && runsIn(c, season) > 0 && eligible(c, taken, honours))
+    .filter((c) => !taken.has(c) && !exclude.has(c) && !takenAlternative(c) && runsIn(c, season) > 0 && eligible(c, prior, taken, honours))
     .sort(
       (a, b) =>
         (prefer.get(a) ?? 99) - (prefer.get(b) ?? 99) ||
@@ -242,6 +250,8 @@ export function registrationRequest(input: {
 }): RegRequest | null {
   const term = input.plan[0]
   if (!term) return null
+  // Banner splits Spring/Summer into Spring (05) and Summer (07) terms: which one isn't Max's guess.
+  if (seasonOf(term.label) === 'Spring/Summer') return null
   const termCode = bannerTermCode(term.label)
   if (!termCode) return null
 
@@ -249,8 +259,9 @@ export function registrationRequest(input: {
     ...(input.booked[term.label] ?? []),
     ...term.courses.filter((c) => c.reason === 'registered').map((c) => c.code),
   ]).filter((c) => !isElective(c))
-  const taken = new Set(input.taken)
-  bookedCodes.forEach((c) => taken.add(c))
+  // Prerequisites count what's passed by then; "already have it" and antirequisites count the booked too.
+  const prior = new Set(input.taken)
+  const taken = new Set([...prior, ...bookedCodes])
 
   const courses = unique(term.courses.filter((c) => !isElective(c.code) && c.reason !== 'registered').map((c) => c.code))
     .filter((c) => !taken.has(c))
@@ -263,7 +274,7 @@ export function registrationRequest(input: {
   if (input.degree) {
     for (const course of term.courses) {
       if (!isElective(course.code)) continue
-      const candidates = slotCandidates(course.code, input.degree, season, taken, named)
+      const candidates = slotCandidates(course.code, input.degree, season, prior, taken, named)
       if (candidates.length > 0) slots.push({ label: electiveLabel(course.code), candidates })
     }
   }
@@ -359,9 +370,10 @@ const bySection = (a: Section, b: Section) => (a.sectionNumber < b.sectionNumber
 const linkGroup = (id: string) => id.replace(/^[A-Za-z]+/, '')
 
 /**
- * The sections a lecture needs alongside it, one list per kind: with Banner's link identifiers, the
- * non-lecture sections of the same group ("M2" takes one "L2" lab and, where there is one, one "T2"
- * tutorial); without them (an older API), any linked section of each non-lecture type.
+ * The sections a lecture needs alongside it, one list per kind, from all of the course's sections
+ * (wherever they run): with Banner's link identifiers, the non-lecture sections of the same group
+ * ("M2" takes one "L2" lab and, where there is one, one "T2" tutorial); without them (an older API),
+ * any linked section of each non-lecture type.
  */
 function linkedKinds(main: Section, sections: Section[]): Section[][] {
   const kinds = new Map<string, Section[]>()
@@ -416,19 +428,31 @@ interface Held {
   meetings: RegMeeting[]
 }
 
+/** Where the sections come from: the request's own term, or another term's timetable for a preview. */
+interface Where {
+  termLabel: string
+  /** 'Fall 2026' when the sections are that term's, standing in for an unpublished term. */
+  timetable?: string
+}
+
+/** "in Winter 2027", or "on Fall 2026's timetable" for a preview. */
+const inTerm = (where: Where) => (where.timetable ? `on ${where.timetable}'s timetable` : `in ${where.termLabel}`)
+
 /**
  * One course's sections: the first open main-campus lecture (in section order) that fits around what's
- * already held, with one open section of each kind linked to it that fits too. When a lecture's labs
- * don't fit, the next lecture is tried, so the student gets another lecture before a "clash".
+ * already held, with one open main-campus section of each kind linked to it that fits too. When a
+ * lecture's labs don't fit, the next lecture is tried, so the student gets another lecture before a
+ * "clash". A lecture whose lab (or tutorial) runs only off the main campus can't be had here at all.
  */
-function placeCourse(course: RegCourse, sections: Section[] | undefined, held: Held[], termLabel: string): Placement {
+function placeCourse(course: RegCourse, sections: Section[] | undefined, held: Held[], where: Where): Placement {
   const code = spacedCode(course.code)
   if (!sections || sections.length === 0) {
-    return { ok: false, reason: 'not-offered', text: `USask isn't running ${code} in ${termLabel}`, clashes: [] }
+    const text = where.timetable ? `${code} isn't on ${where.timetable}'s timetable` : `USask isn't running ${code} in ${where.termLabel}`
+    return { ok: false, reason: 'not-offered', text, clashes: [] }
   }
   const campus = sections.filter(onMainCampus).sort(bySection)
   if (campus.length === 0) {
-    return { ok: false, reason: 'not-offered', text: `${code} runs only off the main campus in ${termLabel}`, clashes: [] }
+    return { ok: false, reason: 'not-offered', text: `${code} runs only off the main campus ${inTerm(where)}`, clashes: [] }
   }
   let mains = campus.filter(isMain)
   if (mains.length === 0) mains = campus
@@ -441,6 +465,7 @@ function placeCourse(course: RegCourse, sections: Section[] | undefined, held: H
   const clashes = new Set<string>()
   let selfClash: string | null = null
   let fullKind: string | null = null
+  let offCampusKind: string | null = null
   for (const main of open) {
     const mainMeetings = sectionMeetings(main)
     const against = held.filter((h) => meetingsClash(mainMeetings, h.meetings)).map((h) => h.code)
@@ -450,8 +475,14 @@ function placeCourse(course: RegCourse, sections: Section[] | undefined, held: H
     }
     const chosen: Section[] = [main]
     let fits = true
-    for (const kind of linkedKinds(main, campus)) {
-      const openKind = kind.filter(isOpen).sort(bySection)
+    for (const kind of linkedKinds(main, sections)) {
+      const here = kind.filter(onMainCampus)
+      if (here.length === 0) {
+        offCampusKind ??= kindWord(kind[0])
+        fits = false
+        break
+      }
+      const openKind = here.filter(isOpen).sort(bySection)
       if (openKind.length === 0) {
         fullKind ??= kindWord(kind[0])
         fits = false
@@ -482,6 +513,9 @@ function placeCourse(course: RegCourse, sections: Section[] | undefined, held: H
   if (selfClash) {
     return { ok: false, reason: 'clash', text: `No open ${selfClash} of ${code} fits around its lecture`, clashes: [] }
   }
+  if (!fullKind && offCampusKind) {
+    return { ok: false, reason: 'not-offered', text: `${code}'s ${offCampusKind}s run only off the main campus`, clashes: [] }
+  }
   return { ok: false, reason: 'full', text: `Every ${fullKind ?? 'lab'} that goes with an open ${code} lecture is full`, clashes: [] }
 }
 
@@ -492,9 +526,11 @@ export interface ScheduleDetail extends Pick<RegPlan, 'picks' | 'booked' | 'unpl
 
 /**
  * pickRealSchedule with the course each slot got. A slot candidate missing from `sectionsByCode` was
- * never looked up and is skipped; one present with no sections isn't running this term.
+ * never looked up and is skipped; one present with no sections isn't running this term. `timetable`
+ * names the term the sections are from when it isn't the request's (a preview), for the sentences.
  */
-export function placeSchedule(request: RegRequest, sectionsByCode: Record<string, Section[]>): ScheduleDetail {
+export function placeSchedule(request: RegRequest, sectionsByCode: Record<string, Section[]>, opts: { timetable?: string } = {}): ScheduleDetail {
+  const where: Where = { termLabel: request.termLabel, ...(opts.timetable ? { timetable: opts.timetable } : {}) }
   const held: Held[] = []
   const booked: RegPick[] = []
   const taken = new Set<string>()
@@ -520,7 +556,7 @@ export function placeSchedule(request: RegRequest, sectionsByCode: Record<string
   for (const course of request.courses) {
     if (taken.has(course.code)) continue
     taken.add(course.code)
-    const placement = placeCourse(course, sectionsByCode[course.code], held, request.termLabel)
+    const placement = placeCourse(course, sectionsByCode[course.code], held, where)
     if (placement.ok) hold(placement.picks)
     else unplaced.push({ code: course.code, title: course.title, reason: placement.reason, text: placement.text })
   }
@@ -532,7 +568,7 @@ export function placeSchedule(request: RegRequest, sectionsByCode: Record<string
     for (const candidate of slot.candidates) {
       if (taken.has(candidate.code) || !(candidate.code in sectionsByCode)) continue
       const course = { ...candidate, slotLabel: slot.label }
-      const placement = placeCourse(course, sectionsByCode[candidate.code], held, request.termLabel)
+      const placement = placeCourse(course, sectionsByCode[candidate.code], held, where)
       if (placement.ok) {
         taken.add(candidate.code)
         hold(placement.picks)
@@ -551,12 +587,12 @@ export function placeSchedule(request: RegRequest, sectionsByCode: Record<string
     const reason: UnplacedReason = failed.some((p) => p.reason === 'clash') ? 'clash' : failed.some((p) => p.reason === 'full') ? 'full' : 'not-offered'
     const text =
       tried.length === 0
-        ? `Max couldn't find a course for ${slotWords} that runs in ${request.termLabel}`
+        ? `Max couldn't find a course for ${slotWords} that runs ${inTerm(where)}`
         : reason === 'clash'
           ? `No open section of ${wordList(codes)} fits around your other classes for ${slotWords}`
           : reason === 'full'
             ? `Every main-campus section of ${wordList(codes, 'and')} is full, so ${slotWords} stays open`
-            : `${wordList(codes, 'and')} ${codes.length === 1 ? "isn't" : "aren't"} running on the main campus in ${request.termLabel}`
+            : `${wordList(codes, 'and')} ${codes.length === 1 ? "isn't" : "aren't"} ${where.timetable ? 'on the main campus' : 'running on the main campus'} ${inTerm(where)}`
     unplaced.push({ code: first?.code ?? slot.label, title: first?.title ?? slot.label, reason, text, slotLabel: slot.label })
   }
 
@@ -569,7 +605,11 @@ export function placeSchedule(request: RegRequest, sectionsByCode: Record<string
  * lecture or required lab/tutorial can't be had open and clash-free is unplaced with a reason, and
  * none of its sections are picked.
  */
-export function pickRealSchedule(request: RegRequest, sectionsByCode: Record<string, Section[]>): Pick<RegPlan, 'picks' | 'booked' | 'unplaced' | 'crns'> {
-  const { picks, booked, unplaced, crns } = placeSchedule(request, sectionsByCode)
+export function pickRealSchedule(
+  request: RegRequest,
+  sectionsByCode: Record<string, Section[]>,
+  opts: { timetable?: string } = {},
+): Pick<RegPlan, 'picks' | 'booked' | 'unplaced' | 'crns'> {
+  const { picks, booked, unplaced, crns } = placeSchedule(request, sectionsByCode, opts)
   return { picks, booked, unplaced, crns }
 }
