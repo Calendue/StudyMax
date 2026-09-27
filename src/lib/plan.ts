@@ -118,7 +118,7 @@ function unmetPrerequisites(code: string, satisfied: Set<string>): string[][] {
  * subjects (CMPT, MATH, STAT for CS, not CME or EE), (f) fewest unmet prerequisites counting what's
  * planned anyway, then level, list order and code.
  */
-export type OptionRanker = (options: string[], exceptSpecId?: string) => string[]
+export type OptionRanker = (options: string[], exceptSpecId?: string, planned?: Set<string>) => string[]
 
 export function optionRanker(
   lists: Specialization[],
@@ -129,6 +129,8 @@ export function optionRanker(
 ): OptionRanker {
   const preferRank = new Map<string, number>()
   const listed = new Set<string>()
+  // "CMPT 260 or CMPT 263": once one is planned, the other is its alternative, not a second pick.
+  const choiceGroups: string[][] = []
   const core = new Set<string>()
   // Planned anyway: completed, and every course a program asks for by name with no choice.
   const likely = new Set(completed)
@@ -138,6 +140,7 @@ export function optionRanker(
       group.prefer?.forEach((c, i) => preferRank.set(c, Math.min(preferRank.get(c) ?? i, i)))
       if (!group.label && group.courses.length > 0) core.add(subjectOf(group.prefer?.[0] ?? group.courses[0]))
       if (!group.label && group.courses.length <= group.need) group.courses.forEach((c) => likely.add(c))
+      if (!group.label && group.need === 1 && group.courses.length > 1) choiceGroups.push(group.courses)
     }
   }
   const overlap = new Map(computeCourseOverlap(lists, completed).map((o) => [o.course, o.specs]))
@@ -146,11 +149,18 @@ export function optionRanker(
     standingOk(code) && ((offerings[code]?.length ?? 0) > 0 || (courseInfo[code]?.offered !== undefined && courseInfo[code]?.offered !== 'none'))
   const programRank = (code: string) => preferRank.get(code) ?? (listed.has(code) ? 100 : 200)
 
-  return (options, exceptSpecId) => {
+  return (options, exceptSpecId, planned) => {
     const position = new Map(options.map((c, i) => [c, i]))
     const advances = (code: string) => (overlap.get(code) ?? []).filter((s) => s.id !== exceptSpecId).length
+    // ...and one not offered beside an alternative that is (CMPT 260, replaced by CMPT 263) is never picked
+    // on the strength of that list.
+    const superseded = (code: string) =>
+      choiceGroups.some(
+        (g) => g.includes(code) && g.some((c) => c !== code && (planned?.has(c) || (!offered(code) && offered(c)))),
+      )
     return [...options].sort(
       (a, b) =>
+        Number(superseded(a)) - Number(superseded(b)) ||
         programRank(a) - programRank(b) ||
         Number(!courseInfo[a]) - Number(!courseInfo[b]) ||
         Number(!offered(a)) - Number(!offered(b)) ||
@@ -263,7 +273,7 @@ export function withPrerequisites(
   while (queue.length > 0) {
     const code = queue.shift()!
     for (const options of unmetPrerequisites(code, satisfied)) {
-      const choice = rank(options)[0]
+      const choice = rank(options, undefined, satisfied)[0]
       if (seen.has(choice)) continue
 
       seen.add(choice)

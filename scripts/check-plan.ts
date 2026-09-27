@@ -250,6 +250,12 @@ assert.deepEqual(upcomingTerm(new Date('2026-10-01')), { season: 'Winter', year:
     assert.ok(plan.slice(0, 2).every((t) => t.courses.every((c) => isElective(c.code) || courseLevel(c.code) < 3)), `${spec.id}: no senior course in Year 1`)
   }
 
+  // Without the degree (What if, Max), a prerequisite choice still skips the replaced CMPT 260.
+  for (const spec of specializations) {
+    const codes = buildStudentPlan([spec], specializations, new Set(), [], 5, { season: 'Winter', year: 2027 }).flatMap((t) => t.courses.map((c) => c.code))
+    assert.ok(!codes.includes('CMPT260'), `${spec.id}: no CMPT260 without the degree either`)
+  }
+
   // Booked courses fill their own term: the sample's Winter 2027 already holds three.
   const booked = { 'Fall 2026': ['CMPT332', 'CMPT360', 'CMPT370', 'MATH266'], 'Winter 2027': ['CMPT340', 'CMPT353', 'CMPT434'] }
   const sample = buildStudentPlan([specializations.find((s) => s.id === 'social-computing')!], specializations, completed, Object.values(booked).flat(), 5, { season: 'Winter', year: 2027 }, { degree, booked })
