@@ -228,12 +228,18 @@ whose p95 is closer to 1.5s than the others).
   {
     "type": "endCall",
     "rejectionPlan": {
-      "conditions": [{ "type": "regex", "regex": "\\?", "target": { "position": -1, "role": "user" } }]
+      "conditions": [{ "type": "group", "operator": "OR", "conditions": [
+        { "type": "regex", "regex": "\\?", "target": { "position": -1, "role": "user" } },
+        { "type": "regex", "regex": "[Hh]old on|[Hh]old up|[Hh]ang on|[Oo]ne sec|[Aa] sec\\b|[Aa] second|[Aa] minute|[Ww]ait|talking to", "target": { "position": -1, "role": "user" } },
+        { "type": "regex", "regex": "^\\W*([Uu]h|[Uu]m)?\\W*[Nn]o\\b", "target": { "position": -1, "role": "user" } }
+      ] }]
     }
   }
 ]
 ```
 
 The last one is Vapi's built-in end-call tool (spec 09: "endCall / transfer use Vapi's built-in tools") —
-no server webhook needed. The `rejectionPlan` is a cheap guard against hanging up mid-question (rejects
-ending the call if the student's last message ended in a `?`).
+no server webhook needed. The `rejectionPlan` refuses to hang up when the student's last words were a
+question, a "hold on"/"hold up", or started with "no". Never add a condition on Max's own last turn: when
+the plan runs, the assistant's latest message is the empty endCall tool call itself, so a check like
+"Max's last line contains *all set*" rejected every hangup (seen on real calls, 2026-09-27).

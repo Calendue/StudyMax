@@ -285,9 +285,9 @@ const tools: import('@vapi-ai/server-sdk').Vapi.OpenAiModelToolsItem[] = [
   {
     // Vapi's built-in end-call tool (spec 09: "endCall / transfer use Vapi's built-in tools") — no
     // server webhook needed. The rejection plan refuses to hang up (any one of these is enough) when
-    // the student's last words were a question or a "hold on", or when Max's own last turn wasn't the
-    // wrap-up question ("…or are we all set?", or "…you're all set" after their goodbye). The real
-    // calls it answers: "Yes, save it. Thank you." and "Uh, no." to an unrelated question both hung up.
+    // the student's last words were a question, a "hold on", or started with "no" ("Uh, no." to an
+    // unrelated question once hung up). Never test Max's own last turn: when this runs, the assistant's
+    // latest message is the empty endCall tool call itself, so such a check rejected every hangup.
     type: 'endCall',
     rejectionPlan: {
       conditions: [
@@ -296,8 +296,8 @@ const tools: import('@vapi-ai/server-sdk').Vapi.OpenAiModelToolsItem[] = [
           operator: 'OR',
           conditions: [
             { type: 'regex', regex: '\\?', target: { position: -1, role: 'user' } },
-            { type: 'regex', regex: '[Hh]old on|[Hh]ang on|[Oo]ne sec|[Aa] sec\\b|[Aa] second|[Aa] minute|[Ww]ait|talking to', target: { position: -1, role: 'user' } },
-            { type: 'regex', regex: '[Aa]ll set', target: { position: -1, role: 'assistant' }, negate: true },
+            { type: 'regex', regex: '[Hh]old on|[Hh]old up|[Hh]ang on|[Oo]ne sec|[Aa] sec\\b|[Aa] second|[Aa] minute|[Ww]ait|talking to', target: { position: -1, role: 'user' } },
+            { type: 'regex', regex: '^\\W*([Uu]h|[Uu]m)?\\W*[Nn]o\\b', target: { position: -1, role: 'user' } },
           ],
         },
       ],
