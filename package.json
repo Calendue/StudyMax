@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
+    "build:skills": "node --experimental-strip-types scripts/build-skills.ts",
     "cap:assets": "bash scripts/generate-native-assets.sh",
     "cap:sync": "cap sync",
     "build:ios": "bash scripts/build-ios.sh --web",
@@ -18,6 +19,7 @@
     "db:seed:institutions": "node --experimental-strip-types --env-file=.env.local scripts/seed-institutions.ts",
     "db:seed:majors": "node --experimental-strip-types --env-file=.env.local scripts/seed-majors.ts",
     "db:seed:demo-student": "node --experimental-strip-types --experimental-loader ./scripts/_resolve-ts-loader.mjs --env-file=.env.local scripts/seed-demo-student.ts",
+    "max:call-log": "node --experimental-strip-types --env-file=.env.local scripts/max-call-log.ts",
     "db:seed": "npm run db:seed:institutions && npm run db:seed:majors",
     "postinstall": "prisma generate"
   },

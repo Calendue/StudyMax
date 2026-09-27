@@ -10,6 +10,9 @@ import { Prisma } from '@prisma/client'
 import { db, hasDatabase } from '../_db.js'
 import { commitScenario, discardScenario, presentScenario, runScenario } from './_scenarios.js'
 import type { ScenarioOp } from '../../src/lib/max/types.js'
+import { maxSkills } from '../../src/lib/max/skills.generated.js'
+import { programName, specializationName } from '../../src/lib/max/planningAdapter.js'
+import { currentTermOf } from '../../src/lib/plan.js'
 
 interface VercelRequest {
   method?: string
@@ -88,14 +91,15 @@ async function resolveCall(vapiCallId: string | null): Promise<ResolvedCall | nu
 
 type ToolResponse = Record<string, unknown>
 
-// Which skill(s) each tool maps to (spec 08) — for readable logs only; the model doesn't report
-// which skill it's following, so this is inferred from the tool name, not literal.
+// Which skill each tool maps to (docs/BayMax/implementation/08-skills-progressive-disclosure.md) —
+// for readable logs only; the model doesn't report which skill it's following, so this is inferred
+// from the tool name, not literal. load_skill's own skill is read from its arguments instead (below).
 const SKILL_BY_TOOL: Record<string, string> = {
-  get_student_overview: 'S1/S2',
-  run_scenario: 'S5/S7',
-  discard_scenario: 'S5',
-  commit_scenario: 'S7',
-  update_name: 'S8',
+  get_student_overview: 'summarize_roadmap',
+  run_scenario: 'what_if/manage_roadmap',
+  discard_scenario: 'what_if/manage_roadmap',
+  commit_scenario: 'manage_roadmap',
+  update_name: 'correct_name',
 }
 
 /** One short, tool-specific fact worth seeing in a log line — never the full payload. */
@@ -113,6 +117,7 @@ function digest(name: string, result: ToolResponse): string {
     case 'commit_scenario':
       return result.versionId ? `v${result.versionId}` : ''
     case 'update_name':
+    case 'load_skill':
       return typeof result.name === 'string' ? `"${result.name}"` : ''
     default:
       return ''
@@ -135,15 +140,19 @@ async function runGetStudentOverview(userId: bigint, callId: bigint): Promise<To
   }
 
   const currentCourses = courses.filter((c) => c.status === 'in_progress').map((c) => c.courseCode)
+  // plan.terms only holds courses not yet taken (buildStudentPlan assumes in-progress ones are done
+  // "by start") — its last entry is the graduation term, never the term running now.
   const terms = plan.terms as unknown as { label: string; courses: { code: string }[] }[]
   const lastTerm = terms[terms.length - 1]
+  const currentTerm = currentTermOf(new Date())
 
   return {
     program: {
-      major: profile.majorProgramId,
-      minor: profile.minorProgramId,
-      specializations: plan.targetSpecializationIds,
+      major: programName(profile.majorProgramId),
+      minor: profile.minorProgramId ? programName(profile.minorProgramId) : null,
+      specializations: plan.targetSpecializationIds.map((id) => specializationName(profile.majorProgramId, id)),
     },
+    currentTerm: `${currentTerm.season} ${currentTerm.year}`,
     currentCourses,
     roadmap: {
       versionNumber: plan.version,
@@ -206,6 +215,16 @@ async function runCommitScenario(userId: bigint, callId: bigint, args: Record<st
   return { ...result }
 }
 
+/** Returns a skill's full playbook by name (docs/BayMax/skills/<name>/SKILL.md, compiled by
+ * scripts/build-skills.ts into skills.generated.ts — no runtime file I/O). No DB or identity
+ * involved; this is a pure lookup, so it can't fail for any reason but an unknown name. */
+function runLoadSkill(args: Record<string, unknown>): ToolResponse {
+  const name = typeof args.name === 'string' ? args.name : ''
+  const skill = maxSkills[name]
+  if (!skill) return { ok: false, code: 'UNKNOWN_SKILL', speakable: "I don't have a playbook for that." }
+  return { ok: true, name: skill.name, instructions: skill.instructions }
+}
+
 const NAME_RE = /^.{1,60}$/
 
 /** Lets Max update the student's name mid-call (e.g. "actually, call me James") and use it for the
@@ -230,6 +249,8 @@ async function executeTool(name: string, userId: bigint, callId: bigint, args: R
       return runCommitScenario(userId, callId, args)
     case 'update_name':
       return runUpdateName(userId, args)
+    case 'load_skill':
+      return runLoadSkill(args)
     default:
       return { ok: false, code: 'UNKNOWN_TOOL', speakable: "I don't have a way to do that yet." }
   }
@@ -293,10 +314,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         data: { result: result as unknown as Prisma.InputJsonValue, ok, errorCode, latencyMs },
       })
 
-      const skill = SKILL_BY_TOOL[raw.name] ?? '?'
+      const skill = raw.name === 'load_skill' ? String(raw.arguments.name ?? '?') : (SKILL_BY_TOOL[raw.name] ?? '?')
       const status = ok ? 'ok' : (errorCode ?? 'error')
       const extra = digest(raw.name, result)
-      console.log(`[Max] ${raw.name} (${skill}) -> ${status}${extra ? ` ${extra}` : ''} [${latencyMs}ms]`)
+      const argsPreview = JSON.stringify(raw.arguments).slice(0, 200)
+      // "call {callId}" matches api/max/webhook.ts's own log prefix for the same call — grep one
+      // callId across both routes' Vercel logs to see status/transcript/tool-call lines interleaved.
+      console.log(`[Max] call ${resolved.callId} ${raw.name} (${skill}) args=${argsPreview} -> ${status}${extra ? ` ${extra}` : ''} [${latencyMs}ms]`)
 
       return { toolCallId: raw.id, result: JSON.stringify(result) }
     }),

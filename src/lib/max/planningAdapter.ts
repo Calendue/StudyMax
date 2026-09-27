@@ -10,6 +10,18 @@
 import { programs } from '../../data/programs/index.js'
 import { buildStudentPlan, type PlannedTerm, type TermStart } from '../plan.js'
 
+/** "computer-science" -> "Computer Science", for anything Max says out loud — never speak a raw
+ * Program.id slug. Falls back to the id itself if it's somehow unknown, rather than throwing. */
+export function programName(programId: string): string {
+  return programs.find((p) => p.id === programId)?.name ?? programId
+}
+
+/** Same, for a Specialization.id within a given program. */
+export function specializationName(programId: string, specializationId: string): string {
+  const program = programs.find((p) => p.id === programId)
+  return program?.specializations.find((s) => s.id === specializationId)?.name ?? specializationId
+}
+
 export interface AdapterInput {
   completed: Set<string>
   /** From StudentCourse where status = "in_progress", minus any DROP_COURSE ops. */
