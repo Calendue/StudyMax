@@ -11,12 +11,24 @@ export interface RequirementGroup {
    * plan shows an unnamed slot with this label instead of picking one of them.
    */
   label?: string
+  /**
+   * The advising sheet's year tag (1-4) for this slot: the year advisors put it in. The planner
+   * treats it as the slot's recommended year, so college requirements land in Year 1, not Year 4.
+   */
+  year?: number
+  /** Preferred picks, best first (the page's "recommended" STAT 242*), ahead of list order. */
+  prefer?: string[]
 }
 
 export interface Specialization {
   id: string
   name: string
   requirements: RequirementGroup[]
+  /**
+   * Why it can't be finished from the current catalogue (a required course the 2026-27 catalogue no
+   * longer lists). Such a specialization is never the default or "closest" target.
+   */
+  unavailable?: string
 }
 
 const single = (course: string): RequirementGroup => ({ courses: [course], need: 1 })
