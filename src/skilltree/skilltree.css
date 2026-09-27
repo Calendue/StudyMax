@@ -1473,6 +1473,16 @@
   .tree-peek__title { white-space: normal; overflow: visible; }
   .tree-peek__codes { flex-wrap: wrap; overflow: visible; }
   .tree-peek__code-chip { min-height: var(--touch-target); }
-  .tree__key-toggle, .tree__jump, .tree-detail__chips button { min-height: var(--touch-target); }
+  .tree__key-btn, .tree__chip, .tree__jump, .tree-detail__chips button { min-height: var(--touch-target); }
   .plan-switch > .icon-btn { margin-left: auto; }
 }
+
+.phone-plan-header {
+  position: sticky;
+  top: 0;
+  z-index: 8;
+  display: flow-root;
+  margin: calc(-1 * var(--s2)) calc(-1 * (var(--s4) + var(--sar))) 0 calc(-1 * (var(--s4) + var(--sal)));
+  background: var(--bg);
+}
+.phone-plan-header .plan-switch--sticky { position: static; margin: 0; }

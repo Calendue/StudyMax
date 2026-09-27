@@ -1,4 +1,4 @@
-import { useLayoutEffect } from 'react'
+import { useLayoutEffect, useState } from 'react'
 import { useModel } from '../model.ts'
 import { KIND_LABEL, plural } from '../format.ts'
 import { ScreenTitle } from '../ui/chrome.tsx'
@@ -11,7 +11,8 @@ import { PlanRoadmap } from './PlanRoadmap.tsx'
 import { SkillTree } from '../skilltree/SkillTree.tsx'
 import { PlanViewSwitch } from '../skilltree/PlanViewSwitch.tsx'
 import { usePlanView } from '../skilltree/planView.ts'
-import { MaxLiveBar, TalkToMax } from '../maxLive/MaxLiveBar.tsx'
+import { TalkToMax } from '../maxLive/MaxLiveBar.tsx'
+import { PhonePlanHeader } from './PhonePlanHeader.tsx'
 import { PlanSettingsSheet } from './PlanSettingsSheet.tsx'
 export { PlanControls } from './PlanControls.tsx'
 import { useRegistrationRequest } from './register/useRegistration.ts'
@@ -185,14 +186,16 @@ export function AddTargetSheet() {
 export function PlanTab() {
   const m = useModel()
   const [view, setView] = usePlanView()
-  useLayoutEffect(() => { window.scrollTo(0, 0) }, [view])
+  const [headerHeight, setHeaderHeight] = useState(56)
+  useLayoutEffect(() => {
+    if (view === 'roadmap') document.querySelector('.screen__body')?.scrollTo(0, 0)
+  }, [view])
   if (view === 'tree') {
     // The tree opens at its roots and grows up; the plan's settings sit under the roots.
     return (
       <>
-        <PlanViewSwitch view={view} onChange={setView} sticky onSettings={() => m.openSheet('plan-settings')} />
-        <MaxLiveBar compact />
-        <SkillTree bleed stickyTop={56} />
+        <PhonePlanHeader view={view} onChange={setView} onSettings={() => m.openSheet('plan-settings')} onHeight={setHeaderHeight} />
+        <SkillTree bleed stickyTop={headerHeight} />
         <div className="plan-after">
           {m.plan.length > 0 && (
             <p className="lead">
