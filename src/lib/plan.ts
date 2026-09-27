@@ -5,6 +5,9 @@ import { creditPrereqs } from '../data/creditPrereqs.js'
 import { offerings as scrapedOfferings } from '../data/offerings.js'
 import { computeCourseOverlap, computeMatches, type SpecializationMatch } from './match.js'
 import { cuOf, degreeTarget, FREE_ELECTIVE, levelOf, planDegree, SENIOR_ELECTIVE, type DegreeSlot } from './planDegree.js'
+import type { CourseOverride } from './overrides.js'
+import type { Catalog, Diagnostic, BindingKind } from './planner/types.js'
+export { FW_LOADS, SUMMER_LOADS, MAX_FW_LOAD, MAX_SUMMER_LOAD, clampLoad, clampSummer, summerLoadOf } from './planner/loads.js'
 
 // Sources for the load rules below: "Normally students register in a maximum of 30 credit units
 // (15 credit units per term) in Fall and Winter Terms" (programs.usask.ca/arts-and-science/
@@ -75,6 +78,27 @@ export interface PlanOptions {
   maxSeniorCmpt?: number
   /** An academic year (by its Fall's calendar year) spent away on an internship: nothing is planned in it. */
   away?: number | null
+  /** Failed / withdrew / not-offered / later (src/lib/overrides.ts), applied before planning. */
+  overrides?: CourseOverride[]
+  /** The term being sat now, for validating overrides; defaults to the term before `start`. */
+  currentTerm?: TermStart
+  /** The course data; defaults to defaultCatalog() (src/lib/catalog.ts). */
+  catalog?: Catalog
+  /** Deterministic search budget, in nodes. */
+  nodeBudget?: number
+}
+
+/** What the UI reads beside the terms: when, how sure, what sets the date, and what couldn't be placed. */
+export interface PlanResult {
+  terms: PlannedTerm[]
+  /** The last term holding a planned or booked course ("Winter 2031"); null with nothing left. */
+  graduation: string | null
+  optimality: 'proven' | 'best-found'
+  /** "Graduation set by MATH 116 → STAT 241 → STAT 242 → CMPT 317 → CMPT 423 → CMPT 489". */
+  binding: string
+  bindingKind: BindingKind
+  /** Errors (unplaceable courses), warnings, and override notes, in a canonical order. */
+  diagnostics: Diagnostic[]
 }
 
 /** An unnamed elective slot in a plan. It has no prerequisites, no catalogue page and no sections. */
@@ -741,4 +765,22 @@ export function currentTermOf(today: Date): TermStart {
 export function nextFall(today: Date): TermStart {
   const upcoming = upcomingTerm(today)
   return upcoming.season === 'Fall' ? upcoming : { season: 'Fall', year: upcoming.year }
+}
+
+/**
+ * The plan with its explanation (graduation, optimality, binding constraint, diagnostics).
+ * STUB (Stage A contract): the Engine track replaces this body; buildStudentPlan stays its adapter.
+ */
+export function buildStudentPlanResult(
+  targets: Specialization[],
+  allSpecializations: Specialization[],
+  completed: Set<string>,
+  inProgress: Iterable<string>,
+  coursesPerTerm: number,
+  start: TermStart,
+  options: PlanOptions = {},
+): PlanResult {
+  const terms = buildStudentPlan(targets, allSpecializations, completed, inProgress, coursesPerTerm, start, options)
+  const last = terms.filter((t) => t.courses.length > 0).at(-1)?.label ?? null
+  return { terms, graduation: last, optimality: 'best-found', binding: '', bindingKind: 'none', diagnostics: [] }
 }
