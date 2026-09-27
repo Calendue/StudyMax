@@ -1,4 +1,4 @@
-import { buildTranscriptParsePrompt, parseTranscriptProgram, parseTranscriptResponse, parseTranscriptTimeline } from '../src/lib/transcriptParse.js'
+import { buildTranscriptParsePrompt, parseTranscriptProfile, parseTranscriptProgram, parseTranscriptResponse, parseTranscriptTimeline } from '../src/lib/transcriptParse.js'
 import { catalogueCourses } from '../src/data/courses.js'
 import { openAIKey, respond, sendFailure } from './_openai.js'
 import { allow, clientIp } from './_rateLimit.js'
@@ -59,6 +59,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const courses = parseTranscriptResponse(text, CATALOGUE_CODES)
   const { completed, inProgress } = courses
   const { major, minor } = parseTranscriptProgram(text)
+  const { institution, expectedGraduation } = parseTranscriptProfile(text)
   // Terms only for courses that made it into the lists. inProgressTerms stays season-only ("Fall"),
   // the shape installed apps read; the "Season YYYY" labels and the document's date are new fields.
   const { inProgressTerms, inProgressTermLabels, completedTerms, documentDate } = parseTranscriptTimeline(text, courses)
@@ -74,6 +75,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     documentDate,
     major,
     minor,
+    institution,
+    expectedGraduation,
     sawText: text.trim().length > 0,
   })
 }

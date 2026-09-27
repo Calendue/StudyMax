@@ -32,6 +32,7 @@ import { treeDegreeProgress } from './lib/degreeProgress.ts'
 import { bookedByTerm, seasonNow, takingNow, termLabels, termsAfterUpload, withCurrentCourses } from './lib/currentTerms.ts'
 import { academicYearOfDegreeYear, currentTermOf } from './lib/skillTree.ts'
 import { searchCourses, catalogueTitle } from './lib/courseSearch.ts'
+import { schoolOf } from './lib/transcriptParse.ts'
 import { courseInfo } from './data/prereqs.ts'
 import { artsAndScienceSubjects, catalogueCourses } from './data/courses.ts'
 import { api, haptic, isNative, onAppUrlOpen, onBackButton } from './platform.ts'
@@ -412,6 +413,9 @@ function useStudyMax() {
   // Picked "Upload my transcript" on the first question: the transcript answers the major, minor and
   // this term's courses, so onboarding skips those and ends on the dashboard, not the course list.
   const [fromTranscript, setFromTranscript] = useState(false)
+  // Set once a first-question transcript is read: the next render (with its school, major and year
+  // settled) jumps past every question the transcript already answered.
+  const [transcriptJump, setTranscriptJump] = useState(false)
   // The major and minor the transcript states, as written; mapped to program ids once USask is picked.
   const [statedProgram, setStatedProgram] = useState<{ major: string | null; minor: string | null }>({
     major: null,
@@ -714,6 +718,16 @@ function useStudyMax() {
   }, [transcriptMatch])
   const targetSeed = seedOf({ concentrationIds, minorId })
 
+  // After a first-question transcript: straight to the first question it didn't answer. The school,
+  // then the degree (the major StudyMax could match, and the graduation year), then the review.
+  useEffect(() => {
+    if (!transcriptJump) return
+    setTranscriptJump(false)
+    const degreeKnown = gradYear !== null && (universityId === 'other' || majorFromTranscript)
+    go(universityId === '' ? 'university' : degreeKnown ? 'review' : 'degree', 1)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transcriptJump])
+
   function seedTargets(ids: string[]) {
     setHeroId(ids[0] ?? null)
     setExtraTargetIds(ids.slice(1))
@@ -840,9 +854,19 @@ function useStudyMax() {
       await wait(1200)
       if (!live()) return
       // Read on the first question: the transcript answers the program questions, so onboarding skips
-      // them from here on (see onboardingSteps) and ends on the dashboard.
-      if (early) setFromTranscript(true)
-      go(early ? 'university' : 'courses', early ? 1 : -1)
+      // them from here on (see onboardingSteps) and ends on the dashboard. The school and the expected
+      // graduation it names are taken as answered too (older servers send neither: then they're asked).
+      if (early) {
+        const school = schoolOf(data.institution)
+        if (school) setUniversityId(school)
+        const year = Number(data.expectedGraduation)
+        const thisYear = new Date().getFullYear()
+        if (Number.isInteger(year) && year >= thisYear && year <= thisYear + 6) setGradYear((y) => y ?? year)
+        setFromTranscript(true)
+        setTranscriptJump(true)
+        return
+      }
+      go('courses', -1)
     } catch (err) {
       if (!live()) return
       setUploadStatus('error')

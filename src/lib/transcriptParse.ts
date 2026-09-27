@@ -38,6 +38,10 @@ export function buildTranscriptParsePrompt(): string {
     '- "major": the declared major or program exactly as written (e.g. from "Major: Computer Science" or ' +
       '"B.Comm. - Accounting"), or null if the document does not state one. Never guess it from the courses.',
     '- "minor": a declared minor exactly as written, or null if none is stated.',
+    '- "institution": the university that issued the document, exactly as written (e.g. "University of ' +
+      'Saskatchewan"), or null if it is not stated.',
+    '- "expectedGraduation": the year of an expected or anticipated graduation date the document states, as a ' +
+      'number (e.g. 2028), or null if none is stated. Never estimate it from the courses.',
     '',
     'Report the terms the document gives, exactly as written and always with the year (e.g. "2026 Fall Term", ' +
       '"Winter 2027", "Spring 2027"). Never drop the year, and never guess a term: omit a course whose term is ' +
@@ -49,7 +53,7 @@ export function buildTranscriptParsePrompt(): string {
     'Respond with ONLY a JSON object of this exact shape, nothing else:',
     '{"completed":["CODE123","CODE456"],"completedTerms":{"CODE123":"2025 Fall Term","CODE456":"Winter 2026"},' +
       '"inProgress":["CODE789"],"inProgressTerms":{"CODE789":"2026 Fall Term"},"documentDate":"2026-08-06",' +
-      '"major":"Computer Science","minor":null}',
+      '"major":"Computer Science","minor":null,"institution":"University of Saskatchewan","expectedGraduation":null}',
     'Course codes: uppercase subject letters directly followed by the number, no space, no period, no credit-' +
       'unit suffix. Example: "MATH 110.3" becomes "MATH110".',
     'If a bucket is empty, use an empty array for it — never omit a bucket.',
@@ -70,6 +74,27 @@ export function parseTranscriptProgram(text: string): TranscriptProgram {
   // Free text from a model: a short string or nothing, never an object or a paragraph.
   const field = (v: unknown) => (typeof v === 'string' && v.trim() && v.length <= 120 ? v.trim() : null)
   return { major: field(parsed?.major), minor: field(parsed?.minor) }
+}
+
+export interface TranscriptProfile {
+  /** The school the document names, as free text. */
+  institution: string | null
+  /** A stated expected graduation year, when it's a plausible one. */
+  expectedGraduation: number | null
+}
+
+/** The school and expected graduation the document states, so onboarding doesn't ask them again. */
+export function parseTranscriptProfile(text: string): TranscriptProfile {
+  const parsed = jsonOf(text)
+  const institution = typeof parsed?.institution === 'string' && parsed.institution.trim() && parsed.institution.length <= 120 ? parsed.institution.trim() : null
+  const year = Number(parsed?.expectedGraduation)
+  return { institution, expectedGraduation: Number.isInteger(year) && year >= 2000 && year <= 2100 ? year : null }
+}
+
+/** Which of onboarding's school answers an institution names: USask, another school, or unknown. */
+export function schoolOf(institution: string | null | undefined): 'usask' | 'other' | null {
+  if (typeof institution !== 'string' || !institution.trim()) return null
+  return /saskatchewan|\busask\b|\bu\s*of\s*s\b/i.test(institution) ? 'usask' : 'other'
 }
 
 export type TermSeason = 'Fall' | 'Winter' | 'Spring/Summer'

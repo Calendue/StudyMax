@@ -258,7 +258,7 @@ export function StudentScreen() {
       <div className="choices choices--2" role="radiogroup" aria-label="Where you are" data-choices>
         <Choice
           index={0}
-          icon="spark"
+          icon="sprout"
           title="Just starting"
           help="First year, no courses yet. We'll plan from day one."
           selected={m.studentType === 'first-year'}
@@ -266,7 +266,7 @@ export function StudentScreen() {
         />
         <Choice
           index={1}
-          icon="layers"
+          icon="book"
           title="Taking courses"
           help={m.features.ai ? 'Add them from a transcript or the catalogue.' : 'Add them from the catalogue.'}
           selected={m.studentType === 'existing' && !reading}
@@ -277,7 +277,7 @@ export function StudentScreen() {
           <Choice
             index={2}
             wide
-            icon="upload"
+            icon="transcript"
             title={reading ? 'Transcript read' : 'Upload my transcript'}
             help={
               reading
