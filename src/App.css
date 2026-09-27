@@ -727,6 +727,8 @@
 }
 
 .hero-action {
+  display: grid;
+  gap: var(--s2);
   margin-top: var(--s4);
 }
 
@@ -1744,3 +1746,131 @@
   margin-top: var(--s2);
 }
 
+.classes__call {
+  margin-top: var(--s4);
+}
+
+.classes__call-note {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  font-size: var(--fs-caption);
+  font-weight: 500;
+  color: var(--accent);
+}
+
+
+/* ─────────────────────────────────────────────────────────── what-if */
+
+.whatif {
+  display: grid;
+  margin-top: var(--s2);
+  border-radius: var(--r3);
+  background: var(--surface);
+}
+
+.whatif__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: var(--s3);
+  align-items: center;
+  padding: var(--s3) var(--s4);
+}
+
+.whatif__row + .whatif__row {
+  border-top: 1px solid var(--divider);
+}
+
+.whatif__row--head {
+  align-items: end;
+}
+
+.whatif__name {
+  display: grid;
+  gap: 2px;
+  font-weight: 600;
+  font-size: var(--fs-caption);
+  line-height: 1.3;
+}
+
+.whatif__name--other {
+  color: var(--accent);
+}
+
+.whatif__label {
+  font-size: var(--fs-caption);
+  color: var(--ink-2);
+}
+
+.whatif__other {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  font-weight: 600;
+}
+
+.whatif__verdict {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s2);
+  margin: var(--s4) var(--s1);
+  font-weight: 500;
+}
+
+.whatif__verdict svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--ink-2);
+}
+
+.whatif__verdict--better svg {
+  color: var(--accent);
+}
+
+/* ─────────────────────────────────────────────────────────── share card */
+
+.share-preview {
+  display: block;
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+  border-radius: var(--r3);
+  box-shadow: var(--shadow-float);
+}
+
+/* ─────────────────────────────────────────────────────────── courses by term */
+
+.term-group + .term-group {
+  margin-top: var(--s4);
+}
+
+.term-group__label {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  margin: 0 var(--s1) var(--s2);
+  font: 600 var(--fs-caption) / 1.3 var(--font-brand);
+  color: var(--ink-2);
+}
+
+.term-select {
+  min-height: 32px;
+  padding: 0 var(--s2);
+  border: 1px solid var(--edge);
+  border-radius: var(--r1);
+  background: var(--bg);
+  color: var(--ink);
+  font: 500 var(--fs-caption) var(--font-text);
+}
+
+.courses-page__uptodate {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  margin: 0;
+}
+
+.courses-page__uptodate svg {
+  color: var(--accent);
+}

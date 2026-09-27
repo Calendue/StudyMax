@@ -79,19 +79,73 @@ function BrowsePanel() {
   )
 }
 
-// The desktop's Courses: finding courses on the left (upload, search or browse), the student's own
-// list on the right with the one action that matters, instead of a phone's stack of sheets.
+// The desktop's Courses: what the student is taking now leads the page, what they've finished sits
+// under it, and finding more courses (upload, search or browse) is the side column.
 export function CoursesPage() {
   const m = useModel()
   const [mode, setMode] = useState<'search' | 'browse'>('search')
   const count = m.takenCourses.length
+  const current = m.inProgressCourses
+  const empty = count === 0 && current.length === 0
   return (
     <div className="page courses-page">
-      <div className="courses-page__find">
+      <div className="courses-page__mine">
+        <Card index={0} title="Taking now" icon="clock" className="courses-page__current">
+          {current.length > 0 ? (
+            <>
+              <p className="courses-page__count">
+                <span className="tnum">{current.length}</span> {current.length === 1 ? 'course' : 'courses'} in progress
+              </p>
+              <InProgressList label={false} />
+            </>
+          ) : empty ? (
+            <>
+              <p className="card__empty">No courses yet. Upload a transcript, search, or start from a real student.</p>
+              <Group>
+                <SampleRow />
+              </Group>
+            </>
+          ) : (
+            <p className="card__empty">
+              Nothing in progress. Upload a transcript with this term on it and your current courses show up here.
+            </p>
+          )}
+        </Card>
+
+        {count > 0 && (
+          <Card index={1} title="Completed" icon="check" className="courses-page__list">
+            <p className="courses-page__count">
+              <span className="tnum">{count}</span> completed
+            </p>
+            <CompletedList label={false} />
+          </Card>
+        )}
+      </div>
+
+      <aside className="courses-page__find">
+        <div className="courses-page__action">
+          {m.revealed && !m.resultsStale ? (
+            // Results recompute as courses change; replaying the reveal is only worth offering once
+            // the list differs from the one it last ran on.
+            <p className="footnote courses-page__uptodate">
+              <Icon name="check" size={16} /> Your results already include every course here.
+            </p>
+          ) : (
+            <Button block disabled={count === 0} onClick={m.startReveal}>
+              {m.revealed ? 'Update my results' : 'Reveal my path'}
+            </Button>
+          )}
+          {count === 0 && <p className="footnote">Add at least one course to see what it opens up.</p>}
+          {count > 0 && m.uploadStatus !== 'sample' && (
+            <button type="button" className="inline-link courses-page__sample" onClick={m.loadSampleStudent}>
+              Or load a sample student
+            </button>
+          )}
+        </div>
         <UploadCard />
         <UploadNotices />
         <Card
-          index={1}
+          index={2}
           title="Add courses"
           icon="plus"
           action={
@@ -119,45 +173,6 @@ export function CoursesPage() {
           </p>
           {mode === 'search' ? <SearchPanel /> : <BrowsePanel />}
         </Card>
-      </div>
-
-      <aside className="courses-page__mine">
-        <Card index={2} title="Your courses" icon="check" className="courses-page__list">
-          {count === 0 && m.uploadInProgress.length === 0 ? (
-            <>
-              <p className="card__empty">No courses yet. Upload a transcript, search, or start from a real student.</p>
-              <Group>
-                <SampleRow />
-              </Group>
-            </>
-          ) : (
-            <>
-              <p className="courses-page__count">
-                {m.uploadInProgress.length > 0 && (
-                  <>
-                    <span className="tnum">{m.uploadInProgress.length}</span> in progress ·{' '}
-                  </>
-                )}
-                <span className="tnum">{count}</span> completed
-              </p>
-              {/* What they're taking now leads; the finished courses follow, labelled once there's
-                  something above them to tell them apart from. */}
-              <InProgressList />
-              <CompletedList label={m.uploadInProgress.length > 0} />
-            </>
-          )}
-        </Card>
-        <div className="courses-page__action">
-          <Button block disabled={count === 0} onClick={m.startReveal}>
-            {m.revealed ? 'Update my results' : 'Reveal my path'}
-          </Button>
-          {count === 0 && <p className="footnote">Add at least one course to see what it opens up.</p>}
-          {count > 0 && m.uploadStatus !== 'sample' && (
-            <button type="button" className="inline-link courses-page__sample" onClick={m.loadSampleStudent}>
-              Or load a sample student
-            </button>
-          )}
-        </div>
       </aside>
     </div>
   )

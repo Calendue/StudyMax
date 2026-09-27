@@ -6,6 +6,8 @@ import type { SpecializationMatch } from '../lib/match.ts'
 import { ScreenTitle } from '../ui/chrome.tsx'
 import { Appear, Button, Chip, CountUp, Group, OptionList, Ring, Row, SectionLabel } from '../ui/primitives.tsx'
 import { Sheet } from '../ui/Sheet.tsx'
+import { WhatIfSheet } from './WhatIfSheet.tsx'
+import { ShareSheet } from './ShareSheet.tsx'
 
 /** One line on why the credential counts, and the full reason a tap away. */
 function WhyItMatters() {
@@ -82,6 +84,12 @@ export function OverviewTab() {
             <Button block onClick={() => m.setTab('plan')}>
               See your term-by-term plan
             </Button>
+            <Button block variant="secondary" icon="compare" onClick={() => m.openSheet('whatif')}>
+              What if I went for something else?
+            </Button>
+            <Button block variant="quiet" icon="share" onClick={() => m.openSheet('share')}>
+              Share my result
+            </Button>
           </Appear>
         </>
       )}
@@ -142,6 +150,8 @@ export function OverviewTab() {
       </p>
 
       <TargetSheet />
+      <WhatIfSheet />
+      <ShareSheet />
     </>
   )
 }

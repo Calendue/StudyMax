@@ -9,6 +9,8 @@ import { useLayoutMode } from '../ui/layout.ts'
 import { SkillTree } from '../skilltree/SkillTree.tsx'
 import { PlanViewSwitch } from '../skilltree/PlanViewSwitch.tsx'
 import { usePlanView } from '../skilltree/planView.ts'
+import { WhatIfSheet } from '../screens/WhatIfSheet.tsx'
+import { ShareSheet } from '../screens/ShareSheet.tsx'
 
 // The desktop's Plan: Ayo's roadmap across the width, and beside it a panel for the course you pick,
 // the plan's settings, and the copy for an advisor. The phone shows the same pieces stacked.
@@ -103,6 +105,8 @@ export function PlanPage() {
         </Card>
       </aside>
       <AddTargetSheet />
+      <WhatIfSheet />
+      <ShareSheet />
     </div>
   )
 }

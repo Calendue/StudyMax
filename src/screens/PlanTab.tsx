@@ -5,6 +5,8 @@ import { ScreenTitle } from '../ui/chrome.tsx'
 import { Icon } from '../ui/Icon.tsx'
 import { Appear, Button, Group, Ring, Row, SectionLabel } from '../ui/primitives.tsx'
 import { Sheet } from '../ui/Sheet.tsx'
+import { WhatIfSheet } from './WhatIfSheet.tsx'
+import { ShareSheet } from './ShareSheet.tsx'
 import { PlanRoadmap } from './PlanRoadmap.tsx'
 import { SkillTree } from '../skilltree/SkillTree.tsx'
 import { PlanViewSwitch } from '../skilltree/PlanViewSwitch.tsx'
@@ -67,6 +69,10 @@ export function PlanTargets() {
           Plan another alongside
         </button>
       )}
+      <button type="button" className="chip chip--add" onClick={() => m.openSheet('whatif')}>
+        <Icon name="compare" size={14} />
+        What if…
+      </button>
     </Appear>
   )
 }
@@ -166,6 +172,9 @@ export function PlanCopy() {
         <Button block icon={m.planCopied ? 'check' : 'copy'} onClick={() => void m.copyPlan()}>
           {m.planCopied ? 'Copied' : 'Copy plan for my advisor'}
         </Button>
+        <Button block variant="secondary" icon="share" onClick={() => m.openSheet('share')}>
+          Share my plan as an image
+        </Button>
       </div>
       {m.planText !== null && (
         <>
@@ -248,6 +257,8 @@ export function PlanTab() {
       <PlanRoadmap />
       <PlanCopy />
       <AddTargetSheet />
+      <WhatIfSheet />
+      <ShareSheet />
     </>
   )
 }

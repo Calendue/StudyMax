@@ -34,4 +34,6 @@ export interface Program {
   sampleTranscript?: string[]
   /** Courses the sample student is registered in but has not finished. */
   sampleInProgress?: string[]
+  /** The term each sample in-progress course is in. */
+  sampleInProgressTerms?: Record<string, 'Fall' | 'Winter' | 'Spring/Summer'>
 }
