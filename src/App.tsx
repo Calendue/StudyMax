@@ -24,6 +24,7 @@ import {
 import { computeCredentials } from './lib/credentials.ts'
 import { treeDegreeProgress } from './lib/degreeProgress.ts'
 import { bookedByTerm, seasonNow, takingNow, termLabels, termsAfterUpload, withCurrentCourses } from './lib/currentTerms.ts'
+import { academicYearOfDegreeYear, currentTermOf } from './lib/skillTree.ts'
 import { searchCourses, catalogueTitle } from './lib/courseSearch.ts'
 import { courseInfo } from './data/prereqs.ts'
 import { artsAndScienceSubjects, catalogueCourses } from './data/courses.ts'
@@ -89,6 +90,9 @@ type UniversityChoice = '' | 'usask' | 'other'
  * already answers (goals, this term's courses, the course list). Results is tabbed; the call is the
  * last step.
  */
+/** The internship question's answers: the year of the degree it takes, or no year to set aside. */
+export type Internship = 3 | 4 | 'unsure' | 'no'
+
 export type Screen =
   | 'landing'
   | 'welcome'
@@ -168,6 +172,8 @@ interface SavedState {
   registered?: string[]
   /** Whether the plan may use Spring/Summer terms. */
   springSummer?: boolean
+  /** When the student plans an internship: a year of their degree (3 or 4), not sure, or none. */
+  internship?: Internship | null
   /** The most courses the plan puts in a Fall/Winter term, and in a Spring/Summer term. */
   coursesPerTerm?: number
   /** Whether the student picked coursesPerTerm; older saves hold the old default of 2 without it. */
@@ -250,6 +256,7 @@ function useStudyMax() {
   const [gradYear, setGradYear] = useState<number | null>(saved.gradYear ?? null)
   const [registered, setRegistered] = useState<string[]>(() => registeredFrom(saved.registered))
   const [springSummer, setSpringSummer] = useState(saved.springSummer ?? false)
+  const [internship, setInternship] = useState<Internship | null>(saved.internship ?? null)
   // The plan's load limits: the most courses per Fall/Winter term, and per Spring/Summer term. Only a
   // load the student picked is kept; otherwise it's the program's (see coursesPerTerm below).
   const [chosenPerTerm, setCoursesPerTerm] = useState<number | null>(() => chosenLoad(saved))
@@ -388,6 +395,7 @@ function useStudyMax() {
     gradYear,
     registered,
     springSummer,
+    internship,
     courseTerms,
     completedTerms,
     coursesPerTerm,
@@ -599,6 +607,11 @@ function useStudyMax() {
     () => takingNow(uploadInProgress, registered, completed),
     [uploadInProgress, registered, completed],
   )
+
+  function chooseInternship(value: Internship) {
+    haptic.selection()
+    setInternship(value)
+  }
 
   function chooseMinor(id: string | null) {
     haptic.selection()
@@ -891,6 +904,23 @@ function useStudyMax() {
   const startTerm = chosenStart ?? (completed.size === 0 && inProgressCourses.length === 0 ? nextFall(today) : startChoices[0])
   // What the student is already taking, by term: it fills part of each term's courses-per-term.
   const booked = useMemo(() => bookedByTerm(currentByTerm, today), [currentByTerm, today])
+  // The internship year, as the academic year the plan leaves empty. The tree numbers years the same way.
+  const internshipYear = typeof internship === 'number' ? internship : null
+  const internshipAY = useMemo(
+    () =>
+      internshipYear === null
+        ? null
+        : academicYearOfDegreeYear(internshipYear, {
+            completed,
+            inProgress: inProgressCourses,
+            currentTerm: currentTermOf(today),
+            completedTerms,
+            termLoad: coursesPerTerm,
+            // Year 1 of a student who hasn't started is the plan's first term, as on the tree.
+            firstTerm: startTerm,
+          }),
+    [internshipYear, completed, inProgressCourses, today, completedTerms, coursesPerTerm, startTerm],
+  )
   const plan = useMemo(
     () =>
       buildStudentPlan(
@@ -900,9 +930,9 @@ function useStudyMax() {
         inProgressCourses,
         coursesPerTerm,
         startTerm,
-        { springSummer, summerPerTerm, degree: selectedProgram?.degree, booked },
+        { springSummer, summerPerTerm, degree: selectedProgram?.degree, booked, away: internshipAY },
       ),
-    [targets, planningSpecs, completed, inProgressCourses, coursesPerTerm, startTerm, springSummer, summerPerTerm, selectedProgram, booked],
+    [targets, planningSpecs, completed, inProgressCourses, coursesPerTerm, startTerm, springSummer, summerPerTerm, selectedProgram, booked, internshipAY],
   )
   // The plan as the roadmap draws it: what's left, plus the courses already under way in their terms.
   const roadmap = useMemo(() => withCurrentCourses(plan, currentByTerm, today), [plan, currentByTerm, today])
@@ -1398,6 +1428,7 @@ function useStudyMax() {
     setSpringSummer(false)
     setCoursesPerTerm(null)
     setStartTerm(null)
+    setInternship(null)
     setSummerPerTerm(DEFAULT_SUMMER_COURSES)
     setUniversityId('')
     setProgramId('')
@@ -1595,6 +1626,10 @@ function useStudyMax() {
     toggleRegistered,
     springSummer,
     setSpringSummer,
+    internship,
+    internshipYear,
+    internshipAY,
+    chooseInternship,
     summerPerTerm,
     setSummerPerTerm,
     removeRegistered,

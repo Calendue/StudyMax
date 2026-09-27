@@ -82,6 +82,24 @@ export function profileRows(m: Model): ProfileRow[] {
       shown: steps.includes('goals') || goalsValue !== null,
     },
     {
+      key: 'internship',
+      label: 'Internship',
+      value:
+        typeof m.internship === 'number'
+          ? `Year ${m.internship}`
+          : m.internship === 'unsure'
+            ? 'Not sure yet'
+            : m.internship === 'no'
+              ? 'Not planning one'
+              : past('goals')
+                ? 'Not set'
+                : null,
+      empty: 'Not set',
+      step: 'goals',
+      // Asked in the goals step; a path without it asks on the review itself, so no row there.
+      shown: steps.includes('goals'),
+    },
+    {
       key: 'term',
       label: 'This term',
       value: termValue ?? (past('registered') ? 'Nothing yet' : null),

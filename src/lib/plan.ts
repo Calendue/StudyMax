@@ -73,6 +73,8 @@ export interface PlanOptions {
   maxCu?: number
   /** 300/400-level CMPT courses a term may hold, booked courses included. */
   maxSeniorCmpt?: number
+  /** An academic year (by its Fall's calendar year) spent away on an internship: nothing is planned in it. */
+  away?: number | null
 }
 
 /** An unnamed elective slot in a plan. It has no prerequisites, no catalogue page and no sections. */
@@ -315,6 +317,11 @@ export function nextTerm({ season, year }: TermStart, springSummer = false): Ter
 }
 
 /** Terms in calendar order: Winter, then Spring/Summer, then Fall, within a year. */
+/** The academic year a term belongs to, by its Fall: Fall 2026, Winter 2027 and Spring/Summer 2027 are 2026. */
+export function academicYearOf({ season, year }: TermStart): number {
+  return season === 'Fall' ? year : year - 1
+}
+
 function termOrder({ season, year }: TermStart): number {
   return year * 10 + (season === 'Winter' ? 0 : season === 'Spring/Summer' ? 1 : 2)
 }
@@ -381,6 +388,7 @@ export function buildPlan(
     offerings = scrapedOfferings,
     maxCu = DEFAULT_MAX_CU,
     maxSeniorCmpt = DEFAULT_MAX_SENIOR_CMPT,
+    away = null,
   }: PlanOptions & { includePrerequisites?: boolean } = {},
 ): PlannedTerm[] {
   const perTerm = Math.max(1, Math.floor(coursesPerTerm))
@@ -557,6 +565,12 @@ export function buildPlan(
         passed.add(code)
         gateCu += cuOf(code)
       }
+    }
+    if (away !== null && academicYearOf(term) === away) {
+      // On the internship: what this year would have held moves on to the terms after it. Not idle
+      // time, so the load rules don't start relaxing.
+      term = nextTerm(term, springSummer)
+      continue
     }
     const label = `${term.season} ${term.year}`
     const summer = term.season === 'Spring/Summer'
