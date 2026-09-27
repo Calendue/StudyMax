@@ -12,7 +12,6 @@ import { courseInfo } from '../src/data/prereqs.ts'
 /** Verified against catalogue.usask.ca on 2026-08-20: each appears only in prose, not as a course. */
 const KNOWN_NOT_IN_CATALOGUE = new Set([
   'BINF451', // computational-modelling
-  'CMPT435', // programming-languages
   'GEOG125', // applied-computing-geomatics
   'MATH123', // applied-mathematics-major — survives only in "credit for only one of" notes
   'MATH124', // applied-mathematics-major — same
