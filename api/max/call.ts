@@ -108,6 +108,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       dial = settings.phoneE164
     }
   }
+  // Phone ownership isn't verified by SMS while the OTP gate is off (PingMaxScreen OTP_GATE_ENABLED),
+  // and a guest's number comes straight from the request. So Max only rings numbers the team has
+  // listed in MAX_ALLOWED_NUMBERS (comma-separated, any formatting); with none listed it rings nobody.
+  // An open endpoint must never let someone point Max at a stranger's phone (spec 11).
+  if (!dryRun && dial && !allowedToDial(dial)) {
+    res.status(403).json({ error: 'NUMBER_NOT_ALLOWED' })
+    return
+  }
 
   const [profile, plan, underWay] = await Promise.all([
     db().studentProfile.findUnique({ where: { userId: user.userId } }),
@@ -224,4 +232,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   res.status(200).json({ ok: true, callId: String(call.callId), liveToken, parity, dryRun: false })
+}
+
+/** Whether MAX_ALLOWED_NUMBERS lists this number, compared by digits so "+1 306…" matches "1306…". */
+function allowedToDial(phone: string): boolean {
+  const digits = (value: string) => value.replace(/\D/g, '')
+  const allowed = (process.env.MAX_ALLOWED_NUMBERS ?? '').split(',').map(digits).filter(Boolean)
+  return allowed.includes(digits(phone))
 }

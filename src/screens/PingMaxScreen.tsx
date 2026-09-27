@@ -236,7 +236,9 @@ export function PingMaxScreen() {
               ? 'Your phone needs verifying first.'
               : data.error === 'CONSENT_REQUIRED'
                 ? 'Consent is needed before Max can call.'
-                : "Max couldn't place the call.",
+                : data.error === 'NUMBER_NOT_ALLOWED'
+                  ? 'For now, Max only calls the StudyMax team’s phones while phone verification is being fixed.'
+                  : "Max couldn't place the call.",
         )
         setStep('error')
         return
