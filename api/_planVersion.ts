@@ -7,7 +7,9 @@ import { db } from './_db.js'
 import type { PlannedTerm } from '../src/lib/plan.js'
 import type { ValidationResult } from '../src/lib/max/planningAdapter.js'
 
-const PLANNER_VERSION = 'lib/plan.ts@buildStudentPlan-v1'
+// v2: PlannedCourse carries cu, group and year; the scheduler honours offerings, credit and level
+// gates, and the senior CMPT limit.
+const PLANNER_VERSION = 'lib/plan.ts@buildStudentPlan-v2'
 
 function hashInputs(snapshot: {
   targetProgramId: string

@@ -20,7 +20,7 @@ const COURSES_PER_TERM = 4
 // only run in Winter, so they can no longer land in the very next (Fall) term once CMPT370 isn't
 // done — a full year out, not one term (originally verified as Fall 2027, before that change).
 const START = { season: 'Winter' as const, year: 2027 }
-const PLANNER_VERSION = 'lib/plan.ts@buildStudentPlan-v1'
+const PLANNER_VERSION = 'lib/plan.ts@buildStudentPlan-v2'
 
 const prisma = new PrismaClient()
 

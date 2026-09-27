@@ -850,10 +850,7 @@ function useStudyMax() {
         inProgressCourses,
         coursesPerTerm,
         startTerm,
-        springSummer,
-        summerPerTerm,
-        selectedProgram?.degree,
-        booked,
+        { springSummer, summerPerTerm, degree: selectedProgram?.degree, booked },
       ),
     [targets, planningSpecs, completed, inProgressCourses, coursesPerTerm, startTerm, springSummer, summerPerTerm, selectedProgram, booked],
   )

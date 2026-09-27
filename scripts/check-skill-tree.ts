@@ -18,7 +18,7 @@ function student(completedList: string[], inProgress: string[], today: Date, wid
   const hero = matches[0]
   const planning = [...specs, ...credentials.map((c) => c.spec)]
   const start: TermStart = upcomingTerm(today)
-  const plan = buildStudentPlan([hero.spec], planning, completed, inProgress, 2, start, springSummer)
+  const plan = buildStudentPlan([hero.spec], planning, completed, inProgress, 2, start, { springSummer })
   const targets = treeTargets(
     [{ match: hero, kind: 'specialization' }],
     credentials.map((c) => ({ match: c, kind: c.program.kind === 'minor' ? 'minor' : 'certificate' })),
