@@ -51,10 +51,7 @@ function student(completedList: string[], inProgress: string[], today: Date, wid
     inProgress,
     load,
     start,
-    o.springSummer ?? false,
-    summerLoad,
-    o.wholeDegree ? computerScience.degree : undefined,
-    booked,
+    { springSummer: o.springSummer ?? false, summerPerTerm: summerLoad, degree: o.wholeDegree ? computerScience.degree : undefined, booked },
   )
   const targets = treeTargets(
     [{ match: hero, kind: 'specialization' }],

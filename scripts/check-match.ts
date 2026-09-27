@@ -4,6 +4,7 @@ import { computeMatches, computeCourseOverlap } from '../src/lib/match.ts'
 import { completedCourses, inProgressCourses } from '../src/data/transcript.ts'
 import { catalogueCourses } from '../src/data/courses.ts'
 import { specializations } from '../src/data/specializations.ts'
+import { computerScienceDegree } from '../src/data/programs/computerScienceDegree.ts'
 
 const completed = new Set(completedCourses)
 const matches = computeMatches(specializations, completed)
@@ -15,10 +16,28 @@ assert.deepEqual(
   ['CMPT412'],
   'the missing course should be CMPT412',
 )
+// Sorted by what can be finished first (a specialization with `unavailable` goes last), then by
+// fewest remaining.
 assert.ok(
-  matches.every((m, i) => i === 0 || m.remaining >= matches[i - 1].remaining),
-  'results must be sorted ascending by remaining count',
+  matches.every(
+    (m, i) =>
+      i === 0 ||
+      Boolean(m.spec.unavailable) > Boolean(matches[i - 1].spec.unavailable) ||
+      (Boolean(m.spec.unavailable) === Boolean(matches[i - 1].spec.unavailable) && m.remaining >= matches[i - 1].remaining),
+  ),
+  'results must be sorted: available first, then ascending by remaining count',
 )
+{
+  const closest = specializations.find((s) => s.id === 'social-computing')!
+  const dead = { ...closest, id: 'dead', name: 'AAA Dead', unavailable: 'needs a course the catalogue dropped' }
+  const ranked = computeMatches([dead, ...specializations], completed)
+  assert.equal(ranked[0].spec.id, 'social-computing', 'an unavailable specialization is never the closest')
+  assert.equal(ranked[ranked.length - 1].spec.id, 'dead', 'an unavailable specialization ranks last')
+  // A first-year is 6 courses from several; the tie goes to the one sharing most with the degree,
+  // not the alphabet (Computational Modelling, which needs the dropped BINF 451).
+  const firstYear = computeMatches(specializations, new Set(), computerScienceDegree)
+  assert.equal(firstYear[0].spec.id, 'social-computing', 'first-year default breaks the tie by the degree')
+}
 
 const overlap = computeCourseOverlap(specializations, completed)
 assert.equal(overlap[0].course, 'CMPT384', 'CMPT384 should be the highest-overlap uncompleted course')
