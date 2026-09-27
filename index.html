@@ -15,7 +15,27 @@
     <link rel="manifest" href="/site.webmanifest" />
     <!-- Old Lace, not the pack's berry: the browser bar should match the app's cream top bar. -->
     <meta name="theme-color" content="#FFF8EB" />
-    <meta name="color-scheme" content="light only" />
+    <meta name="color-scheme" content="light dark" />
+    <!-- The theme is set before the first paint, so a dark-mode visitor never sees a light flash:
+         the saved choice (studymax:theme, written by src/theme.ts), else the system's. -->
+    <script>
+      ;(function () {
+        var pref = null
+        try {
+          pref = localStorage.getItem('studymax:theme')
+        } catch (e) {}
+        var dark = pref === 'dark' || (pref !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+        var root = document.documentElement
+        root.setAttribute('data-theme', dark ? 'dark' : 'light')
+        root.style.colorScheme = dark ? 'dark' : 'light'
+        var meta = document.querySelector('meta[name=theme-color]')
+        if (meta) meta.setAttribute('content', dark ? '#0B1619' : '#FFF8EB')
+      })()
+    </script>
+    <style>
+      html { background: #fff8eb; }
+      html[data-theme='dark'] { background: #0b1619; }
+    </style>
     <meta name="format-detection" content="telephone=no" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="StudyMax" />

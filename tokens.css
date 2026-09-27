@@ -11,7 +11,10 @@
  * Rosy Taupe #C38D94 is the accent's tonal partner: ring tracks, selected tints, dividers and
  * inactive states. It is never text on Old Lace (2.6:1).
  */
-:root {
+/* Colour, light: the page is Old Lace. `.theme-light` re-declares it so a subtree (the launch splash)
+   can stay light inside a dark app. */
+:root,
+.theme-light {
   color-scheme: light;
 
   /* ── colour ── */
@@ -25,16 +28,54 @@
      role Kamu's surfaceMuted plays. Grouping is tone and whitespace, not boxes and borders. */
   --surface: #f9ede2;
   --surface-2: #f3e3d9; /* pressed rows, skeletons */
+  /* A desktop card: Old Lace lifted a step toward paper, never pure white, with a hairline. */
+  --card: #fffcf6;
+  --card-surface: #f9ede2;
+  --card-surface-2: #f3e3d9;
+  --raised: #fffcf6; /* popovers and menus */
   --ink-2: rgb(18 38 43 / 0.7); /* secondary text, 5.7:1 */
   --ink-3: rgb(18 38 43 / 0.45); /* placeholders ONLY, 2.7:1 */
   --edge: rgb(18 38 43 / 0.18); /* a hairline for real edges: inputs */
+  --hairline: rgb(18 38 43 / 0.09); /* a card's 1px edge */
   --divider: rgb(195 141 148 / 0.42); /* hairlines between rows on a surface */
+  /* The accent has two jobs. --accent is text, icons and strokes on the page; --accent-fill is a
+     filled control with --on-accent on it. In light they are the same Cherry Rose. */
   --accent: var(--cherry);
+  --accent-fill: var(--cherry);
   --on-accent: var(--old-lace);
+  --accent-tint: rgb(152 38 73 / 0.1); /* the tab capsule, hovered rows */
+  --accent-edge: rgb(152 38 73 / 0.24);
   --track: rgb(195 141 148 / 0.5); /* ring tracks, the timeline spine */
   --selected: rgb(195 141 148 / 0.26); /* selected rows and quiet chips */
   --inactive: var(--taupe); /* a disabled primary button */
   --scrim: rgb(18 38 43 / 0.34);
+
+  /* The desktop sidebar is the brand colour; its active item is a notch of the page colour. */
+  --sidebar: var(--cherry);
+  --on-sidebar: var(--old-lace);
+  --on-sidebar-2: rgb(255 248 235 / 0.8); /* 5.3:1 on Cherry Rose */
+  --sidebar-hover: rgb(255 248 235 / 0.1);
+  --notch-ink: var(--ink);
+  --notch-accent: var(--cherry);
+
+  /* The dashboard's welcome card: ink into a deeper ink, with a Cherry Rose glow. */
+  --welcome-from: #12262b;
+  --welcome-to: #0b1a1e;
+  --welcome-glow: rgb(152 38 73 / 0.55);
+  --on-welcome: var(--old-lace);
+  --on-welcome-2: rgb(255 248 235 / 0.74);
+  --welcome-track: rgb(255 248 235 / 0.16);
+  --welcome-accent: #e6a8b6;
+
+  /* A dark band on a light page (the landing page's problem statement). */
+  --band: #12262b;
+  --on-band: var(--old-lace);
+
+  --shadow-card: 0 1px 2px rgb(18 38 43 / 0.04), 0 4px 16px rgb(18 38 43 / 0.05);
+  --shadow-card-hover: 0 2px 4px rgb(18 38 43 / 0.05), 0 12px 32px rgb(18 38 43 / 0.09);
+  --glass-blur: saturate(1.4) blur(14px);
+  --shadow-notch: -6px 6px 18px -10px rgb(18 38 43 / 0.35);
+  --shadow-knob: 0 1px 3px rgb(18 38 43 / 0.2);
 
   /* ONE elevation recipe, tinted with ink, only for things that float above the page: the
      bottom action bar, the tab bar, a sheet. Never on a card. */
@@ -55,6 +96,13 @@
   --fs-label: 0.9375rem;
   --fs-caption: 0.8125rem;
   --fs-section: 0.75rem;
+  /* The landing page's marketing sizes, beyond the app's own scale. */
+  --fs-small: 0.875rem;
+  --fs-lead: 1.125rem;
+  --fs-lede: 1.375rem;
+  --fs-headline: 2.25rem;
+  --fs-hero: clamp(2.25rem, 4.4vw + 1rem, 3.5rem);
+  --fs-lede-fluid: clamp(1.25rem, 1.4vw + 1rem, 1.75rem);
   --lh-body: 1.55;
 
   /* ── space: a 4pt rhythm. Seven numbers, not thirty. ── */
@@ -65,11 +113,13 @@
   --s5: 24px;
   --s6: 32px;
   --s7: 48px;
+  --s8: 72px; /* the landing page's section rhythm */
 
   --r1: 8px;
   --r2: 12px;
   --r3: 16px;
   --r4: 24px;
+  --r-pill: 999px;
 
   /* ── motion: one vocabulary ──
      The spring is for things that APPEAR, and animates transform and opacity only. The settle
@@ -81,6 +131,75 @@
   --d-slow: 380ms; /* full-screen changes */
 
   --column: 640px;
+  --content-max: 1440px;
+  --sidebar-width: 256px;
+  --rail-width: 88px;
+  --header-height: 72px;
+  --tabbar-height: 56px;
+}
+
+/* Colour, dark: derived from the brand, not a new palette. The page is Jet Black deepened, surfaces
+   step up from #12262B, text is Old Lace at three strengths. Cherry Rose stays the fill; as text it
+   fails on dark (2.4:1), so text, icons and strokes take a lifted rose instead (9.3:1). */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg: #0b1619;
+  --surface: #12262b;
+  --surface-2: #1a3238;
+  --card: #12262b;
+  --card-surface: #1a3238;
+  --card-surface-2: #223d44;
+  --raised: #1a3238;
+  --ink: #fff8eb; /* 17.4:1 on the page */
+  --ink-2: rgb(255 248 235 / 0.72); /* 9.3:1 */
+  --ink-3: rgb(255 248 235 / 0.55); /* 5.9:1 */
+  --edge: rgb(255 248 235 / 0.18);
+  --hairline: rgb(255 248 235 / 0.1);
+  --divider: rgb(255 248 235 / 0.1);
+  --accent: #e6a8b6; /* the lifted rose: 9.3:1 on the page, 6.8:1 on raised */
+  --accent-fill: var(--cherry);
+  --on-accent: var(--old-lace);
+  --accent-tint: rgb(230 168 182 / 0.14);
+  --accent-edge: rgb(230 168 182 / 0.3);
+  --track: rgb(195 141 148 / 0.26);
+  --selected: rgb(230 168 182 / 0.14);
+  --inactive: #4a3a40;
+  --scrim: rgb(4 10 12 / 0.62);
+
+  --sidebar: #0f2126;
+  --on-sidebar: var(--old-lace);
+  --on-sidebar-2: rgb(255 248 235 / 0.72);
+  --sidebar-hover: rgb(255 248 235 / 0.06);
+  --notch-ink: var(--old-lace);
+  --notch-accent: #e6a8b6;
+
+  --welcome-from: #1a3238;
+  --welcome-to: #0f2126;
+  --welcome-glow: rgb(152 38 73 / 0.5);
+
+  --band: #12262b;
+  --on-band: var(--old-lace);
+
+  --shadow-float: 0 8px 24px rgb(4 10 12 / 0.45), 0 1px 4px rgb(4 10 12 / 0.3);
+  --shadow-card: 0 1px 2px rgb(4 10 12 / 0.3), 0 4px 16px rgb(4 10 12 / 0.25);
+  --shadow-card-hover: 0 2px 4px rgb(4 10 12 / 0.35), 0 14px 36px rgb(4 10 12 / 0.4);
+  --shadow-notch: -6px 6px 18px -10px rgb(4 10 12 / 0.6);
+  --shadow-knob: 0 1px 3px rgb(4 10 12 / 0.5);
+}
+
+/* A theme switch cross-fades colour only, for about 300ms; nothing else animates with it. */
+:root.theme-fade,
+:root.theme-fade *,
+:root.theme-fade *::before,
+:root.theme-fade *::after {
+  transition:
+    color 300ms var(--settle),
+    background-color 300ms var(--settle),
+    border-color 300ms var(--settle),
+    fill 300ms var(--settle),
+    stroke 300ms var(--settle),
+    box-shadow 300ms var(--settle) !important;
 }
 
 /* Safe areas, declared on body so they resolve wherever SystemBars puts its values (html or body).

@@ -68,7 +68,7 @@ export function Intro({ onReveal }: { onReveal: () => void }) {
       {shown && (
         <motion.div
           key="intro"
-          className="prism"
+          className="prism theme-light"
           aria-hidden
           exit={{ opacity: 0, transition: { duration: DISSOLVE_S, ease: DISSOLVE_EASE } }}
         >
@@ -166,6 +166,8 @@ function PrismStage({ onAnimationDone }: { onAnimationDone: () => void }) {
   )
 }
 
+const CLEAR_POSTER = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
+
 /** The Prism gradient, played back rather than computed on the device. */
 function PrismVideo({
   startAt,
@@ -219,6 +221,9 @@ function PrismVideo({
       ref={ref}
       className="prism__field"
       src="/splash/prism-splash.mp4"
+      // A clear poster: without one, Android's WebView paints a grey play button until the first
+      // frame decodes (seen on the emulator's software decoder).
+      poster={CLEAR_POSTER}
       muted
       playsInline
       preload="auto"

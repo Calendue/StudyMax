@@ -129,7 +129,7 @@ export function OverviewTab() {
   )
 }
 
-function TargetRow({ match, index, name, kind }: { match: SpecializationMatch; index: number; name: string; kind?: string }) {
+export function TargetRow({ match, index, name, kind }: { match: SpecializationMatch; index: number; name: string; kind?: string }) {
   const m = useModel()
   const isHero = match.spec.id === m.hero.spec.id
   return (
@@ -147,7 +147,7 @@ function TargetRow({ match, index, name, kind }: { match: SpecializationMatch; i
   )
 }
 
-function TargetSheet() {
+export function TargetSheet() {
   const m = useModel()
   const id = m.sheet?.startsWith('target:') ? m.sheet.slice('target:'.length) : null
   const credential = m.credentials.find((c) => c.spec.id === id)

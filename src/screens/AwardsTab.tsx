@@ -11,7 +11,7 @@ function formatDate(date: Date) {
 }
 
 /** "Closes in 5 days", filled when it's closing soon; the listed date or "rolling" otherwise. */
-function Deadline({ award, today }: { award: Resource; today: Date }) {
+export function Deadline({ award, today }: { award: Resource; today: Date }) {
   const days = daysUntil(award, today)
   return (
     <Chip tone={days !== null && days <= 14 ? 'urgent' : 'quiet'} icon="clock">
@@ -35,37 +35,12 @@ export function AwardsTab() {
         Awards, by deadline
       </ScreenTitle>
 
-      {top && (
-        <Appear index={0} className="spotlight">
-          <Deadline award={top} today={m.today} />
-          <h2 className="spotlight__name">{top.name}</h2>
-          {top.value && <p className="spotlight__value">{top.value}</p>}
-          <p className="spotlight__why">{top.whatItIs}</p>
-          {m.features.call && (
-            <Button block icon="phone" onClick={() => m.go('call')}>
-              Get a call before it closes
-            </Button>
-          )}
-          {/* The deadline watch: a Live Activity on iOS, a Live Update on Android. Apps only. */}
-          {isNative && m.watchableDeadline?.id === top.id && (
-            <Button
-              block
-              variant="secondary"
-              icon="clock"
-              disabled={m.watchBusy}
-              onClick={() => void (m.watchedId === top.id ? m.unwatchDeadline() : m.watchDeadline())}
-            >
-              {m.watchedId === top.id ? 'Stop watching' : 'Watch this deadline'}
-            </Button>
-          )}
-          {m.watchError && <p className="footnote">{m.watchError}</p>}
-        </Appear>
-      )}
+      {top && <AwardSpotlight award={top} />}
 
       <SectionLabel>{top ? 'Everything else' : 'Awards'}</SectionLabel>
       <Group>
         {listed.map((award, i) => (
-          <Appear key={award.id} index={1 + i} className="row-wrap">
+          <Appear key={award.id} index={1 + i} className="row-wrap award-anchor" id={`award-${award.id}`}>
             <div className="award">
               <div className="award__head">
                 <Deadline award={award} today={m.today} />
@@ -90,8 +65,41 @@ export function AwardsTab() {
   )
 }
 
+/** The award closing soonest, with the two things StudyMax can do about it: call, and watch. */
+export function AwardSpotlight({ award, className }: { award: Resource; className?: string }) {
+  const m = useModel()
+  return (
+    <Appear index={0} className={`spotlight award-anchor${className ? ` ${className}` : ''}`} id={`award-${award.id}`}>
+      <Deadline award={award} today={m.today} />
+      <h2 className="spotlight__name">{award.name}</h2>
+      {award.value && <p className="spotlight__value">{award.value}</p>}
+      <p className="spotlight__why">{award.whatItIs}</p>
+      <div className="spotlight__actions">
+        {m.features.call && (
+          <Button block icon="phone" onClick={() => m.go('call')}>
+            Get a call before it closes
+          </Button>
+        )}
+        {/* The deadline watch: a Live Activity on iOS, a Live Update on Android. Apps only. */}
+        {isNative && m.watchableDeadline?.id === award.id && (
+          <Button
+            block
+            variant="secondary"
+            icon="clock"
+            disabled={m.watchBusy}
+            onClick={() => void (m.watchedId === award.id ? m.unwatchDeadline() : m.watchDeadline())}
+          >
+            {m.watchedId === award.id ? 'Stop watching' : 'Watch this deadline'}
+          </Button>
+        )}
+      </div>
+      {m.watchError && <p className="footnote">{m.watchError}</p>}
+    </Appear>
+  )
+}
+
 /** The AI's note on why this award fits this student: a skeleton while it's written, then read in. */
-function WhyYou({ loading, text, fallback }: { loading: boolean; text?: string; fallback: string }) {
+export function WhyYou({ loading, text, fallback }: { loading: boolean; text?: string; fallback: string }) {
   if (loading) {
     return (
       <div className="why why--loading">
@@ -109,7 +117,7 @@ function WhyYou({ loading, text, fallback }: { loading: boolean; text?: string; 
   )
 }
 
-function Guidance() {
+export function Guidance() {
   const m = useModel()
   const lookup = m.lookup?.kind === 'guidance' ? m.lookup : null
   // Direction for unmapped schools is AI-written. The university step hides this path without the

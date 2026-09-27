@@ -50,7 +50,8 @@ export function initNative() {
     .querySelector('meta[name=viewport]')
     ?.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover')
 
-  // Style.Light is "dark text for light backgrounds": dark status-bar icons over Old Lace.
+  // Style.Light is "dark text for light backgrounds": dark icons over the Old Lace launch splash,
+  // in either theme. src/theme.ts switches them for dark mode once the splash has gone.
   void StatusBar.setStyle({ style: Style.Light }).catch(() => {})
 
   // The field being typed into is never left under the keyboard. The web view is resized natively,
