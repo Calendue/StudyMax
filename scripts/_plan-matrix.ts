@@ -8,7 +8,7 @@ import { usask } from '../src/data/schools/usask.js'
 import { completedCourses as sampleCompleted, inProgressCourses as sampleInProgress, inProgressTerms as sampleTerms } from '../src/data/transcript.js'
 import { computeMatches } from '../src/lib/match.js'
 import { computeCredentials } from '../src/lib/credentials.js'
-import { buildStudentPlan, upcomingTerm, type PlanOptions, type PlannedTerm, type Season, type TermStart } from '../src/lib/plan.js'
+import { buildStudentPlan, buildStudentPlanResult, upcomingTerm, type PlanOptions, type PlanResult, type PlannedTerm, type Season, type TermStart } from '../src/lib/plan.js'
 import { bookedByTerm, seasonNow } from '../src/lib/currentTerms.js'
 
 export const TODAY = new Date(2026, 8, 26)
@@ -53,9 +53,11 @@ export interface BuiltCase {
   honours: boolean
   targets: string[]
   args: Parameters<typeof buildStudentPlan>
+  /** With `result: true`: buildStudentPlanResult's output (plan is its terms). */
+  result?: PlanResult
 }
 /** Builds one case. `shuffle` reverses/permutes every input collection (determinism checks). `extra` merges into the options. */
-export function buildCase(c: Pick<MatrixCase, 'stage' | 'specId' | 'variant' | 'load' | 'summer'>, opts: { shuffle?: boolean; extra?: Partial<PlanOptions>; completed?: string[]; inProgress?: string[] } = {}): BuiltCase {
+export function buildCase(c: Pick<MatrixCase, 'stage' | 'specId' | 'variant' | 'load' | 'summer'>, opts: { shuffle?: boolean; extra?: Partial<PlanOptions>; completed?: string[]; inProgress?: string[]; result?: boolean; start?: TermStart } = {}): BuiltCase {
   const st = c.stage
   let completedArr = [...(opts.completed ?? st.completed)]
   let specList = [...SPECS]
@@ -76,13 +78,14 @@ export function buildCase(c: Pick<MatrixCase, 'stage' | 'specId' | 'variant' | '
   const hero = matches.find((m) => m.spec.id === c.specId)!
   const targets = [hero].filter((m) => m.remaining > 0).map((m) => m.spec)
   const args: Parameters<typeof buildStudentPlan> = [
-    targets, planning, completed, inProgress, c.load, c.stage.start,
+    targets, planning, completed, inProgress, c.load, opts.start ?? c.stage.start,
     { springSummer: c.summer > 0, summerPerTerm: Math.max(1, c.summer), degree, booked, ...(opts.extra ?? {}) },
   ]
   const t0 = performance.now()
-  const plan = buildStudentPlan(...args)
+  const result = opts.result ? buildStudentPlanResult(...args) : undefined
+  const plan = result ? result.terms : buildStudentPlan(...args)
   const ms = performance.now() - t0
-  return { plan, ms, completed, inProgress, booked, degreeId: degree.id, honours: c.variant === 'bsc-honours', targets: targets.map((t) => t.id), args }
+  return { result, plan, ms, completed, inProgress, booked, degreeId: degree.id, honours: c.variant === 'bsc-honours', targets: targets.map((t) => t.id), args }
 }
 
 /** The graduation term: the last term holding a planned or booked course, as termOrd. */
