@@ -828,6 +828,25 @@
   background: var(--surface);
 }
 
+/* Registering for the next term with Max: its own row under the targets, full width on a phone. */
+.plan-register {
+  margin-top: var(--s4);
+}
+
+.plan-page__side .plan-register {
+  margin-top: 0;
+}
+
+.plan-page__side .plan-register .btn {
+  width: 100%;
+}
+
+@media (max-width: 767px) {
+  .plan-register .btn {
+    width: 100%;
+  }
+}
+
 /* One of a set (a term, a filter): quiet until it's the one picked, then the accent's tint and edge. */
 .chip--choice {
   min-height: 36px;

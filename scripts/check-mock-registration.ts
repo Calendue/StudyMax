@@ -1,54 +1,110 @@
-// Sanity check for the fake registration demo. Run: node --experimental-strip-types scripts/check-mock-registration.ts
+// Sanity check for the practice run. Run: node --experimental-strip-types scripts/check-mock-registration.ts
 import assert from 'node:assert/strict'
-import { pickSchedule, sectionsFor, type PlanCourseInput } from '../src/lib/mockRegistration.ts'
+import type { RegPick, RegPlan } from '../src/lib/registration.ts'
+import {
+  clear,
+  hasSavedRun,
+  load,
+  save,
+  scriptFromPlan,
+  sectionsFor,
+  storageKey,
+  type RegState,
+} from '../src/lib/mockRegistration.ts'
 
-const courses: PlanCourseInput[] = [
-  { code: 'CMPT370', title: 'Intermediate Software Engineering', credits: 3 },
-  { code: 'CMPT371', title: 'Computer Networks and Distributed Processing', credits: 3 },
-  { code: 'CMPT383', title: 'Comparative Programming Languages', credits: 3 },
-]
-
-// --- deterministic: same input, same output ---
-const a = pickSchedule(courses)
-const b = pickSchedule(courses)
-assert.deepEqual(a, b, 'picking is deterministic for the same input')
-
-// --- no two picked rows clash in time ---
-function toMinutes(t: string) {
-  const [h, m] = t.split(':').map(Number)
-  return h * 60 + m
-}
-for (let i = 0; i < a.rows.length; i++) {
-  for (let j = i + 1; j < a.rows.length; j++) {
-    const x = a.rows[i]
-    const y = a.rows[j]
-    const sameDay = x.days.some((d) => y.days.includes(d))
-    const overlap = toMinutes(x.start) < toMinutes(y.end) && toMinutes(y.start) < toMinutes(x.end)
-    assert.ok(!(sameDay && overlap), `${x.code} ${x.section} clashes with ${y.code} ${y.section}`)
+// A synthetic plan shaped like the sample student's Winter 2027: two slot picks (one with a linked
+// lab), a booked course for context, and a course Max couldn't place.
+function pick(p: Partial<RegPick> & Pick<RegPick, 'code' | 'crn' | 'section'>): RegPick {
+  return {
+    title: p.code,
+    type: 'Lecture',
+    main: true,
+    credits: 3,
+    meetings: [{ days: ['Mon', 'Wed', 'Fri'], start: '09:30', end: '10:20' }],
+    seats: 12,
+    status: 'open',
+    ...p,
   }
 }
 
-// --- the first course's first section falls back (full) ---
-const firstCourseSections = sectionsFor(courses[0].code, false)
-const firstRow = a.rows.find((r) => r.code === courses[0].code && r.type === 'Lecture')
-assert.ok(firstRow, 'first course got a lecture section')
-assert.notEqual(firstRow!.section, firstCourseSections[0].section, 'first course falls back off its full first section')
-assert.ok(a.steps.some((s) => s.text.includes('is full')), 'the script records the full-section fallback')
+const plan: Pick<RegPlan, 'picks' | 'booked' | 'unplaced' | 'crns'> = {
+  picks: [
+    pick({ code: 'INDG107', crn: '21001', section: '01', slotLabel: 'Indigenous learning', meetings: [{ days: ['Tue', 'Thu'], start: '11:30', end: '12:50' }] }),
+    pick({ code: 'CHEM112', crn: '22002', section: '04', slotLabel: 'Junior science: Biology, Chemistry or Earth Science', meetings: [{ days: ['Tue', 'Thu'], start: '10:00', end: '11:20' }] }),
+    pick({ code: 'CHEM112', crn: '22010', section: 'LC4', type: 'Laboratory', main: false, credits: 0, meetings: [{ days: ['Wed'], start: '14:30', end: '17:20' }] }),
+  ],
+  booked: [
+    pick({ code: 'CMPT340', crn: '28326', section: '04', meetings: [{ days: ['Mon', 'Wed'], start: '10:30', end: '11:20' }, { days: ['Fri'], start: '10:30', end: '11:20' }] }),
+  ],
+  unplaced: [{ code: 'BIOL120', title: 'The Nature of Life', reason: 'full', text: 'Every main-campus lecture of BIOL 120 is full.' }],
+  crns: ['21001', '22002', '22010'],
+}
 
-// --- every step targeting a row or course points at a real one ---
+// --- deterministic: same input, same output ---
+const a = scriptFromPlan(plan)
+assert.deepEqual(a, scriptFromPlan(plan), 'the script is deterministic for the same plan')
+
+// --- rows are the picks, in order; booked stays context ---
+assert.deepEqual(a.rows.map((r) => r.crn), plan.crns, 'rows are exactly the picks, in order')
+assert.ok(a.rows.every((r) => r.status === 'pending'), 'picks start pending')
+assert.deepEqual(a.booked.map((r) => r.crn), ['28326'], 'booked courses are context rows')
+assert.equal(a.booked[0].meetings.length, 2, 'a section keeps every meeting')
+assert.equal(a.rows.find((r) => r.crn === '22010')!.credits, 0, 'a linked lab carries no credit units')
+assert.equal(a.rows.filter((r) => r.main).reduce((s, r) => s + r.credits, 0), 6, 'credits count the lectures only')
+
+// --- every step points at something real; each pick is added exactly once; one submit, last ---
 for (const step of a.steps) {
   if (step.rowIndex !== undefined) assert.ok(a.rows[step.rowIndex], `step ${step.action} points at a real row`)
-  if (step.courseIndex !== undefined) assert.ok(courses[step.courseIndex], `step ${step.action} points at a real course`)
+  if (step.courseIndex !== undefined) assert.ok(a.courses[step.courseIndex], `step ${step.action} points at a real course`)
+  if (step.action === 'add') {
+    assert.ok(step.rowIndex !== undefined, 'an add step names its row')
+    assert.equal(a.courses[step.courseIndex!].code, a.rows[step.rowIndex!].code, 'an add step adds a section of the course on screen')
+  }
 }
-assert.ok(a.steps.some((s) => s.action === 'submit'), 'the script ends with a submit step')
+const adds = a.steps.filter((s) => s.action === 'add').map((s) => s.rowIndex)
+assert.deepEqual(adds, a.rows.map((_, i) => i), 'each pick is added once, in order')
+assert.equal(a.steps.filter((s) => s.action === 'submit').length, 1, 'exactly one submit')
+assert.equal(a.steps[a.steps.length - 1].action, 'submit', 'the submit comes last')
+assert.deepEqual(a.courses.map((c) => c.code), ['INDG107', 'CHEM112'], 'each course is searched once')
+assert.ok(a.steps.some((s) => s.text === 'Indigenous learning: INDG 107 fits'), 'a slot pick says which slot it fills')
+assert.ok(a.steps.some((s) => s.text === 'Junior science: CHEM 112 fits'), "a narrowed slot's areas aren't repeated")
+assert.ok(a.steps.some((s) => s.action === 'note' && s.text.includes('BIOL 120')), 'an unplaced course is narrated')
 
-// --- electives are excluded (caller's job: this module never invents an elective row) ---
-const withElective: PlanCourseInput[] = [...courses, { code: 'elective:3:Breadth elective', title: 'Breadth elective', credits: 3 }]
-const c = pickSchedule(withElective.filter((course) => !course.code.startsWith('elective:')))
-assert.deepEqual(
-  c.rows.map((r) => r.code),
-  a.rows.map((r) => r.code),
-  'electives filtered out before scheduling produce the same rows',
-)
+// --- an empty plan still ends in one submit and adds nothing ---
+const empty = scriptFromPlan({ picks: [], booked: [], unplaced: [] })
+assert.deepEqual(empty.rows, [], 'no picks, no rows')
+assert.deepEqual(empty.steps.map((s) => s.action), ['submit'], 'no picks, just the submit')
+
+// --- the offline fallback's practice sections stay deterministic ---
+assert.deepEqual(sectionsFor('CMPT370', true), sectionsFor('CMPT370', true), 'practice sections are deterministic')
+
+// --- the saved run is scoped to the student, the term and the exact CRNs ---
+const store = new Map<string, string>()
+Object.assign(globalThis, {
+  localStorage: {
+    getItem: (k: string) => store.get(k) ?? null,
+    setItem: (k: string, v: string) => void store.set(k, v),
+    removeItem: (k: string) => void store.delete(k),
+    key: (i: number) => [...store.keys()][i] ?? null,
+    get length() {
+      return store.size
+    },
+  },
+})
+const scope = { uid: 'uid-1', termLabel: 'Winter 2027', crns: plan.crns }
+assert.equal(storageKey(scope), 'studymax:mock-registration:uid-1:Winter 2027:21001,22002,22010', 'the key format')
+assert.equal(storageKey({ ...scope, uid: null }), 'studymax:mock-registration:guest:Winter 2027:21001,22002,22010', 'guests are "guest"')
+const state: RegState = { termLabel: 'Winter 2027', rows: a.rows, submittedAt: '2026-09-27T08:00:00.000Z' }
+save(scope, state)
+assert.deepEqual(load(scope), state, 'a saved run loads back for the same scope')
+assert.equal(load({ ...scope, uid: 'uid-2' }), null, "another student doesn't see it")
+assert.equal(load({ ...scope, uid: null }), null, "a guest doesn't see a student's run")
+assert.equal(load({ ...scope, termLabel: 'Fall 2027' }), null, "another term doesn't see it")
+assert.equal(load({ ...scope, crns: ['21001'] }), null, "a changed list of CRNs doesn't see it")
+assert.ok(hasSavedRun('uid-1', 'Winter 2027'), 'the Plan knows a run was saved')
+assert.ok(!hasSavedRun(null, 'Winter 2027'), 'but not for a guest')
+clear(scope)
+assert.equal(load(scope), null, 'clear removes it')
+assert.ok(!hasSavedRun('uid-1', 'Winter 2027'), 'and the Plan forgets it')
 
 console.log('check-mock-registration: ok')

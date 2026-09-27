@@ -1,0 +1,771 @@
+[
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "22170",
+  "subject": "BIOL",
+  "courseNumber": "120",
+  "sequenceNumber": "01",
+  "courseTitle": "The Nature of Life",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Lecture",
+  "creditHours": 3,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 425,
+  "enrollment": 425,
+  "seatsAvailable": 0,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "M1",
+  "isSectionLinked": true,
+  "reservedSeatSummary": {
+   "maximumEnrollmentReserved": 331,
+   "seatsAvailableUnreserved": 0
+  },
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": false,
+     "tuesday": true,
+     "wednesday": false,
+     "thursday": true,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "1000",
+     "endTime": "1120",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "22171",
+  "subject": "BIOL",
+  "courseNumber": "120",
+  "sequenceNumber": "02",
+  "courseTitle": "The Nature of Life",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Lecture",
+  "creditHours": 3,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 425,
+  "enrollment": 425,
+  "seatsAvailable": 0,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "M2",
+  "isSectionLinked": true,
+  "reservedSeatSummary": {
+   "maximumEnrollmentReserved": 188,
+   "seatsAvailableUnreserved": 0
+  },
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": true,
+     "tuesday": false,
+     "wednesday": true,
+     "thursday": false,
+     "friday": true,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "0930",
+     "endTime": "1020",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "33203",
+  "subject": "BIOL",
+  "courseNumber": "120",
+  "sequenceNumber": "03",
+  "courseTitle": "The Nature of Life",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Lecture",
+  "creditHours": 3,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 60,
+  "enrollment": 60,
+  "seatsAvailable": 0,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "M3",
+  "isSectionLinked": true,
+  "reservedSeatSummary": null,
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": false,
+     "tuesday": true,
+     "wednesday": false,
+     "thursday": false,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "1630",
+     "endTime": "1720",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "32749",
+  "subject": "BIOL",
+  "courseNumber": "120",
+  "sequenceNumber": "C16",
+  "courseTitle": "The Nature of Life",
+  "campusDescription": " USask - Prince Albert Campus",
+  "scheduleTypeDescription": "Lecture",
+  "creditHours": 3,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 40,
+  "enrollment": 28,
+  "seatsAvailable": 12,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "M6",
+  "isSectionLinked": true,
+  "reservedSeatSummary": null,
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": false,
+     "tuesday": true,
+     "wednesday": false,
+     "thursday": false,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "1800",
+     "endTime": "2050",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "23734",
+  "subject": "BIOL",
+  "courseNumber": "120",
+  "sequenceNumber": "C40",
+  "courseTitle": "The Nature of Life",
+  "campusDescription": "Northlands College",
+  "scheduleTypeDescription": "Lecture",
+  "creditHours": 3,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 20,
+  "enrollment": 5,
+  "seatsAvailable": 15,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "M9",
+  "isSectionLinked": true,
+  "reservedSeatSummary": null,
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": false,
+     "tuesday": false,
+     "wednesday": true,
+     "thursday": false,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "1800",
+     "endTime": "2050",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "22172",
+  "subject": "BIOL",
+  "courseNumber": "120",
+  "sequenceNumber": "L01",
+  "courseTitle": "The Nature of Life",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Laboratory",
+  "creditHours": 0,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 61,
+  "enrollment": 61,
+  "seatsAvailable": 0,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "L2",
+  "isSectionLinked": true,
+  "reservedSeatSummary": null,
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": true,
+     "tuesday": false,
+     "wednesday": false,
+     "thursday": false,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "1330",
+     "endTime": "1620",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "29762",
+  "subject": "BIOL",
+  "courseNumber": "120",
+  "sequenceNumber": "L03",
+  "courseTitle": "The Nature of Life",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Laboratory",
+  "creditHours": 0,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 60,
+  "enrollment": 60,
+  "seatsAvailable": 0,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "L2",
+  "isSectionLinked": true,
+  "reservedSeatSummary": null,
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": false,
+     "tuesday": true,
+     "wednesday": false,
+     "thursday": false,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "0830",
+     "endTime": "1120",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "25713",
+  "subject": "BIOL",
+  "courseNumber": "120",
+  "sequenceNumber": "L04",
+  "courseTitle": "The Nature of Life",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Laboratory",
+  "creditHours": 0,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 122,
+  "enrollment": 122,
+  "seatsAvailable": 0,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "L2",
+  "isSectionLinked": true,
+  "reservedSeatSummary": null,
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": false,
+     "tuesday": true,
+     "wednesday": false,
+     "thursday": false,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "1330",
+     "endTime": "1620",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "22175",
+  "subject": "BIOL",
+  "courseNumber": "120",
+  "sequenceNumber": "L05",
+  "courseTitle": "The Nature of Life",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Laboratory",
+  "creditHours": 0,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 61,
+  "enrollment": 61,
+  "seatsAvailable": 0,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "L1",
+  "isSectionLinked": true,
+  "reservedSeatSummary": null,
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": false,
+     "tuesday": true,
+     "wednesday": false,
+     "thursday": false,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "1730",
+     "endTime": "2020",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "22173",
+  "subject": "BIOL",
+  "courseNumber": "120",
+  "sequenceNumber": "L06",
+  "courseTitle": "The Nature of Life",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Laboratory",
+  "creditHours": 0,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 122,
+  "enrollment": 122,
+  "seatsAvailable": 0,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "L1",
+  "isSectionLinked": true,
+  "reservedSeatSummary": null,
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": false,
+     "tuesday": false,
+     "wednesday": true,
+     "thursday": false,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "1330",
+     "endTime": "1620",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "22174",
+  "subject": "BIOL",
+  "courseNumber": "120",
+  "sequenceNumber": "L07",
+  "courseTitle": "The Nature of Life",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Laboratory",
+  "creditHours": 0,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 122,
+  "enrollment": 122,
+  "seatsAvailable": 0,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "L2",
+  "isSectionLinked": true,
+  "reservedSeatSummary": null,
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": false,
+     "tuesday": false,
+     "wednesday": true,
+     "thursday": false,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "1730",
+     "endTime": "2020",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "23774",
+  "subject": "BIOL",
+  "courseNumber": "120",
+  "sequenceNumber": "L08",
+  "courseTitle": "The Nature of Life",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Laboratory",
+  "creditHours": 0,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 60,
+  "enrollment": 60,
+  "seatsAvailable": 0,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "L2",
+  "isSectionLinked": true,
+  "reservedSeatSummary": null,
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": false,
+     "tuesday": false,
+     "wednesday": false,
+     "thursday": true,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "0830",
+     "endTime": "1120",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "22556",
+  "subject": "BIOL",
+  "courseNumber": "120",
+  "sequenceNumber": "L09",
+  "courseTitle": "The Nature of Life",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Laboratory",
+  "creditHours": 0,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 122,
+  "enrollment": 122,
+  "seatsAvailable": 0,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "L1",
+  "isSectionLinked": true,
+  "reservedSeatSummary": null,
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": false,
+     "tuesday": false,
+     "wednesday": false,
+     "thursday": true,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "1330",
+     "endTime": "1620",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "30126",
+  "subject": "BIOL",
+  "courseNumber": "120",
+  "sequenceNumber": "L10",
+  "courseTitle": "The Nature of Life",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Laboratory",
+  "creditHours": 0,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 60,
+  "enrollment": 60,
+  "seatsAvailable": 0,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "L1",
+  "isSectionLinked": true,
+  "reservedSeatSummary": null,
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": false,
+     "tuesday": false,
+     "wednesday": false,
+     "thursday": true,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "1730",
+     "endTime": "2020",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "22558",
+  "subject": "BIOL",
+  "courseNumber": "120",
+  "sequenceNumber": "L11",
+  "courseTitle": "The Nature of Life",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Laboratory",
+  "creditHours": 0,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 60,
+  "enrollment": 60,
+  "seatsAvailable": 0,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "L1",
+  "isSectionLinked": true,
+  "reservedSeatSummary": {
+   "maximumEnrollmentReserved": 27,
+   "seatsAvailableUnreserved": 0
+  },
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": false,
+     "tuesday": false,
+     "wednesday": false,
+     "thursday": false,
+     "friday": true,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "1330",
+     "endTime": "1620",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "33204",
+  "subject": "BIOL",
+  "courseNumber": "120",
+  "sequenceNumber": "L23",
+  "courseTitle": "The Nature of Life",
+  "campusDescription": " USask - Main Saskatoon Campus",
+  "scheduleTypeDescription": "Laboratory",
+  "creditHours": 0,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 60,
+  "enrollment": 60,
+  "seatsAvailable": 0,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "L3",
+  "isSectionLinked": true,
+  "reservedSeatSummary": null,
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": false,
+     "tuesday": true,
+     "wednesday": false,
+     "thursday": false,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "1730",
+     "endTime": "2020",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "32750",
+  "subject": "BIOL",
+  "courseNumber": "120",
+  "sequenceNumber": "L29",
+  "courseTitle": "The Nature of Life",
+  "campusDescription": " USask - Prince Albert Campus",
+  "scheduleTypeDescription": "Laboratory",
+  "creditHours": 0,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 20,
+  "enrollment": 15,
+  "seatsAvailable": 5,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "L6",
+  "isSectionLinked": true,
+  "reservedSeatSummary": null,
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": true,
+     "tuesday": false,
+     "wednesday": false,
+     "thursday": false,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "0900",
+     "endTime": "1150",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "32751",
+  "subject": "BIOL",
+  "courseNumber": "120",
+  "sequenceNumber": "L30",
+  "courseTitle": "The Nature of Life",
+  "campusDescription": " USask - Prince Albert Campus",
+  "scheduleTypeDescription": "Laboratory",
+  "creditHours": 0,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 20,
+  "enrollment": 13,
+  "seatsAvailable": 7,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "L6",
+  "isSectionLinked": true,
+  "reservedSeatSummary": null,
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": true,
+     "tuesday": false,
+     "wednesday": false,
+     "thursday": false,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "1300",
+     "endTime": "1550",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ },
+ {
+  "term": "202701",
+  "termDesc": "2027 Winter Term",
+  "courseReferenceNumber": "24728",
+  "subject": "BIOL",
+  "courseNumber": "120",
+  "sequenceNumber": "LL1",
+  "courseTitle": "The Nature of Life",
+  "campusDescription": "Northlands College",
+  "scheduleTypeDescription": "Laboratory",
+  "creditHours": 0,
+  "creditHourHigh": 3,
+  "creditHourLow": 0,
+  "maximumEnrollment": 20,
+  "enrollment": 5,
+  "seatsAvailable": 15,
+  "waitCapacity": 0,
+  "waitCount": 0,
+  "waitAvailable": 0,
+  "linkIdentifier": "L9",
+  "isSectionLinked": true,
+  "reservedSeatSummary": null,
+  "meetingsFaculty": [
+   {
+    "meetingTime": {
+     "monday": false,
+     "tuesday": false,
+     "wednesday": false,
+     "thursday": true,
+     "friday": false,
+     "saturday": false,
+     "sunday": false,
+     "beginTime": "1800",
+     "endTime": "2050",
+     "buildingDescription": null,
+     "room": null
+    }
+   }
+  ]
+ }
+]
