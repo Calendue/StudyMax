@@ -12,7 +12,7 @@
 //
 // Run: node --experimental-strip-types --experimental-loader ./scripts/_resolve-ts-loader.mjs scripts/check-plan-validator.ts [--verbose]
 import { matrixCases, buildCase, SPECS, type MatrixCase } from './_plan-matrix.ts'
-import { validatePlan, VRULES, parseLabel, type VRule, type Violation } from './_plan-validate.ts'
+import { validatePlan, VRULES, parseLabel, ordOf, type VRule, type Violation } from './_plan-validate.ts'
 import { runsIn } from './_degree-rules.ts'
 import type { CourseOverride } from '../src/lib/overrides.ts'
 import type { PlannedTerm, TermStart } from '../src/lib/plan.ts'
@@ -58,6 +58,45 @@ function record(kind: Kind, key: string, vs: Violation[], overrides: CourseOverr
   }
 }
 const winterOf = (plan: PlannedTerm[], code: string) => plan.find((t) => parseLabel(t.label)?.season === 'Winter' && t.courses.some((x) => x.code === code))?.label
+
+// Self-test: the validator must catch hand-broken plans (so a clean run isn't vacuous).
+{
+  const c = matrixCases().find((x) => x.key === 'first/algorithmics/bsc-4/L5/S0')!
+  const b = buildCase(c)
+  const input = (plan: PlannedTerm[]) => ({ plan, completed: b.completed, inProgress: b.inProgress, booked: b.booked, load: 5, summer: 0, variant: c.variant, honours: false, targets: SPECS.filter((s) => b.targets.includes(s.id)), start: c.stage.start })
+  const clone = () => b.plan.map((t) => ({ label: t.label, courses: t.courses.map((x) => ({ ...x })) }))
+  const termOf = (p: PlannedTerm[], code: string) => p.find((t) => t.courses.some((x) => x.code === code))!
+  const move = (p: PlannedTerm[], code: string, to: string) => {
+    const from = termOf(p, code)
+    const x = from.courses.splice(from.courses.findIndex((y) => y.code === code), 1)[0]
+    ;(p.find((t) => t.label === to) ?? (p.push({ label: to, courses: [] }), p.at(-1)!)).courses.push(x)
+    return p
+  }
+  const fall = (p: PlannedTerm[]) => p.find((t) => t.label.startsWith('Fall'))!.label
+  const mutants: [string, VRule, (p: PlannedTerm[]) => PlannedTerm[]][] = [
+    ['overload a term', 'V1', (p) => { p[0].courses.push(...p[1].courses.splice(0)); return p }],
+    ['Spring/Summer term at load 0', 'V1', (p) => move(p, p.at(-1)!.courses[0].code, 'Spring/Summer 2030')],
+    ['STAT242 in a Fall', 'V2', (p) => move(p, 'STAT242', fall(p))],
+    ['CMPT145 with CMPT141', 'V3', (p) => move(p, 'CMPT145', termOf(p, 'CMPT141').label)],
+    ['CMPT370 in the first term', 'V4', (p) => move(p, 'CMPT370', p[0].label)],
+    ['CMPT400 in a Four-year plan', 'V5', (p) => { p.at(-1)!.courses.push({ ...p.at(-1)!.courses[0], code: 'CMPT400' }); return p }],
+    ['4 senior CMPT in one term', 'V6', (p) => { const last = p.at(-1)!.label; for (const code of p.flatMap((t) => t.courses.map((x) => x.code)).filter((x) => /^CMPT[34]/.test(x)).slice(0, 4)) move(p, code, last); return p }],
+    ['a course twice', 'V7', (p) => { p.at(-1)!.courses.push({ ...p[0].courses[0] }); return p }],
+    ['a required course dropped', 'V10', (p) => { const t = termOf(p, 'CMPT463'); t.courses = t.courses.filter((x) => x.code !== 'CMPT463'); return p }],
+  ]
+  const missed: string[] = []
+  for (const [name, rule, f] of mutants) if (!validatePlan(input(f(clone()))).some((v) => v.rule === rule)) missed.push(`${name} (${rule})`)
+  if (validatePlan(input(clone())).some((v) => v.rule !== 'V11')) missed.push('the unbroken plan has violations')
+  const base = validatePlan({ ...input(clone()), overrides: [{ code: 'CMPT280', term: termOf(clone(), 'CMPT280').label, kind: 'not-offered' }] })
+  if (!base.some((v) => v.rule === 'V9')) missed.push('a blocked term kept (V9)')
+  const away = Math.floor(ordOf(clone()[2].label) / 10)
+  if (!validatePlan({ ...input(clone()), away: clone()[2].label.startsWith('Fall') ? away : away - 1 }).some((v) => v.rule === 'V12')) missed.push('the internship year used (V12)')
+  if (missed.length > 0) {
+    console.error(`check-plan-validator: the validator missed: ${missed.join('; ')}`)
+    process.exit(1)
+  }
+  console.log(`self-test: the validator catches all ${mutants.length + 2} hand-broken plans`)
+}
 
 const t0 = performance.now()
 for (const c of matrixCases()) {
