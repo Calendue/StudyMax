@@ -1,5 +1,6 @@
 import { haptic } from '../platform.ts'
 import type { PlanView } from './planView.ts'
+import { Icon } from '../ui/Icon.tsx'
 
 const VIEWS: { id: PlanView; label: string }[] = [
   { id: 'tree', label: 'Tree' },
@@ -7,7 +8,7 @@ const VIEWS: { id: PlanView; label: string }[] = [
 ]
 
 /** Tree or Ayo's roadmap: two ways to read the same plan. */
-export function PlanViewSwitch({ view, onChange, sticky = false }: { view: PlanView; onChange: (view: PlanView) => void; sticky?: boolean }) {
+export function PlanViewSwitch({ view, onChange, sticky = false, onSettings }: { view: PlanView; onChange: (view: PlanView) => void; sticky?: boolean; onSettings?: () => void }) {
   return (
     <div className={`plan-switch${sticky ? ' plan-switch--sticky' : ''}`}>
       <div className="segmented segmented--labels" role="radiogroup" aria-label="Show the plan as">
@@ -27,6 +28,7 @@ export function PlanViewSwitch({ view, onChange, sticky = false }: { view: PlanV
           </button>
         ))}
       </div>
+      {onSettings && <button type="button" className="icon-btn" aria-label="Plan settings" onClick={onSettings}><Icon name="settings" /></button>}
     </div>
   )
 }

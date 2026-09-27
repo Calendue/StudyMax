@@ -4,6 +4,7 @@ import { Haptics, ImpactStyle } from '@capacitor/haptics'
 import { Keyboard } from '@capacitor/keyboard'
 import { SplashScreen } from '@capacitor/splash-screen'
 import { StatusBar, Style } from '@capacitor/status-bar'
+import { dismissBackLayer } from './lib/backLayers.ts'
 
 export const isNative = Capacitor.isNativePlatform()
 
@@ -64,6 +65,7 @@ export function initNative() {
     }
   })
   void Keyboard.addListener('keyboardWillHide', () => document.documentElement.classList.remove('keyboard-open'))
+  void Keyboard.addListener('keyboardDidHide', () => document.documentElement.classList.remove('keyboard-open'))
 }
 
 /** Called once React has painted: the native splash hands over to the in-app intro. */
@@ -89,9 +91,22 @@ export function onAppUrlOpen(handler: (url: string) => void): () => void {
  * false means there was nowhere left to go, and the app exits.
  */
 export function onBackButton(handler: () => boolean): () => void {
-  if (!isNative) return () => {}
-  const listener = NativeApp.addListener('backButton', () => {
-    if (!handler()) void NativeApp.exitApp()
-  })
-  return () => void listener.then((l) => l.remove())
+  const onEscape = (event: KeyboardEvent) => {
+    if (event.key === 'Escape' && dismissBackLayer()) {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+    }
+  }
+  window.addEventListener('keydown', onEscape, true)
+  const listener = isNative ? NativeApp.addListener('backButton', () => {
+    if (document.documentElement.classList.contains('keyboard-open')) {
+      void Keyboard.hide().catch(() => {})
+      return
+    }
+    if (!dismissBackLayer() && !handler()) void NativeApp.exitApp()
+  }) : null
+  return () => {
+    window.removeEventListener('keydown', onEscape, true)
+    if (listener) void listener.then((l) => l.remove())
+  }
 }

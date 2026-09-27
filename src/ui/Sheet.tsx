@@ -1,8 +1,9 @@
-import type { ReactNode } from 'react'
+import { useId, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion, useDragControls, useReducedMotion } from 'motion/react'
 import { Icon } from './Icon.tsx'
 import { DUR, INSTANT, SPRING } from './motion.ts'
+import { useBackLayer } from './useBackLayer.ts'
 
 /**
  * A bottom sheet. The top carries a drag handle in the middle and a close cross on the LEFT: the
@@ -27,6 +28,8 @@ export function Sheet({
 }) {
   const drag = useDragControls()
   const reduce = useReducedMotion()
+  const titleId = useId()
+  useBackLayer(open, onClose, 100)
   return createPortal(
     <AnimatePresence>
       {open && (
@@ -46,6 +49,7 @@ export function Sheet({
           className={`sheet${tall ? ' sheet--tall' : ''}`}
           role="dialog"
           aria-modal="true"
+          aria-labelledby={titleId}
           initial={reduce ? false : { y: '100%' }}
           animate={{ y: 0, transition: reduce ? INSTANT : { duration: DUR.med, ease: SPRING } }}
           exit={{ y: '100%', transition: reduce ? INSTANT : { duration: 0.2, ease: 'easeIn' } }}
@@ -64,7 +68,7 @@ export function Sheet({
             </button>
             <span className="sheet__handle" aria-hidden />
           </div>
-          <h2 className="sheet__title">{title}</h2>
+          <h2 id={titleId} className="sheet__title">{title}</h2>
           <div className="sheet__body">{children}</div>
           {footer && <div className="sheet__footer">{footer}</div>}
         </motion.div>

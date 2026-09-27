@@ -50,7 +50,7 @@ export function Wood({ g, grown, reduce }: { g: ClimbGeometry; grown: number; re
       </defs>
 
       <g className={`climb__roots${grown >= 0 ? ' is-grown' : ''}`} style={{ transformOrigin: `${g.base.x}px ${g.base.y}px` }}>
-        <g filter="url(#climb-root-glow)" className="climb__root-glow">
+        <g filter={g.compact ? undefined : 'url(#climb-root-glow)'} className="climb__root-glow">
           {g.roots.filter((root) => root.glow).map((root, i) => (
             <path key={i} d={root.d} />
           ))}
@@ -89,8 +89,9 @@ export function Links({ g, grown, live }: { g: ClimbGeometry; grown: number; liv
             <rect key={i} x={c.x} y={c.y} width={c.w} height={c.h} rx={16} fill="black" />
           ))}
         </mask>
+        {/* Blurred glows are desktop only: on a phone they repaint a page-tall layer every frame. */}
         {g.links.map((l, i) =>
-          live.has(l.beat) || live.has(l.from) ? (
+          !g.compact && (live.has(l.beat) || live.has(l.from)) ? (
             <filter key={l.key} id={`climb-glow-${i}`} filterUnits="userSpaceOnUse" x={l.box.x} y={l.box.y} width={l.box.w} height={l.box.h}>
               <feGaussianBlur stdDeviation="3.5" result="blur" />
               <feMerge>
@@ -104,10 +105,14 @@ export function Links({ g, grown, live }: { g: ClimbGeometry; grown: number; liv
       </defs>
       {live.has(0) && grown >= 0 && (
         <g className="climb-link climb-link--sap is-live" style={{ '--len': g.sap.len } as CSSProperties}>
-          <filter id="climb-sap-glow" filterUnits="userSpaceOnUse" x={g.sap.box.x} y={g.sap.box.y} width={g.sap.box.w} height={g.sap.box.h}>
-            <feGaussianBlur stdDeviation="7" />
-          </filter>
-          <path d={g.sap.d} className="climb-link__signal" filter="url(#climb-sap-glow)" />
+          {!g.compact && (
+            <>
+              <filter id="climb-sap-glow" filterUnits="userSpaceOnUse" x={g.sap.box.x} y={g.sap.box.y} width={g.sap.box.w} height={g.sap.box.h}>
+                <feGaussianBlur stdDeviation="7" />
+              </filter>
+              <path d={g.sap.d} className="climb-link__signal" filter="url(#climb-sap-glow)" />
+            </>
+          )}
           <path d={g.sap.d} className="climb-link__signal climb-link__signal--core" />
         </g>
       )}
@@ -123,7 +128,7 @@ export function Links({ g, grown, live }: { g: ClimbGeometry; grown: number; liv
               <path d={l.d} className="climb-link__line" pathLength={1} />
               {on && (
                 <>
-                  <path d={l.d} className="climb-link__signal" filter={`url(#climb-glow-${i})`} />
+                  {!g.compact && <path d={l.d} className="climb-link__signal" filter={`url(#climb-glow-${i})`} />}
                   <path d={l.d} className="climb-link__signal climb-link__signal--core" />
                 </>
               )}

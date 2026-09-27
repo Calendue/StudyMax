@@ -222,7 +222,7 @@ is gated by `agentSession()`. A plugin upgrade needs the patch regenerated (`npx
 - `src/screens/register/Bookmarklet.tsx`: the web's optional bookmarklet.
 - `src/screens/register/useRegistration.ts`: the request and the loaded plan, shared with the Plan.
 - `src/screens/register/sectionText.ts`: how a section, its times and a reading's age read.
-- `src/screens/register.css`: the Register screen and the practice run's scoped palette.
+- `src/screens/register.css`: the Register screen and the practice run's shared light/dark theme tokens.
 - `src/screens/PlanTab.tsx` (`RegisterEntry`) and `src/pages/PlanPage.tsx`: the entry button.
 - `api/_banner.ts`: `normalizeSection` now passes campus and link identifier.
 - `patches/@capgo+capacitor-inappbrowser+8.20.0.patch`: keeps the plugin's scripts to Banner.
@@ -292,3 +292,7 @@ assumed:
   opened someone else's finished run. It's now scoped to student, term and CRNs.
 - **Max pressing Submit.** In the old practice run Max pressed the simulated Submit. The student
   does now, as on PAWS.
+
+### Mobile verification, 27 September
+
+The practice screen uses native safe areas, labelled section rows at phone width and a sticky Max / Submit dock. Android Back closes confirmation sheets first and returns from practice to the registration plan. Both native builds reached USask CAS during the audit without entering credentials. The authenticated PAWS fill remains an owner-run test; Max’s host and Submit guards are unchanged.

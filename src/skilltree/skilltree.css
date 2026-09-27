@@ -1467,3 +1467,12 @@
     animation: none;
   }
 }
+
+@media (max-width: 767px) {
+  .tree-peek__close, .tree-peek__more { min-width: var(--touch-target); min-height: var(--touch-target); }
+  .tree-peek__title { white-space: normal; overflow: visible; }
+  .tree-peek__codes { flex-wrap: wrap; overflow: visible; }
+  .tree-peek__code-chip { min-height: var(--touch-target); }
+  .tree__key-toggle, .tree__jump, .tree-detail__chips button { min-height: var(--touch-target); }
+  .plan-switch > .icon-btn { margin-left: auto; }
+}

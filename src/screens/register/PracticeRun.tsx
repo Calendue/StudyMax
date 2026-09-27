@@ -5,7 +5,7 @@ import { firstName } from '../../auth.ts'
 import { haptic } from '../../platform.ts'
 import { clear, load, save, scriptFromPlan, storageKey, typeWord, type RegRow, type RegScope, type RegState } from '../../lib/mockRegistration.ts'
 import type { RegPlan } from '../../lib/registration.ts'
-import { Mark } from '../../ui/Brand.tsx'
+import { MaxOwl } from '../../ui/MaxOwl.tsx'
 import { Icon } from '../../ui/Icon.tsx'
 import { timeText } from './sectionText.ts'
 
@@ -306,13 +306,13 @@ function Run({ plan, scope, onBack }: { plan: RegPlan; scope: RegScope; onBack: 
                     const added = addedRows.has(i)
                     return (
                       <tr key={r.crn}>
-                        <td>{r.crn}</td>
-                        <td>{r.section}</td>
-                        <td>{typeWord(r.type)}</td>
-                        <td>
+                        <td data-label="CRN">{r.crn}</td>
+                        <td data-label="Section">{r.section}</td>
+                        <td data-label="Type">{typeWord(r.type)}</td>
+                        <td data-label="Days">
                           {r.meetings.length === 0 ? 'TBA' : r.meetings.map((mt, k) => <div key={k}>{mt.days.join(' ')}</div>)}
                         </td>
-                        <td>
+                        <td data-label="Time">
                           {r.meetings.length === 0
                             ? 'TBA'
                             : r.meetings.map((mt, k) => (
@@ -321,7 +321,7 @@ function Run({ plan, scope, onBack }: { plan: RegPlan; scope: RegScope; onBack: 
                                 </div>
                               ))}
                         </td>
-                        <td>{full ? <span className="reg-full">FULL</span> : r.seats}</td>
+                        <td data-label="Seats">{full ? <span className="reg-full">FULL</span> : r.seats}</td>
                         <td>
                           <button
                             ref={(el) => void addRefs.current.set(i, el)}
@@ -442,27 +442,10 @@ function Run({ plan, scope, onBack }: { plan: RegPlan; scope: RegScope; onBack: 
         </section>
       </div>
 
-      <footer className="reg-bottom">
-        <span className="reg-panels">Panels ▾</span>
-        <div className="reg-bottom__right">
-          <label className="reg-check">
-            <input type="checkbox" disabled />
-            Switch class sections (prior to registration deadline)
-          </label>
-          <button
-            type="button"
-            className={`reg-btn reg-btn--submit${canSubmit ? ' reg-btn--ready' : ''}`}
-            disabled={!canSubmit}
-            onClick={submit}
-          >
-            Submit
-          </button>
-        </div>
-      </footer>
-
+      <div className="reg-dock">
       <div className="reg-bubble" aria-live="polite">
         <span className="reg-bubble__avatar" aria-hidden>
-          <Mark size={20} />
+          <MaxOwl size={40} pose={done || ready ? 'celebrating' : 'thinking'} />
         </span>
         <div className="reg-bubble__body">
           {!done ? (
@@ -494,6 +477,25 @@ function Run({ plan, scope, onBack }: { plan: RegPlan; scope: RegScope; onBack: 
             </>
           )}
         </div>
+      </div>
+      <footer className="reg-bottom">
+        <span className="reg-panels">Panels ▾</span>
+        <div className="reg-bottom__right">
+          <label className="reg-check">
+            <input type="checkbox" disabled />
+            Switch class sections (prior to registration deadline)
+          </label>
+          <button
+            type="button"
+            className={`reg-btn reg-btn--submit${canSubmit ? ' reg-btn--ready' : ''}`}
+            disabled={!canSubmit}
+            onClick={submit}
+          >
+            Submit
+          </button>
+        </div>
+      </footer>
+
       </div>
     </div>
   )

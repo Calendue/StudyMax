@@ -2058,3 +2058,22 @@
 .courses-page__uptodate svg {
   color: var(--accent);
 }
+
+/* Phone controls keep their meaning and a full thumb target, even at 390px. */
+@media (max-width: 767px) {
+  .segmented__option { min-width: var(--touch-target); min-height: var(--touch-target); }
+  .per-term { flex-wrap: wrap; padding: var(--s3); }
+  .per-term .segmented { margin-left: auto; }
+  .per-term select { min-height: var(--touch-target); }
+  .per-term:has(#per-term-label) .segmented { flex: 1 0 100%; }
+  .per-term:has(#per-term-label) .segmented__option { flex: 1; }
+  .welcome__home, button.inline-link, button.chip { min-height: var(--touch-target); }
+  .phone-roadmap { display: grid; gap: var(--s6); }
+  .phone-roadmap__term { border-left: 2px solid var(--track); padding-left: var(--s3); }
+  .phone-roadmap__courses { display: grid; gap: var(--s2); }
+  .phone-roadmap .roadmap__node { min-height: 76px; height: auto; width: 100%; padding: var(--s3) var(--s4); }
+  .phone-roadmap .roadmap__node-code, .phone-roadmap .roadmap__node-title { overflow: visible; white-space: normal; text-overflow: clip; display: block; -webkit-line-clamp: unset; }
+  .phone-roadmap .roadmap__node-head { flex-wrap: wrap; }
+  .phone-roadmap .roadmap__cell .roadmap__node { padding-right: var(--s7); }
+  .phone-roadmap .roadmap__remove { width: var(--touch-target); height: var(--touch-target); }
+}

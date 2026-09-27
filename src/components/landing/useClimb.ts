@@ -135,8 +135,18 @@ export function useClimb(stageRef: RefObject<HTMLDivElement | null>, reduce: boo
     scrollerRef.current = scroller
     const restoration = history.scrollRestoration
     history.scrollRestoration = 'manual'
+    // Only moves the view when the page itself changed height, or while it's still on the roots. A
+    // phone's toolbar sliding away resizes the scroller mid-scroll, and writing scrollTop then would
+    // kill the fling's momentum: the page would feel stiff.
+    let lastHeight = -1
     const settle = () => {
-      maxScroll.current = scroller.scrollHeight - scroller.clientHeight
+      const height = scroller.scrollHeight
+      maxScroll.current = height - scroller.clientHeight
+      if (height === lastHeight && fromBottom.current > 0) {
+        fromBottom.current = Math.max(0, maxScroll.current - scroller.scrollTop)
+        return
+      }
+      lastHeight = height
       scroller.scrollTop = maxScroll.current - fromBottom.current
     }
     fromBottom.current = 0
@@ -186,7 +196,8 @@ export function useClimb(stageRef: RefObject<HTMLDivElement | null>, reduce: boo
           const seen = entries.filter((e) => e.isIntersecting).map((e) => Number((e.target as HTMLElement).closest<HTMLElement>('[data-beat]')!.dataset.beat))
           if (seen.length > 0) setGrown((g) => Math.max(g, ...seen))
         },
-        { root, rootMargin: '-14% 0px -14% 0px' },
+        // On a phone a beat grows just before it scrolls in, so its cards are there when you arrive.
+        { root, rootMargin: measured.geometry.compact ? '12% 0px 12% 0px' : '-14% 0px -14% 0px' },
       )
       anchors.forEach((a) => grow.observe(a))
       const onScreen = new IntersectionObserver(

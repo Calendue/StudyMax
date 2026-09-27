@@ -95,6 +95,23 @@
      bottom action bar, the tab bar, a sheet. Never on a card. */
   --shadow-float: 0 8px 24px rgb(18 38 43 / 0.08), 0 1px 4px rgb(18 38 43 / 0.06);
 
+  /* Simulated registration uses the same accessible light/dark surfaces as the app. */
+  --reg-brand: var(--accent-fill);
+  --reg-brand-dark: var(--ink);
+  --reg-link: var(--accent);
+  --reg-tab: var(--accent-fill);
+  --reg-bg: var(--bg);
+  --reg-ink: var(--ink);
+  --reg-ink-2: var(--ink-2);
+  --reg-border: var(--divider);
+  --reg-c0: var(--accent-fill);
+  --reg-c1: var(--tree-cred-1);
+  --reg-c2: var(--tree-cred-2);
+  --reg-c3: var(--tree-cred-3);
+  --reg-c4: var(--accent-fill);
+  --reg-booked: var(--surface-2);
+  --touch-target: 44px;
+
   /* ── type: two voices ──
      BRAND (Plus Jakarta Sans): the wordmark, screen titles, section labels.
      TEXT (the platform face: SF Pro on iOS, Roboto on Android): body, inputs, buttons.
