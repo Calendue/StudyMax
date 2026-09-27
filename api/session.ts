@@ -9,7 +9,8 @@
 import { Prisma } from '@prisma/client'
 import { cleanCloudSession, internshipFrom, USASK_INSTITUTION, type CloudSession } from '../src/lib/cloudSession.js'
 import { regenerate, validate } from '../src/lib/max/planningAdapter.js'
-import { upcomingTerm } from '../src/lib/plan.js'
+import { nextFall, upcomingTerm } from '../src/lib/plan.js'
+import { seasonNow, termLabel } from '../src/lib/currentTerms.js'
 import { db, hasDatabase } from './_db.js'
 import { verifiedUser, type VerifiedUser } from './_firebaseAuth.js'
 import { allow } from './_rateLimit.js'
@@ -148,13 +149,21 @@ async function save(user: VerifiedUser, session: CloudSession) {
   let planSnapshot: PlanSnapshot | null = null
   if (profile) {
     try {
-      const start = upcomingTerm(new Date())
-      const { terms } = regenerate({
+      // The plan the app draws for this student (App.tsx): the program's own degree (the degree
+      // variant is device-only, so the Four-year for CS), their loads, and what they're taking and
+      // registered for booked in this term, as the app books a course with no term picked.
+      const now = new Date()
+      const taking = [...new Set([...session.inProgress, ...session.registered])].filter((c) => !session.completed.includes(c))
+      const start = session.completed.length === 0 && taking.length === 0 ? nextFall(now) : upcomingTerm(now)
+      const { terms, inputs } = regenerate({
         completed: new Set(session.completed),
-        inProgress: new Set([...session.inProgress, ...session.registered]),
+        inProgress: new Set(taking),
         targetProgramId: session.programId,
         targetSpecializationIds: session.concentrationIds,
-        coursesPerTerm: 4,
+        coursesPerTerm: session.coursesPerTerm,
+        springSummer: session.springSummer,
+        summerPerTerm: session.summerPerTerm,
+        booked: taking.length > 0 ? { [termLabel(seasonNow(now), now)]: taking } : {},
         start,
         // The internship year the app resolved; an older app build sends none, so the stored one.
         away:
@@ -166,11 +175,12 @@ async function save(user: VerifiedUser, session: CloudSession) {
         targetProgramId: session.programId,
         minorProgramId: session.minorId,
         targetSpecializationIds: session.concentrationIds,
-        coursesPerTerm: 4,
+        coursesPerTerm: inputs.load,
         startSeason: start.season,
         startYear: start.year,
         terms,
         validation: validate(terms),
+        inputs,
       }
     } catch {
       planSnapshot = null

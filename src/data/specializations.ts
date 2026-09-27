@@ -29,6 +29,11 @@ export interface Specialization {
    * longer lists). Such a specialization is never the default or "closest" target.
    */
   unavailable?: string
+  /**
+   * A required course that rarely runs: few or no Banner sections in the last three years (checked
+   * by scripts/check-offerings.ts). The specialization stays plannable; this is what to warn about.
+   */
+  atRisk?: string
 }
 
 const single = (course: string): RequirementGroup => ({ courses: [course], need: 1 })
@@ -64,6 +69,7 @@ export const specializations: Specialization[] = [
   {
     id: 'programming-languages',
     name: 'Programming Languages',
+    atRisk: 'CMPT 440 has had no section since at least Fall 2024, and CMPT 442 ran only in Fall 2025',
     requirements: [
       single('CMPT145'),
       single('CMPT214'),
@@ -102,6 +108,7 @@ export const specializations: Specialization[] = [
   {
     id: 'computer-systems',
     name: 'Computer Systems',
+    atRisk: 'CMPT 432 ran only in Winter 2025, and CMPT 433 only in Winter 2026',
     requirements: [
       single('CMPT145'),
       single('CMPT214'),
@@ -115,6 +122,7 @@ export const specializations: Specialization[] = [
   {
     id: 'cybersecurity',
     name: 'Cybersecurity',
+    atRisk: 'CMPT 438 ran in Winter 2025 and Fall 2025 and has no section in 2026-27',
     requirements: [
       single('CMPT145'),
       single('CMPT214'),
