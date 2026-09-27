@@ -6,12 +6,14 @@ import { offerings as scrapedOfferings } from '../data/offerings.js'
 import { computeCourseOverlap, computeMatches, type SpecializationMatch } from './match.js'
 import { cuOf, degreeTarget, FREE_ELECTIVE, levelOf, planDegree, SENIOR_ELECTIVE, type DegreeSlot } from './planDegree.js'
 import type { CourseOverride } from './overrides.js'
-import type { Catalog, Diagnostic, BindingKind, CoreResult } from './planner/types.js'
+import type { Catalog, Diagnostic, BindingKind } from './planner/types.js'
 import { clampLoad, clampSummer } from './planner/loads.js'
 import { defaultCatalog } from './catalog.js'
 import { buildModel, spaced, type ModelCourse } from './planner/model.js'
 import { coreLowerBound, scheduleCore } from './planner/schedule.js'
 import { forcedRanker, jointSelect, type Attempt, type Choice } from './planner/select.js'
+import { bindingText } from './planner/explain.js'
+export { bindingText }
 import { applyOverrides } from './overrides.js'
 import { auditDegree } from './degree.js'
 export { FW_LOADS, SUMMER_LOADS, MAX_FW_LOAD, MAX_SUMMER_LOAD, clampLoad, clampSummer, summerLoadOf } from './planner/loads.js'
@@ -552,6 +554,14 @@ function runPlan(
     const result = scheduleCore(force.size > 0 ? { ...built.core, nodeBudget: Math.min(built.core.nodeBudget ?? 3000, 300) } : built.core)
     const byCode = new Map(courses.map((c) => [c.code, c]))
     const diagnostics = [...built.diagnostics]
+    // A requirement with no course left in the 2026-27 catalogue (BINF 451) can't be planned: said, never dropped silently.
+    for (const t of targets) {
+      for (const slot of t.unsatisfied) {
+        if (slot.label || slot.options.some((o) => courseInfo[o] !== undefined)) continue
+        const first = [...slot.options].sort()[0]
+        if (first) diagnostics.push({ level: 'error', code: 'NO_OFFERING', course: first, message: `${t.spec.name} needs ${slot.options.map(spaced).join(' or ')}, which the 2026-27 catalogue no longer lists.` })
+      }
+    }
     const placed = new Map<number, PlannedCourse[]>()
     if (result.at) {
       built.core.items.forEach((item, i) => {
@@ -614,24 +624,6 @@ function runPlan(
   return { ...best.value, optimality: best.value.optimality === 'proven' && proven ? 'proven' : 'best-found' }
 }
 
-/** "Graduation set by MATH 116 → STAT 241 → …", "set by 4 Winter-only courses", "set by your load of 3 a term". */
-export function bindingText(b: CoreResult['binding'], load: number, count: number): string {
-  const name = (id: string) => (isElective(id) ? electiveLabel(id) : spaced(id))
-  switch (b.kind) {
-    case 'chain':
-      return b.chain && b.chain.length > 1 ? `Graduation set by ${b.chain.map(name).join(' → ')}` : `Graduation set by ${b.chain?.[0] ? name(b.chain[0]) : 'a prerequisite chain'}`
-    case 'gate':
-      return `Graduation set by the credit you need before ${b.chain?.[0] ? name(b.chain[0]) : 'senior courses'}`
-    case 'capacity':
-      return `Graduation set by your load of ${load} a term (${count} courses left)`
-    case 'season':
-      return `Graduation set by ${b.detail}`
-    case 'senior':
-      return `Graduation set by ${b.detail} at three a term`
-    default:
-      return ''
-  }
-}
 
 /**
  * The plan from the student's own state, starting in the term they chose.
