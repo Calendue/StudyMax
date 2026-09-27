@@ -1,0 +1,130 @@
+/* "Something changed?" and "What changed": override actions and the replan summary (WhatChanged.tsx).
+   Tokens only; the accent stays on the one primary action. */
+
+.changes {
+  display: grid;
+  gap: var(--s2);
+  margin-top: var(--s3);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--divider);
+}
+
+.changes__title {
+  font: 600 var(--fs-section) / 1.3 var(--font-brand);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+.changes__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+.changes__action {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--fs-small);
+}
+
+.changes__said {
+  display: grid;
+  gap: var(--s1);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.changes__said li {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.changes__warnings {
+  display: grid;
+  gap: var(--s1);
+  list-style: none;
+  padding: 0;
+  margin: var(--s2) 0 0;
+}
+
+.changes__warning {
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r1);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: var(--fs-caption);
+  line-height: 1.4;
+}
+
+.changes__warning--error {
+  background: var(--accent-tint);
+  color: var(--accent);
+}
+
+.changes__summary {
+  display: grid;
+  gap: var(--s3);
+}
+
+.changes__lines {
+  display: grid;
+  gap: var(--s2);
+  padding-left: var(--s4);
+  margin: 0;
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+}
+
+.changes__lines li::marker {
+  color: var(--accent);
+}
+
+.changes__notes {
+  display: grid;
+  gap: var(--s1);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.changes__footer {
+  display: flex;
+  gap: var(--s2);
+}
+
+.changes__footer > * {
+  flex: 1 1 0;
+}
+
+.changes__issues {
+  display: grid;
+  gap: var(--s2);
+  margin-bottom: var(--s3);
+}
+
+/* The Courses list's in-progress rows: the three "life happened" actions under the course. */
+.changes__row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1);
+  margin-top: var(--s1);
+}
+
+.changes__row-actions .chip {
+  cursor: pointer;
+}
+
+.changes__row-said {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.changes__row-note {
+  flex-basis: 100%;
+  font-size: var(--fs-caption);
+  color: var(--ink-2);
+}

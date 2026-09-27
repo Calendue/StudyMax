@@ -192,13 +192,18 @@ assert.ok(buildPlan(matches[0], specializations, completed, 0, { season: 'Fall',
 {
   const big = matches.reduce((a, b) => (b.remaining > a.remaining ? b : a))
   const loaded = buildStudentPlan([big.spec], specializations, new Set(), [], 3, { season: 'Fall', year: 2026 }, { springSummer: true, summerPerTerm: 1 })
-  assert.ok(loaded.some((t) => t.label.startsWith('Spring/Summer')), 'Spring/Summer terms appear when on')
   for (const term of loaded) {
     const cap = term.label.startsWith('Spring/Summer') ? 1 : 3
     assert.ok(term.courses.length <= cap, `${term.label} holds at most ${cap}`)
   }
   const off = buildStudentPlan([big.spec], specializations, new Set(), [], 3, { season: 'Fall', year: 2026 }, { summerPerTerm: 1 })
   assert.ok(!off.some((t) => t.label.startsWith('Spring/Summer')), 'no Spring/Summer terms when off')
+  // L3: a Spring/Summer term is used only when it brings graduation forward.
+  const ord = (p: typeof off) => { const [s, y] = [p.at(-1)!.label.split(' ')[0], Number(p.at(-1)!.label.split(' ').at(-1))]; return y * 10 + (s === 'Winter' ? 0 : s === 'Spring/Summer' ? 1 : 2) }
+  assert.ok(ord(loaded) <= ord(off), 'Spring/Summer never makes graduation later')
+  if (loaded.some((t) => t.label.startsWith('Spring/Summer'))) assert.ok(ord(loaded) < ord(off), 'Spring/Summer terms appear only when they bring graduation forward')
+  const heavy = buildStudentPlan([big.spec], specializations, new Set(), [], 1, { season: 'Fall', year: 2026 }, { springSummer: true, summerPerTerm: 2 })
+  assert.ok(heavy.some((t) => t.label.startsWith('Spring/Summer')), 'Spring/Summer terms appear when on and they help (load 1)')
 }
 
 assert.deepEqual(upcomingTerm(new Date('2026-03-01')), { season: 'Fall', year: 2026 })

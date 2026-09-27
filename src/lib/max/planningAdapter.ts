@@ -8,10 +8,11 @@
 // partway through, at the student's own load preferences. Every server path (Max's scenarios,
 // api/session.ts's autosave, the demo seed) goes through it, so a scenario always diffs like with like.
 //
-// validate() re-checks the planner's hard constraints on its output. They hold by construction until
-// the planner gives up on a course and relaxes its rules (RELAX_AFTER in plan.ts) — then a violation
-// is real, and an ERROR blocks the commit (spec 05).
+// validate() re-checks the planner's hard constraints on its output. The exact planner never relaxes
+// a rule (an unplaceable course is left out with a diagnostic), so an ERROR here means a real bug and
+// blocks the commit (spec 05); AT_RISK warns about a course with no section in three years.
 import { programs } from '../../data/programs/index.js'
+import { defaultCatalog } from '../catalog.js'
 import type { Program } from '../../data/programs/types.js'
 import { computeCredentials } from '../credentials.js'
 import { bookedByTerm, seasonNow } from '../currentTerms.js'
@@ -193,6 +194,7 @@ export function regenerate(input: AdapterInput): { terms: PlannedTerm[] } {
  */
 export function validate(terms: PlannedTerm[], input: AdapterInput): ValidationResult {
   const issues: ValidationIssue[] = []
+  const catalog = defaultCatalog()
   const booked = bookedNow(input)
   const passed = new Set([...input.completed, ...takingNow(input)])
   const seen = new Set<string>()
@@ -204,9 +206,11 @@ export function validate(terms: PlannedTerm[], input: AdapterInput): ValidationR
   for (const term of terms) {
     const season = term.label.slice(0, term.label.lastIndexOf(' ')) as Season
     const cap = season === 'Spring/Summer' ? input.summerPerTerm : input.coursesPerTerm
-    const load = term.courses.length + (booked[term.label]?.length ?? 0)
-    if (load > cap) {
-      issues.push({ code: 'OVER_LOAD', severity: 'ERROR', message: `${term.label} has ${load} courses, over your limit of ${cap}.` })
+    // Booked courses above the load are the student's own registration (shown, never grown); only
+    // planned courses past what's left of the load are an error.
+    const room = Math.max(0, cap - (booked[term.label]?.length ?? 0))
+    if (term.courses.length > room) {
+      issues.push({ code: 'OVER_LOAD', severity: 'ERROR', message: `${term.label} has ${term.courses.length + (booked[term.label]?.length ?? 0)} courses, over your limit of ${cap}.` })
     }
 
     const real = term.courses.map((c) => c.code).filter((code) => !isElective(code))
@@ -217,6 +221,9 @@ export function validate(terms: PlannedTerm[], input: AdapterInput): ValidationR
       }
       if (!courseRunsIn(code, season, input.springSummer)) {
         issues.push({ code: 'NOT_OFFERED', severity: 'ERROR', message: `${code} isn't offered in ${season}.` })
+      }
+      if (catalog[code]?.atRisk) {
+        issues.push({ code: 'AT_RISK', severity: 'WARNING', message: `${code.replace(/(\d)/, ' $1')} hasn't had a class section in the last three years, so it may not run in ${term.label}.` })
       }
       if (!prerequisitesMet(code, passed, alongside)) {
         issues.push({ code: 'PREREQ_UNMET', severity: 'ERROR', message: `${code} is planned before its prerequisites are done.` })

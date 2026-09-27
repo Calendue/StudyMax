@@ -1,6 +1,7 @@
 import type { Specialization } from '../data/specializations.ts'
 import type { SpecializationMatch } from './match.ts'
 import { buildStudentPlan, nextTerm, type TermStart } from './plan.ts'
+import type { CourseOverride } from './overrides.ts'
 
 // "What if I went for X instead?" Plans two targets on their own, with the same inputs the student's
 // real plan uses, and says how they differ. Pure: the planner does the work, this only compares.
@@ -17,6 +18,10 @@ export interface WhatIfInputs {
   booked?: Record<string, string[]>
   /** The academic year away on an internship, which the real plan leaves empty too. */
   away?: number | null
+  /** The student's overrides (failed, withdrew, not running, later), as the real plan applies them. */
+  overrides?: CourseOverride[]
+  /** The term being sat now, for validating the overrides. */
+  currentTerm?: TermStart
 }
 
 export interface TargetOutlook {
@@ -56,7 +61,14 @@ export function outlook(match: SpecializationMatch, input: WhatIfInputs): Target
     input.start,
     // No degree: a what-if weighs one credential against another, and the whole degree would pad
     // both to the same finish.
-    { springSummer: input.springSummer, summerPerTerm: input.summerPerTerm, booked: input.booked, away: input.away ?? null },
+    {
+      springSummer: input.springSummer,
+      summerPerTerm: input.summerPerTerm,
+      booked: input.booked,
+      away: input.away ?? null,
+      overrides: input.overrides,
+      currentTerm: input.currentTerm,
+    },
   )
   const courses = plan.flatMap((t) => t.courses)
   return {

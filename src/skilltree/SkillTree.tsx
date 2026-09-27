@@ -12,6 +12,7 @@ import { Sheet } from '../ui/Sheet.tsx'
 import { useTreeSource, type TreeSelection } from './planView.ts'
 import { useTreeTransition } from './useTreeTransition.ts'
 import { DegreeReadout } from './DegreeReadout.tsx'
+import { PlanIssues } from '../ui/WhatChanged.tsx'
 import { TreeDetail } from './TreeDetail.tsx'
 import { TreePeek } from './TreePeek.tsx'
 import './skilltree.css'
@@ -280,7 +281,7 @@ export function SkillTree({
     if (best) focusKey(best.i.key)
   }
 
-  const detail = layout && live ? <TreeDetail layout={layout} selection={live} onSelect={(s) => select(s, true)} /> : null
+  const detail = layout && live ? <TreeDetail layout={layout} selection={live} onSelect={(s) => select(s, true)} onChanged={() => setSheetOpen(false)} /> : null
   const detailTitle =
     live?.kind === 'node' ? courseCode(live.code) : live?.kind === 'leaf' && layout ? layout.leaves[live.index]?.name ?? '' : ''
 
@@ -365,6 +366,7 @@ export function SkillTree({
       aria-label="Academic skill tree"
       style={{ '--tree-sticky-top': `${stickyTop}px` } as CSSProperties}
     >
+      <PlanIssues />
       <div className="tree__bar">
         {(!compact || keyOpen) && (
           <ul id="tree-key" className="tree__legend" aria-label="Key">

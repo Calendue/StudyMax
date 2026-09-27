@@ -178,6 +178,9 @@ async function save(user: VerifiedUser, session: CloudSession) {
         summerPerTerm: session.summerPerTerm,
         startSeason: start.season,
         startYear: start.year,
+        completed: [...completed],
+        inProgress: [...inProgress],
+        away: input.away ?? null,
         terms,
         validation: validate(terms, input),
       }

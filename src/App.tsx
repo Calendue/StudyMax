@@ -11,17 +11,22 @@ import { computerScience } from './data/programs/computerScience.ts'
 import type { Program } from './data/programs/types.ts'
 import { buildCallScript, type CallContext } from './lib/callScript.ts'
 import {
-  buildStudentPlan,
+  buildStudentPlanResult,
+  clampSummer,
   DEFAULT_COURSES_PER_TERM,
   DEFAULT_SUMMER_COURSES,
   isElective,
   nextFall,
+  summerLoadOf,
   termsFrom,
   upcomingTerm,
   type Season,
   type TermStart,
 } from './lib/plan.ts'
 import { computeCredentials } from './lib/credentials.ts'
+import { applyOverrides, sameOverride, sortOverrides, type CourseOverride } from './lib/overrides.ts'
+import { defaultCatalog } from './lib/catalog.ts'
+import { diffPlans } from './lib/planner/explain.ts'
 import { treeDegreeProgress } from './lib/degreeProgress.ts'
 import { bookedByTerm, seasonNow, takingNow, termLabels, termsAfterUpload, withCurrentCourses } from './lib/currentTerms.ts'
 import { academicYearOfDegreeYear, currentTermOf } from './lib/skillTree.ts'
@@ -60,6 +65,7 @@ import {
   UniversityScreen,
 } from './screens/Onboarding.tsx'
 import { CoursesScreen } from './screens/CoursesScreen.tsx'
+import { WhatChangedSheet } from './ui/WhatChanged.tsx'
 import { ReadingScreen } from './screens/ReadingScreen.tsx'
 import { RevealScreen } from './screens/RevealScreen.tsx'
 import { ResultsScreen } from './screens/ResultsScreen.tsx'
@@ -196,6 +202,21 @@ interface SavedState {
   addedCourses?: string[]
   /** Which variant of the degree the plan is for ('bsc-4', 'bsc-honours', 'bsc-3'). Device-only, like gradYear. */
   degreeVariant?: string
+  /** What changed: failed, withdrew, not running, later (src/lib/overrides.ts). Device-only. */
+  overrides?: CourseOverride[]
+}
+
+/** Saved overrides in canonical order; anything not shaped like one is dropped (the planner validates the rest). */
+function storedOverrides(value: unknown): CourseOverride[] {
+  if (!Array.isArray(value)) return []
+  return sortOverrides(
+    value.filter((o): o is CourseOverride => !!o && typeof o === 'object' && typeof o.code === 'string' && typeof o.term === 'string' && typeof o.kind === 'string'),
+  )
+}
+
+/** A session from the database: its load is one the student saved, so it's kept as chosen. */
+function fromCloud(session: CloudSession): Partial<SavedState> {
+  return { ...session, coursesPerTermChosen: true }
 }
 
 
@@ -274,7 +295,10 @@ function useStudyMax() {
   // The plan's load limits: the most courses per Fall/Winter term, and per Spring/Summer term. Only a
   // load the student picked is kept; otherwise it's the program's (see coursesPerTerm below).
   const [chosenPerTerm, setCoursesPerTerm] = useState<number | null>(() => chosenLoad(saved))
-  const [summerPerTerm, setSummerPerTerm] = useState(saved.summerPerTerm ?? DEFAULT_SUMMER_COURSES)
+  // A stored 3 (the old maximum) is 2 now; 0 is off, the same as springSummer false.
+  const [summerPerTerm, setSummerPerTerm] = useState(clampSummer(saved.summerPerTerm ?? DEFAULT_SUMMER_COURSES, DEFAULT_SUMMER_COURSES))
+  // Failed, withdrew, not running, later: applied before planning, kept in canonical order.
+  const [overrides, setOverrides] = useState<CourseOverride[]>(() => storedOverrides(saved.overrides))
   const [pinned, setPinned] = useState<Record<string, string[]>>(saved.pinned ?? {})
   const [addedCourses, setAddedCourses] = useState<string[]>(saved.addedCourses ?? [])
 
@@ -421,6 +445,7 @@ function useStudyMax() {
     coursesPerTerm,
     coursesPerTermChosen: chosenPerTerm !== null,
     summerPerTerm,
+    overrides,
     pinned,
     addedCourses,
   }
@@ -693,6 +718,8 @@ function useStudyMax() {
     setUploadInProgress(computerScience.sampleInProgress ?? [])
     setCourseTerms(computerScience.sampleInProgressTerms ?? {})
     setCompletedTerms({})
+    setOverrides([])
+    setLastChange(null)
     // The sample's own seven are the whole of what it's taking: onboarding's picks don't join them.
     setRegistered([])
     setRegisteredQuery('')
@@ -946,19 +973,41 @@ function useStudyMax() {
     const timer = setTimeout(() => void saveCloudSession(JSON.parse(cloudJson)), 1500)
     return () => clearTimeout(timer)
   }, [accountUid, cloudUid, cloudJson])
-  const plan = useMemo(
+  // Overrides are applied by the planner itself (options.overrides); the same pre-pass here is what
+  // the tree and the roadmap show: a failed course is no longer done, a dropped registration no
+  // longer under way.
+  const currentTerm = useMemo(() => currentTermOf(today), [today])
+  const currentTermLabel = `${currentTerm.season} ${currentTerm.year}`
+  const applied = useMemo(
+    () => applyOverrides({ completed, inProgress: inProgressCourses, booked }, overrides, defaultCatalog(), currentTermLabel),
+    [completed, inProgressCourses, booked, overrides, currentTermLabel],
+  )
+  const planCompleted = overrides.length > 0 ? applied.completed : completed
+  const planInProgress = overrides.length > 0 ? applied.inProgress : inProgressCourses
+  const planByTerm = useMemo(
     () =>
-      buildStudentPlan(
+      overrides.length > 0
+        ? currentByTerm.map((g) => ({ ...g, courses: g.courses.filter((c) => applied.inProgress.includes(c)) })).filter((g) => g.courses.length > 0)
+        : currentByTerm,
+    [overrides, currentByTerm, applied],
+  )
+  // Spring/Summer: 0 is off, everywhere the plan is built.
+  const summerLoad = summerLoadOf(springSummer, summerPerTerm)
+  const planResult = useMemo(
+    () =>
+      buildStudentPlanResult(
         targets.map((t) => t.spec),
         planningSpecs,
         completed,
         inProgressCourses,
         coursesPerTerm,
         startTerm,
-        { springSummer, summerPerTerm, degree: activeDegree, booked, away: internshipAY, pinned, added: addedCourses },
+        { springSummer: summerLoad > 0, summerPerTerm: summerLoad, degree: activeDegree, booked, away: internshipAY, overrides, currentTerm, pinned, added: addedCourses },
       ),
-    [targets, planningSpecs, completed, inProgressCourses, coursesPerTerm, startTerm, springSummer, summerPerTerm, activeDegree, booked, internshipAY, pinned, addedCourses],
+    [targets, planningSpecs, completed, inProgressCourses, coursesPerTerm, startTerm, summerLoad, activeDegree, booked, internshipAY, overrides, currentTerm, pinned, addedCourses],
   )
+  const plan = planResult.terms
+
   // --- Max live on the Skill Tree (src/maxLive/) ---
   // The plan above as inputs, sent when placing a Max call so Max plans exactly what's on screen.
   const maxPlanInputs = useMemo<CallPlanInputs | null>(() => {
@@ -1029,11 +1078,30 @@ function useStudyMax() {
   const maxLive = useMaxLive({ onCommitted: adoptMaxPlan, onAction: runMaxAction })
 
   // The plan as the roadmap draws it: what's left, plus the courses already under way in their terms.
-  const roadmap = useMemo(() => withCurrentCourses(plan, currentByTerm, today), [plan, currentByTerm, today])
+  const roadmap = useMemo(() => withCurrentCourses(plan, planByTerm, today), [plan, planByTerm, today])
+  // The planner's notes: its own diagnostics, plus the override notes (once each).
+  const planNotes = useMemo(() => {
+    const seen = new Set(planResult.diagnostics.map((d) => d.message))
+    return [...planResult.diagnostics, ...applied.notes.filter((n) => !seen.has(n.message))]
+  }, [planResult, applied])
+
+  // "Something changed?": each override replans; the last one shows what moved, with an undo.
+  const [lastChange, setLastChange] = useState<{ override: CourseOverride; before: typeof roadmap } | null>(null)
+  function addOverride(o: CourseOverride) {
+    haptic.medium()
+    setLastChange({ override: o, before: roadmap })
+    setOverrides((prev) => sortOverrides([...prev.filter((p) => !(p.code === o.code && (p.kind === 'failed' || p.kind === 'withdrew') && (o.kind === 'failed' || o.kind === 'withdrew'))), o]))
+  }
+  function removeOverride(o: CourseOverride) {
+    haptic.selection()
+    setLastChange(null)
+    setOverrides((prev) => prev.filter((p) => !sameOverride(p, o)))
+  }
+  const lastDiff = useMemo(() => (lastChange ? diffPlans(lastChange.before, roadmap, overrides) : null), [lastChange, roadmap, overrides])
   // The degree in credit units for the tree's readout and milestones: done, under way and planned.
   const treeDegree = useMemo(
-    () => (activeDegree ? treeDegreeProgress(activeDegree, completed, inProgressCourses, plan) : undefined),
-    [activeDegree, completed, inProgressCourses, plan],
+    () => (activeDegree ? treeDegreeProgress(activeDegree, planCompleted, planInProgress, plan) : undefined),
+    [activeDegree, planCompleted, planInProgress, plan],
   )
   const [planCopied, setPlanCopied] = useState(false)
   // Clipboard writes are blocked in some browsers and contexts. Rather than a button that appears to
@@ -1247,7 +1315,9 @@ function useStudyMax() {
     // A session from an app build before the question has no answer: keep this device's.
     if (state.internship !== undefined) setInternship(state.internship)
     setCoursesPerTerm(chosenLoad(state))
-    setSummerPerTerm(state.summerPerTerm ?? DEFAULT_SUMMER_COURSES)
+    setSummerPerTerm(clampSummer(state.summerPerTerm ?? DEFAULT_SUMMER_COURSES, DEFAULT_SUMMER_COURSES))
+    setOverrides(storedOverrides(state.overrides))
+    setLastChange(null)
     setUploadStatus('idle')
     seedTargets(seedOf(state))
     setLookup(null)
@@ -1266,7 +1336,7 @@ function useStudyMax() {
       const key = saveKeyFor(existing.uid)
       // Nothing saved on this phone yet: their session from another device, if there is one.
       const cloud = hasSaved(key) ? null : await loadCloudSession()
-      const state = hasSaved(key) ? loadSaved(key) : (cloud?.session ?? {})
+      const state = hasSaved(key) ? loadSaved(key) : cloud?.session ? fromCloud(cloud.session) : {}
       if (!live) return
       if (hasSaved(key) || cloud) setCloudUid(existing.uid)
       applySavedRef.current(state)
@@ -1294,7 +1364,7 @@ function useStudyMax() {
       // Failing that, their session from another device; failing that, what they've done here.
       const key = saveKeyFor(signedIn.uid)
       const cloud = hasSaved(key) ? null : await loadCloudSession()
-      const stored = hasSaved(key) ? loadSaved(key) : cloud?.session
+      const stored = hasSaved(key) ? loadSaved(key) : cloud?.session ? fromCloud(cloud.session) : undefined
       const state = stored ?? snapshot
       if (stored) applySaved(stored)
       if (hasSaved(key) || cloud) setCloudUid(signedIn.uid)
@@ -1529,6 +1599,8 @@ function useStudyMax() {
     setPinned({})
     setAddedCourses([])
     setSummerPerTerm(DEFAULT_SUMMER_COURSES)
+    setOverrides([])
+    setLastChange(null)
     setUniversityId('')
     setProgramId('')
     setCompleted(new Set())
@@ -1784,6 +1856,16 @@ function useStudyMax() {
     extraTargetIds,
     setExtraTargetIds,
     plan,
+    planResult,
+    planNotes,
+    planCompleted,
+    planInProgress,
+    currentTermLabel,
+    overrides,
+    addOverride,
+    removeOverride,
+    lastChange: lastChange && lastDiff ? { override: lastChange.override, diff: lastDiff } : null,
+    dismissChange: () => setLastChange(null),
     coursesPerTerm,
     setCoursesPerTerm,
     startChoices,
@@ -1947,6 +2029,7 @@ function App() {
         {launched && (wizard ? <Wizard>{screens}</Wizard> : screens)}
       </div>
       <AccountSheet />
+      <WhatChangedSheet />
       <EditMajorSheet open={model.sheet === 'edit-major'} onClose={() => model.setSheet(null)} />
       <EditMinorSheet open={model.sheet === 'edit-minor'} onClose={() => model.setSheet(null)} />
       <EditConcentrationsSheet open={model.sheet === 'edit-concentrations'} onClose={() => model.setSheet(null)} />

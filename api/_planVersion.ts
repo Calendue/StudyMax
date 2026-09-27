@@ -11,16 +11,28 @@ import type { ValidationResult } from '../src/lib/max/planningAdapter.js'
 // gates, and the senior CMPT limit.
 // v3: server plans go through planningAdapter.regenerate(), the app's own plan — the whole degree,
 // credentials and a declared minor, at the student's load and Spring/Summer preferences.
-const PLANNER_VERSION = 'lib/plan.ts@buildStudentPlan-v3'
+// v4: the exact planner (src/lib/planner): earliest graduation proven, no relaxed rules, loads 1-5
+// and Spring/Summer 0-2, full-year courses in two terms; the hash covers every planner input.
+export const PLANNER_VERSION = 'lib/planner@exact-v4'
 
-function hashInputs(snapshot: {
-  targetProgramId: string
-  targetSpecializationIds: string[]
-  coursesPerTerm: number
-  startSeason: string
-  startYear: number
-}): string {
-  return createHash('sha256').update(JSON.stringify(snapshot)).digest('hex')
+const sortedCodes = (codes: readonly string[] | undefined) => [...new Set(codes ?? [])].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+
+/** Every planner input, normalised and sorted, so the same student always hashes the same. */
+function hashInputs(snapshot: PlanSnapshot): string {
+  const inputs = {
+    targetProgramId: snapshot.targetProgramId,
+    minorProgramId: snapshot.minorProgramId,
+    targetSpecializationIds: sortedCodes(snapshot.targetSpecializationIds),
+    coursesPerTerm: snapshot.coursesPerTerm,
+    springSummer: snapshot.springSummer,
+    summerPerTerm: snapshot.summerPerTerm,
+    startSeason: snapshot.startSeason,
+    startYear: snapshot.startYear,
+    completed: sortedCodes(snapshot.completed),
+    inProgress: sortedCodes(snapshot.inProgress),
+    away: snapshot.away ?? null,
+  }
+  return createHash('sha256').update(JSON.stringify(inputs)).digest('hex')
 }
 
 export interface PlanSnapshot {
@@ -35,6 +47,10 @@ export interface PlanSnapshot {
   startYear: number
   terms: PlannedTerm[]
   validation: ValidationResult
+  /** Hashed with the rest (not stored in columns): the courses and internship year the plan was built from. */
+  completed?: string[]
+  inProgress?: string[]
+  away?: number | null
 }
 
 /** Bumps GeneratedPlan.version, writes the head, and appends a PlanVersion — always together (I4). */

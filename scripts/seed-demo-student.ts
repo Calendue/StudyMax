@@ -25,7 +25,7 @@ const SUMMER_PER_TERM = DEFAULT_SUMMER_COURSES
 // day this is re-run: "now" is demo weekend (Fall 2026), so the plan starts Winter 2027.
 const TODAY = new Date(2026, 8, 27)
 const START = { season: 'Winter' as const, year: 2027 }
-const PLANNER_VERSION = 'lib/plan.ts@buildStudentPlan-v3'
+const PLANNER_VERSION = 'lib/planner@exact-v4'
 
 const prisma = new PrismaClient()
 

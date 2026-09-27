@@ -91,7 +91,8 @@ export function useTreeSource() {
   const m = useModel()
   const inputs = useTreeInputs()
   const frame = m.maxLive.frame
-  const { completed, inProgressCourses, plan, matches, credentials, activeDegree } = m
+  // After the student's overrides: a failed course isn't done, a dropped one isn't under way.
+  const { planCompleted: completed, planInProgress: inProgressCourses, plan, matches, credentials, activeDegree } = m
   return useMemo(() => {
     if (!frame) return { completed, inProgress: inProgressCourses, plan, inputs, liveKey: null as string | null }
     const f = frame.inputs
