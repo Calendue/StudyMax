@@ -6,7 +6,8 @@ import { ThemeSwitch } from '../../ui/ThemeSwitch.tsx'
 import { CanopyBeat, GuideBeat, HowBeat, MoreBeat, ProblemBeat, RootsBeat, ScatteredBeat, ShowcaseBeat, TeamBeat } from './Beats.tsx'
 import { Links, Wood, Zones } from './StoryTree.tsx'
 import { useClimb } from './useClimb.ts'
-import { DrakeRail, useDrakeCue } from './DrakeRail.tsx'
+import { DrakeRail } from './DrakeRail.tsx'
+import { useDrakeCue } from './useDrakeCue.ts'
 import './landing.css'
 
 interface LandingPageProps {
