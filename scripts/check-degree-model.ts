@@ -5,7 +5,7 @@
 // (programs.usask.ca/arts-and-science/computer-science/bsc-4-computer-science.php); the sample's
 // expected progress was worked out by hand from src/data/transcript.ts.
 import assert from 'node:assert/strict'
-import { computerScienceBsc4 as degree } from '../src/data/degrees/computerScience.ts'
+import { computerScienceBsc4 as degree, computerScienceHonours as honours } from '../src/data/degrees/computerScience.ts'
 import { auditDegree, courseCu, groupAccepts } from '../src/lib/degree.ts'
 import { breadth } from '../src/data/breadth.ts'
 import { catalogueCourses } from '../src/data/courses.ts'
@@ -195,6 +195,19 @@ for (const spec of specializations) {
     for (const code of g.courses) assert.ok(active.has(code), `${spec.id}: ${code} is in the 2026-27 catalogue`)
   }
 }
+
+// --- Honours: the same C1-C3, a 60-cu C4 (bsc-honours-computer-science.php), 18 cu of C5 ---
+const honoursCu = (block: string) => honours.groups.filter((g) => g.block === block).reduce((n, g) => n + g.needCu, 0)
+assert.deepEqual([honoursCu('C1'), honoursCu('C2'), honoursCu('C3'), honoursCu('C4')], [15, 9, 18, 60])
+assert.equal(honours.totalCu - honours.groups.reduce((n, g) => n + g.needCu, 0), 18, 'C5 Electives (18 - 21 credit units)')
+assert.equal(new Set(honours.groups.map((g) => g.id)).size, honours.groups.length, 'Honours group ids are unique')
+const honoursSample = auditDegree(honours, [...completedCourses, ...inProgressCourses])
+const hp = (id: string) => honoursSample.groups.find((p) => p.group.id === id)!
+assert.equal(hp('c4-stat241').cu, 3)
+assert.equal(hp('c4-calc2').cu, 3, 'MATH 116 is Calculus 2 here')
+assert.equal(hp('c4-cmpt400').remainingCu, 3, 'the thesis is still to come')
+assert.equal(hp('c4-core-senior').cu, 15)
+assert.equal(auditDegree(honours, ['CME433', 'CME435']).groups.find((p) => p.group.id === 'c4-410')!.cu, 3, 'at most one CME course')
 
 // --- fast enough for renders and the planner loop ---
 const all = [...completedCourses, ...inProgressCourses]

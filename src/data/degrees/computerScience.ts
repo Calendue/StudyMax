@@ -253,3 +253,73 @@ export const computerScienceBsc4: Degree = {
     'https://programs.usask.ca/arts-and-science/computer-science/index.php',
   ],
 }
+
+// B.Sc. Honours Computer Science, University Catalogue 2026-27:
+// https://programs.usask.ca/arts-and-science/computer-science/bsc-honours-computer-science.php
+// C1-C3 are the Four-year's word for word. C4 (60 cu) adds CMPT 360, 364, 400 and STAT 241, takes 15 cu
+// (not 18) of the core, and a Calculus 2 slot instead of the Mathematics List; C5 is 18 cu. Year tags:
+// https://www.cs.usask.ca/documents/advising/2024-bsc-hons-advising.pdf (MATH 116 Y1, STAT 241 Y2,
+// senior CMPT Y3/4; the thesis goes in Year 4, after admission to Honours at 60 cu).
+const shared = computerScienceBsc4.groups.filter((g) => g.block !== 'C4')
+const sharedC4 = computerScienceBsc4.groups.filter((g) => /^c4-(cmpt\d|stats)/.test(g.id))
+const required = (code: string, year: number, label = code.replace(/(\d)/, ' $1')) => ({
+  id: `c4-${code.toLowerCase()}`,
+  block: 'C4' as const,
+  label,
+  needCu: 3,
+  courses: [code],
+  year,
+})
+
+export const computerScienceHonours: Degree = {
+  id: 'usask-cmpt-bsc-honours',
+  name: 'B.Sc. Honours in Computer Science',
+  variant: 'bsc-honours',
+  totalCu: 120,
+  minSeniorCu: 66,
+  groups: [
+    ...shared,
+    ...sharedC4,
+    required('CMPT360', 3),
+    required('CMPT364', 3),
+    required('CMPT400', 4, 'CMPT 400 (Honours thesis)'),
+    required('STAT241', 2),
+    {
+      id: 'c4-core-senior',
+      block: 'C4',
+      label: 'Core CMPT',
+      needCu: 15,
+      courses: coreSenior.filter((code) => code !== 'CMPT360'),
+      year: 3,
+    },
+    {
+      id: 'c4-410',
+      block: 'C4',
+      label: 'CMPT elective (410 or higher)',
+      needCu: 6,
+      courses: ['CME433', 'CME435'],
+      matches: cmptAtLeast(410),
+      // The advising sheet: "at most 1 of CME433, 435".
+      oneOf: [['CME433', 'CME435']],
+      open: true,
+      year: 3,
+    },
+    {
+      id: 'c4-calc2',
+      block: 'C4',
+      label: 'Calculus 2',
+      needCu: 3,
+      courses: ['MATH116', 'MATH134', 'MATH177'],
+      oneOf: [['MATH116', 'MATH134', 'MATH177']],
+      prefer: ['MATH116'],
+      year: 1,
+    },
+  ],
+  subjectCap: computerScienceBsc4.subjectCap,
+  milestones: computerScienceBsc4.milestones,
+  sources: [
+    'https://programs.usask.ca/arts-and-science/computer-science/bsc-honours-computer-science.php',
+    'https://programs.usask.ca/arts-and-science/policies.php',
+    'https://www.cs.usask.ca/documents/advising/2024-bsc-hons-advising.pdf',
+  ],
+}
