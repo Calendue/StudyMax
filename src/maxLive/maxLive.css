@@ -70,6 +70,16 @@
   white-space: nowrap;
 }
 
+.max-live__seats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  margin: 0;
+  font-size: var(--fs-label);
+  font-weight: 600;
+}
+
 .max-live__close {
   display: grid;
   place-items: center;

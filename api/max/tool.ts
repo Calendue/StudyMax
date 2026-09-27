@@ -19,6 +19,7 @@ import {
   presentScenario,
   runScenario,
   snapshotFromCall,
+  termOf,
   type CallScope,
 } from './_scenarios.js'
 import { publish, uiVisible } from './_live.js'
@@ -30,7 +31,9 @@ import { planOptions, type OptionTopic } from '../../src/lib/max/options.js'
 import { programName, regenerate, speakableCourse, specializationName, underWayByTerm } from '../../src/lib/max/planningAdapter.js'
 import { computeMatches } from '../../src/lib/match.js'
 import { programs } from '../../src/data/programs/index.js'
-import { currentTermOf } from '../../src/lib/plan.js'
+import { currentTermOf, upcomingTerm, type TermStart } from '../../src/lib/plan.js'
+import { getTerms, searchCourse } from '../_banner.js'
+import { bannerTermCode, formatMeeting, openSeats, statusLabel } from '../../src/lib/classTracker.js'
 
 interface VercelRequest {
   method?: string
@@ -136,6 +139,7 @@ const SKILL_BY_TOOL: Record<string, string> = {
   update_name: 'correct_name',
   get_plan_options: 'recommend_plan',
   app_action: 'manage_roadmap',
+  check_seats: 'check_seats',
 }
 
 /** One short, tool-specific fact worth seeing in a log line — never the full payload. */
@@ -336,6 +340,8 @@ async function runRunScenario(call: ResolvedCall, args: Record<string, unknown>)
     presentedHash: presented.presentedHash,
     feasible: result.validation.ok,
     headline: result.diff.headline,
+    // Say these right after the headline: where a moved course landed and why, or the nearest possible target.
+    ...(result.notes.length > 0 ? { placement: result.notes } : {}),
     warnings: result.validation.issues.filter((i) => i.severity === 'WARNING').map((i) => i.message),
     errors,
     // Always false now: every change saves on a clear spoken yes (src/lib/max/types.ts PROGRAM_OPS).
@@ -450,8 +456,89 @@ async function runUpdateName(call: ResolvedCall, args: Record<string, unknown>):
   return { ok: true, name: user.firstName }
 }
 
+// --- check_seats: live seats from USask's class search (api/_banner.ts, the Class Tracker's source) ---
+
+let bannerTerms: { at: number; codes: Set<string> } | null = null
+const TERMS_TTL_MS = 6 * 60 * 60 * 1000
+
+async function publishedTermCodes(): Promise<Set<string>> {
+  if (bannerTerms && Date.now() - bannerTerms.at < TERMS_TTL_MS) return bannerTerms.codes
+  bannerTerms = { at: Date.now(), codes: new Set((await getTerms()).map((t) => t.code)) }
+  return bannerTerms.codes
+}
+
+/** "current"/"this term", "next" (the term they register for next, the default), or a named term. */
+function seatTerm(raw: unknown, today: Date): TermStart | null {
+  const text = typeof raw === 'string' ? raw.trim() : ''
+  if (!text || /\b(next|upcoming|coming|register)/i.test(text)) return upcomingTerm(today)
+  if (/\b(current|this|now)\b/i.test(text)) return currentTermOf(today)
+  return termOf(text)
+}
+
+async function runCheckSeats(call: ResolvedCall, args: Record<string, unknown>): Promise<ToolResponse> {
+  const code = normalizeCourseCode(args.courseCode)
+  const match = code.match(/^([A-Z]{2,5})(\d{3})$/)
+  if (!match) return { ok: false, code: 'INVALID_COURSE', speakable: "I didn't catch which course — could you say the code again?" }
+  const term = seatTerm(args.term, new Date())
+  if (!term) return { ok: false, code: 'INVALID_TERM', speakable: "I didn't catch which term — this term, next term, or one like Winter 2027?" }
+  const label = `${term.season} ${term.year}`
+  const termCode = bannerTermCode(label)!
+  const course = code.replace(/^([A-Z]+)(\d)/, '$1 $2')
+
+  const working = publish(call.liveToken, { type: 'max.working', tool: 'check_seats' })
+  try {
+    if (!(await publishedTermCodes()).has(termCode)) {
+      await working
+      return { status: 'not_published', term: label, speakable: `USask hasn't published ${label} sections yet, so there are no seats to check.` }
+    }
+    let sections = await searchCourse(termCode, match[1], match[2])
+    // Banner answers a throttled search with nothing: look once more before calling it "not running".
+    if (sections.length === 0) {
+      await new Promise((r) => setTimeout(r, 1200))
+      sections = await searchCourse(termCode, match[1], match[2])
+    }
+    const lectures = sections.filter((s) => s.scheduleType === null || /lecture/i.test(s.scheduleType))
+    const counted = lectures.length > 0 ? lectures : sections
+    const open = counted.filter((s) => s.status === 'open')
+    const seatsOpen = open.reduce((n, s) => n + openSeats(s), 0)
+    const status =
+      counted.length === 0 ? 'not_running' : open.length > 0 ? 'open' : counted.some((s) => s.status === 'waitlist') ? 'waitlist' : counted.some((s) => s.status === 'full') ? 'full' : 'no_data'
+    const speakable =
+      status === 'not_running'
+        ? `${course} isn't running in ${label}.`
+        : status === 'open'
+          ? `${course} has ${seatsOpen === 1 ? '1 seat' : `${seatsOpen} seats`} open in ${label}${open.length > 1 ? ` across ${open.length} sections` : ''}.`
+          : status === 'waitlist'
+            ? `${course} is full for ${label}, but the waitlist is open.`
+            : status === 'full'
+              ? `${course} is full for ${label}, waitlist included.`
+              : `USask's class search has no seat numbers for ${course} in ${label}.`
+    await working
+    await publish(call.liveToken, { type: 'seats.checked', courseCode: code, term: label, status, seatsOpen })
+    return {
+      status,
+      term: label,
+      seatsOpen,
+      sections: counted.slice(0, 6).map((s) => ({
+        section: s.sectionNumber,
+        type: s.scheduleType,
+        when: s.meetings.map(formatMeeting).join('; ') || null,
+        status: statusLabel(s.status, openSeats(s)),
+      })),
+      speakable,
+      uiVisible: uiVisible(call),
+    }
+  } catch (e) {
+    await working
+    console.error('[Max] check_seats failed', (e as Error)?.message ?? e)
+    return { ok: false, code: 'SEARCH_FAILED', speakable: "USask's class search isn't answering right now — the Classes tab can check it in a minute." }
+  }
+}
+
 async function executeTool(name: string, call: ResolvedCall, args: Record<string, unknown>): Promise<ToolResponse> {
   switch (name) {
+    case 'check_seats':
+      return runCheckSeats(call, args)
     case 'get_student_overview':
       return runGetStudentOverview(call)
     case 'run_scenario':

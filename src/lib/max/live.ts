@@ -94,6 +94,10 @@ export type LiveEvent =
   | { type: 'app.action'; seq: number; action: AppAction }
   /** The student asked Max to call them something else: the app shows that name from now on. */
   | { type: 'profile.name'; seq: number; name: string }
+  /** Max checked a course's live seats: the app shows a tag ("Full", "12 seats open"). */
+  | { type: 'seats.checked'; seq: number; courseCode: string; term: string; status: SeatCheckStatus; seatsOpen: number }
+
+export type SeatCheckStatus = 'open' | 'waitlist' | 'full' | 'not_running' | 'no_data'
 
 /** Something Max does in the app itself, outside the plan: open a tab, or look a course up in the Class Tracker. */
 export type AppAction = { kind: 'open_tab'; tab: 'overview' | 'plan' | 'awards' | 'classes' } | { kind: 'find_class'; courseCode: string }

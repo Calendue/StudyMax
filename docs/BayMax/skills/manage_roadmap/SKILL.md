@@ -1,13 +1,13 @@
 ---
 name: manage_roadmap
-description: Imperative changes ("drop CMPT 370", "add a stats minor", "put CMPT 318 in Winter", "undo that"), app actions, and saving or discarding an explored change — the only path to commit_scenario.
+description: Imperative changes ("drop CMPT 370", "move CMPT 370", "specialize in AI", "add a stats minor", "put CMPT 318 in Winter", "undo that", "leave it as it was"), app actions, and saving or discarding an explored change — the only path to commit_scenario.
 ---
 
 Two entry points land here: an imperative request stated as a command rather than a question, and a
 student responding to a change already explored under `what_if`.
 
-**Imperative request** ("drop CMPT 370", "add CMPT 318", "move CMPT 370 to next fall", "switch me to
-Cybersecurity", "add a stats minor", "do the Honours", "I want to finish by Winter 2029", "put my
+**Imperative request** ("drop CMPT 370", "add CMPT 318", "move CMPT 370", "move CMPT 370 to next
+fall", "switch me to Cybersecurity", "I want to specialize in AI", "add a stats minor", "do the Honours", "I want to finish by Winter 2029", "put my
 internship in Year 3", "make it 4 a term", "put me back on version 3"): treat it exactly like `what_if`
 — translate to its op(s) (the list is in `what_if`), call `run_scenario`, speak the headline then
 warnings/errors — but skip the "keep it, tweak it, leave it" framing and go straight to the save
@@ -18,14 +18,24 @@ clear spoken yes to the save question. Before asking, say in a few words what it
 headline covers graduation; for a major, add that their specializations start over). Tapping Keep this
 plan on their screen saves it too; `get_student_overview`'s `savedThisCall` tells you if they did.
 
-**If `feasible` is false** (a course moved before its prerequisites, or into a term it doesn't run), say
-the first error plainly and offer the fix (a later term, or letting the plan place it) — never ask to
-save an infeasible change; the server refuses it anyway.
+**Moving a course:** `MOVE_COURSE` with no `toTerm` unless they named one — even for a course they're
+taking right now. The server puts it in the next term that actually works and says so in `placement`;
+say that line right after the headline. Never answer a move with "you can't" or "you'd have to drop it
+first": the move already handles the drop (then give the registrar note below).
+
+**If `feasible` is false**, say the first error plainly and offer the fix (a later term, a lighter pace)
+— never ask to save an infeasible change; the server refuses it anyway.
+
+**Seats:** "is there a seat in CMPT 370", "check seats for CMPT 370", "is it full next term", "can I
+still get into it" → `check_seats` with the course code and the term they meant ("current" for this
+term, "next" for the one they register for next, or a named term). It works with or without the app
+open. Say its status in one sentence — the seat count if it's open, and plainly that it's full if it's
+full (and whether the waitlist is open). No save question.
 
 **App actions** (`app_action`, only while the app is open on this call): "show me my awards" or "open
-my plan" → `action: open_tab`; "can I get into CMPT 370", "check seats for CMPT 370" →
-`action: find_class` with the course code, which opens the Class Tracker on its sections so they can
-tap one to watch. These happen right away — no save question.
+my plan" → `action: open_tab`; "open the class tracker for CMPT 370" → `action: find_class`, which opens
+the Class Tracker on its sections so they can tap one to watch. These happen right away — no save
+question.
 
 **The save question:** ask one direct yes/no question — "Want me to save that as your plan?" — and
 nothing else. Only call `commit_scenario` after a clear, unambiguous yes to that exact question,
@@ -50,7 +60,7 @@ tapping Not now) and has no effect on the real plan. Then say you've left it as 
 "I haven't saved that" without calling it — the proposal would stay on their screen.
 
 After a save or a discard, don't wrap up the call: ask what else they'd like, and only end it the way
-the system prompt says (a separate "…or are we all set?" and a clear answer).
+the system prompt says (after a real lull, "Is everything all set?" and a clear yes).
 
 **Registrar note:** if the change involves dropping a course they're currently taking, say once, right
 after describing the change (not as a separate follow-up), that they still need to do this with the
@@ -58,7 +68,9 @@ registrar — the app change doesn't drop them from the course itself.
 
 **"Undo that" mid-call:** if it refers to something explored but not yet committed this call, that's
 just `discard_scenario`. If it refers to something already committed (earlier this call or a past
-call), the only way back is `RESTORE_VERSION` to the version before it (the saved version number minus
-one — `get_student_overview` gives the current number) through a fresh `run_scenario`, which still
-needs its own save confirmation before `commit_scenario`. Restoring also brings back any course that
+call) — "undo that", "don't drop it", "leave it as it was" — the way back is `RESTORE_VERSION` with
+`versionNumber: "previous"` (the plan before the last save) through a fresh `run_scenario`, which still
+needs its own save confirmation before `commit_scenario`. The student saying it IS the request: run it
+straight away and then ask the save question — don't first ask whether they want to undo. More changes
+can build on it (pass its `scenarioId`), e.g. going back and then moving a course. Restoring also brings back any course that
 version hadn't dropped. Don't treat "undo" as a shortcut around that confirmation.

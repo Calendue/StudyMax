@@ -34,6 +34,8 @@ export interface MaxLive {
   /** Max is working on something (a tool is running). */
   working: boolean
   options: { about: string; options: LiveOption[]; recommended: string | null } | null
+  /** The last seat check Max ran on this call, for a small tag ("CMPT 370 · Full"). */
+  seats: Omit<Extract<LiveEvent, { type: 'seats.checked' }>, 'type' | 'seq'> | null
   /** Saves still to adopt, or just adopted: "Saved as your plan ✓". */
   savedCount: number
   busy: boolean
@@ -109,6 +111,7 @@ export function useMaxLive({ onCommitted, onAction, onName, ready = true }: Opti
   const [scenario, setScenario] = useState<LiveScenario | null>(null)
   const [working, setWorking] = useState(false)
   const [options, setOptions] = useState<MaxLive['options']>(null)
+  const [seats, setSeats] = useState<MaxLive['seats']>(null)
   const [savedCount, setSavedCount] = useState(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -139,6 +142,7 @@ export function useMaxLive({ onCommitted, onAction, onName, ready = true }: Opti
     setScenario(null)
     setWorking(false)
     setOptions(null)
+    setSeats(null)
     setError(null)
   }, [])
 
@@ -206,6 +210,10 @@ export function useMaxLive({ onCommitted, onAction, onName, ready = true }: Opti
           break
         case 'profile.name':
           nameRef.current?.(event.name)
+          break
+        case 'seats.checked':
+          setWorking(false)
+          setSeats({ courseCode: event.courseCode, term: event.term, status: event.status, seatsOpen: event.seatsOpen })
           break
       }
     },
@@ -382,6 +390,7 @@ export function useMaxLive({ onCommitted, onAction, onName, ready = true }: Opti
     scenario,
     working,
     options,
+    seats,
     savedCount,
     busy,
     error,

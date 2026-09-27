@@ -15,6 +15,7 @@ import { createHash } from 'node:crypto'
 import { Prisma, type GeneratedPlan } from '@prisma/client'
 import { db } from '../_db.js'
 import { isSharedGuest } from './_demoUser.js'
+import { publishedAbsences } from './_published.js'
 import { planVersionWrites, type PlanSnapshot } from '../_planVersion.js'
 import { isActiveCourse } from '../../src/data/activeCourses.js'
 import { programs } from '../../src/data/programs/index.js'
@@ -28,11 +29,13 @@ import {
   validate,
   type AdapterInput,
   type RoadmapDiff,
+  type ValidationIssue,
   type ValidationResult,
 } from '../../src/lib/max/planningAdapter.js'
 import { PREFERENCE_KEYS, SUPPORTED_OPS, type PreferenceKey, type ScenarioOp } from '../../src/lib/max/types.js'
 import {
   DEFAULT_SUMMER_COURSES,
+  nextTerm,
   termFromLabel,
   termOrder,
   type PlannedTerm,
@@ -52,6 +55,10 @@ function err(code: string, speakable: string): ToolError {
 // --- planner-input snapshot: the current official state, and what an op list does to it ---
 
 export interface Snapshot {
+  /** What Max should say about how ops were carried out ("Fall 2027 doesn't work… so Winter 2028"). Never saved. */
+  notes?: string[]
+  /** Per course, the terms USask's published timetable doesn't run it in (api/max/_published.ts). Never saved. */
+  notRunning?: Record<string, string[]>
   completed: string[]
   /** What the plan treats as under way: the enrolled courses minus droppedCourses. */
   inProgress: string[]
@@ -242,8 +249,10 @@ export function cleanOps(raw: unknown): ScenarioOp[] | ToolError {
       const rawTerm = item.toTerm ?? item.term
       const term = rawTerm === undefined || rawTerm === null || rawTerm === '' ? null : termOf(rawTerm)
       if (rawTerm !== undefined && rawTerm !== null && rawTerm !== '' && !term) return err('INVALID_TERM', "I didn't catch which term — could you say it like Winter 2028?")
-      if (op !== 'ADD_COURSE' && !term) return err('INVALID_TERM', 'Which term should it go in?')
-      ops.push(op === 'ADD_COURSE' ? { op, courseCode, ...(term ? { term } : {}) } : op === 'MOVE_COURSE' ? { op, courseCode, toTerm: term! } : { op, courseCode, term: term! })
+      if (op === 'PIN_COURSE' && !term) return err('INVALID_TERM', 'Which term should it go in?')
+      ops.push(
+        op === 'PIN_COURSE' ? { op, courseCode, term: term! } : op === 'MOVE_COURSE' ? { op, courseCode, ...(term ? { toTerm: term } : {}) } : { op, courseCode, ...(term ? { term } : {}) },
+      )
     } else if (op === 'UNPIN_COURSE') {
       const courseCode = courseCodeOf(item.courseCode)
       if (typeof courseCode !== 'string') return courseCode
@@ -266,6 +275,10 @@ export function cleanOps(raw: unknown): ScenarioOp[] | ToolError {
       if (year === undefined) return err('INVALID_INTERNSHIP', 'I can set an internship in your third or fourth year, or take it out.')
       ops.push({ op, year })
     } else {
+      if (typeof item.versionNumber === 'string' && /^(previous|last|before|prior)$/i.test(item.versionNumber.trim())) {
+        ops.push({ op: 'RESTORE_VERSION', versionNumber: 'previous' })
+        continue
+      }
       const versionNumber = Number(item.versionNumber)
       if (!Number.isInteger(versionNumber) || versionNumber < 1) return err('UNKNOWN_VERSION', "I didn't catch which version to go back to.")
       ops.push({ op: 'RESTORE_VERSION', versionNumber })
@@ -291,20 +304,30 @@ export function resolveSpecialization(programId: string, completed: string[], sa
 
 /** Applies every op but RESTORE_VERSION to a snapshot — pure, so the sequences are testable. */
 export function applyPlanOps(base: Snapshot, ops: ScenarioOp[]): Snapshot | ToolError {
-  const inProgress = new Set(base.inProgress)
-  const dropped = new Set(base.droppedCourses)
+  let inProgress = new Set(base.inProgress)
+  let dropped = new Set(base.droppedCourses)
   let next: Snapshot = { ...base }
   for (const op of ops) {
     if (op.op === 'DROP_COURSE') {
-      if (base.droppedCourses.includes(op.courseCode)) {
-        return err('ALREADY_DROPPED', `${op.courseCode} is already dropped in your saved plan.`)
+      const code = op.courseCode
+      if (base.droppedCourses.includes(code)) {
+        return err('ALREADY_DROPPED', `${spoken(code)} is already dropped in your saved plan.`)
       }
-      if (dropped.has(op.courseCode)) continue // the same drop said twice in one scenario
-      if (!inProgress.has(op.courseCode)) {
-        return err('COURSE_NOT_IN_PROGRESS', `I don't have ${op.courseCode} listed as something you're currently taking.`)
+      if (dropped.has(code)) continue // the same drop said twice in one scenario
+      if (!inProgress.has(code)) {
+        // Not under way: one they put in the plan themselves comes back out; one the plan needs can only move.
+        if (Object.values(next.pinned).some((codes) => codes.includes(code)) || next.added.includes(code)) {
+          next = { ...next, pinned: withoutPin(next.pinned, code), added: next.added.filter((c) => c !== code) }
+          continue
+        }
+        const planned = plannedTermOf(regenerate(adapterInput({ ...next, inProgress: [...inProgress], droppedCourses: [...dropped] })).terms, code)
+        if (planned) {
+          return err('REQUIRED_COURSE', `${spoken(code)} is in your plan for ${planned} because your degree needs it, so it can't come out — but I can move it to a later term.`)
+        }
+        return err('COURSE_NOT_IN_PROGRESS', `I don't have ${spoken(code)} as something you're taking or have planned.`)
       }
-      inProgress.delete(op.courseCode)
-      dropped.add(op.courseCode)
+      inProgress.delete(code)
+      dropped.add(code)
     } else if (op.op === 'SET_PREFERENCE') {
       const key = op.key as PreferenceKey
       if (key === 'maxCoursesPerTerm') next = { ...next, coursesPerTerm: op.value as number }
@@ -325,6 +348,9 @@ export function applyPlanOps(base: Snapshot, ops: ScenarioOp[]): Snapshot | Tool
       const changed = applyProgramOp(current, op)
       if ('code' in changed) return changed
       next = changed
+      // A move of a course under way drops it from this term too.
+      inProgress = new Set(changed.inProgress)
+      dropped = new Set(changed.droppedCourses)
     }
   }
   return { ...next, inProgress: [...inProgress], droppedCourses: [...dropped] }
@@ -350,6 +376,67 @@ function pinnedIn(s: Snapshot, code: string, term: TermStart): Snapshot {
 }
 
 const spoken = (code: string) => code.replace(/^([A-Z]+)(\d)/, '$1 $2')
+
+/** How far ahead a move looks for a term that works: four academic years with summers. */
+const PLACEMENT_HORIZON = 12
+
+/** Why a term won't hold a course, as Max would say it. */
+function whyNot(issue: ValidationIssue, term: TermStart, springSummer: boolean): string {
+  if (issue.code === 'NOT_OFFERED') {
+    return term.season === 'Spring/Summer' && !springSummer ? "your plan doesn't use Spring/Summer terms" : `it doesn't run in ${term.season}`
+  }
+  if (issue.code === 'PREREQ_UNMET') return "its prerequisites wouldn't be done by then"
+  if (issue.code === 'OVER_LOAD') return 'that term is already full at your pace'
+  return issue.message
+}
+
+/**
+ * Puts a course in `target` when the plan can hold it there, else in the nearest later term that can:
+ * one that runs it, after its prerequisites, within the load — no rule broken that the plan wasn't
+ * already breaking. No target: the first term after where it sits now. One being taken now is dropped
+ * from this term first (the student does that part with the registrar).
+ */
+function placeCourse(s: Snapshot, code: string, target: TermStart | null): Snapshot | ToolError {
+  const notes: string[] = []
+  let from = s
+  let first: TermStart
+  if (s.inProgress.includes(code)) {
+    from = { ...s, inProgress: s.inProgress.filter((c) => c !== code), droppedCourses: [...s.droppedCourses, code] }
+    notes.push(`This means dropping ${spoken(code)} this term — that part is done with the registrar.`)
+    first = target ?? s.start
+  } else {
+    const now = plannedTermOf(regenerate(adapterInput(s)).terms, code)
+    const nowTerm = now ? termFromLabel(now) : null
+    first = target ?? (nowTerm ? nextTerm(nowTerm, s.springSummer) : s.start)
+  }
+  if (termOrder(first) < termOrder(s.start)) {
+    if (target) return err('TERM_PAST', `Your plan starts in ${labelOf(s.start)}, so I can only put courses from then on.`)
+    first = s.start
+  }
+
+  const baseInput = adapterInput(from)
+  const already = new Set(validate(regenerate(baseInput).terms, baseInput).issues.filter((i) => i.severity === 'ERROR').map((i) => i.message))
+  let term = first
+  let reason: string | null = null
+  for (let i = 0; i < PLACEMENT_HORIZON; i++) {
+    if (s.notRunning?.[code]?.includes(labelOf(term))) {
+      reason ??= "USask's published timetable doesn't have it"
+      term = nextTerm(term, s.springSummer)
+      continue
+    }
+    const trial = pinnedIn(from, code, term)
+    const input = adapterInput(trial)
+    const broken = validate(regenerate(input).terms, input).issues.filter((x) => x.severity === 'ERROR' && !already.has(x.message))
+    if (broken.length === 0) {
+      if (target && i > 0) notes.unshift(`${labelOf(target)} doesn't work for ${spoken(code)} because ${reason}, so the next term that does is ${labelOf(term)}.`)
+      else if (!target) notes.unshift(`The next term that works for ${spoken(code)} is ${labelOf(term)}${reason ? ` — in ${labelOf(first)}, ${reason}` : ''}.`)
+      return { ...trial, notes: [...(s.notes ?? []), ...notes] }
+    }
+    if (reason === null) reason = whyNot(broken.find((x) => x.message.includes(code)) ?? broken[0], term, s.springSummer)
+    term = nextTerm(term, s.springSummer)
+  }
+  return err('NO_TERM_FITS', `I couldn't find a term in the next four years that fits ${spoken(code)} — ${reason ?? 'nothing works'}.`)
+}
 
 /** Finish of a plan as a sortable number (null: nothing left to plan). */
 function finishOrder(terms: PlannedTerm[]): number | null {
@@ -399,13 +486,9 @@ function applyProgramOp(s: Snapshot, op: ScenarioOp): Snapshot | ToolError {
       const term = op.op === 'ADD_COURSE' ? op.term : op.op === 'MOVE_COURSE' ? op.toTerm : op.term
       if (!isActiveCourse(code)) return err('UNKNOWN_COURSE', `I can't find ${spoken(code)} in the catalogue — could you say the code again?`)
       if (s.completed.includes(code)) return err('ALREADY_TAKEN', `You've already taken ${spoken(code)}.`)
-      if (s.inProgress.includes(code)) return err('IN_PROGRESS', `You're taking ${spoken(code)} right now.`)
-      if (term) {
-        if (termOrder(term) < termOrder(s.start)) {
-          return err('TERM_PAST', `Your plan starts in ${labelOf(s.start)}, so I can only put courses from then on.`)
-        }
-        return pinnedIn(s, code, term)
-      }
+      // A move with no term means "later"; any placement goes to the nearest term that actually works.
+      if (term || op.op === 'MOVE_COURSE') return placeCourse(s, code, term ?? null)
+      if (s.inProgress.includes(code)) return err('IN_PROGRESS', `You're already taking ${spoken(code)} this term.`)
       const planned = plannedTermOf(regenerate(adapterInput(s)).terms, code)
       if (planned) return err('ALREADY_PLANNED', `${spoken(code)} is already in your plan for ${planned}. Want it in a different term?`)
       // No term said: the planner places it like a requirement, in a term that runs it, prerequisites first.
@@ -430,14 +513,18 @@ function applyProgramOp(s: Snapshot, op: ScenarioOp): Snapshot | ToolError {
       if (!s.springSummer) {
         for (let p = s.coursesPerTerm; p <= 5; p++) for (let q = 1; q <= 3; q++) tries.push({ coursesPerTerm: p, springSummer: true, summerPerTerm: q })
       }
-      let best: number | null = null
+      let best: { finish: number; trial: Snapshot } | null = null
       for (const pace of tries) {
         const trial = { ...s, ...pace }
         const finish = finishOrder(regenerate(adapterInput(trial)).terms)
         if (finish !== null && finish <= goal) return trial
-        if (finish !== null && (best === null || finish < best)) best = finish
+        if (finish !== null && (best === null || finish < best.finish)) best = { finish, trial }
       }
-      const earliest = best === null ? null : `${['Winter', 'Spring/Summer', 'Fall'][best % 10]} ${Math.floor(best / 10)}`
+      const earliest = best === null ? null : `${['Winter', 'Spring/Summer', 'Fall'][best.finish % 10]} ${Math.floor(best.finish / 10)}`
+      // Can't make it: offer the soonest finish that is possible, when that's sooner than now.
+      if (best && earliest && (now === null || best.finish < now)) {
+        return { ...best.trial, notes: [...(s.notes ?? []), `${labelOf(op.term)} isn't possible even at the heaviest load, so this is the soonest you could finish: ${earliest}.`] }
+      }
       return err('CANT_MEET_TARGET', `Even at five courses a term with summers, the earliest you'd finish is ${earliest ?? 'later than that'}.`)
     }
     case 'SET_MAJOR': {
@@ -567,44 +654,58 @@ export async function loadCurrentSnapshot(
   }
 }
 
-/** Applies validated ops to a snapshot. RESTORE_VERSION must be the only op (checked on append). */
+/** Applies validated ops to a snapshot. A RESTORE_VERSION comes first (runScenario orders it): the
+ * changes after it build on the version it goes back to. */
 async function applyOps(planId: bigint, base: Snapshot, ops: ScenarioOp[], scope?: CallScope): Promise<Snapshot | ToolError> {
-  const restore = ops.find((o) => o.op === 'RESTORE_VERSION')
-  if (restore && restore.op === 'RESTORE_VERSION') {
-    const version = await db().planVersion.findUnique({
-      where: { planId_versionNumber: { planId, versionNumber: restore.versionNumber } },
-      include: { scenario: { select: { resultInputs: true, callId: true } } },
-    })
-    // A guest's saved versions share one account with every other guest's: anything not saved on this
-    // call is someone else's plan. Going back past this call means the plan they started it with.
-    if (scope?.isGuest && scope.planInputs && version?.scenario?.callId !== scope.callId) {
-      return snapshotFromCall(scope.planInputs.original ?? scope.planInputs)
-    }
-    if (!version) return err('UNKNOWN_VERSION', `I don't have a version ${restore.versionNumber} to go back to.`)
-    const saved = (version.scenario?.resultInputs ?? {}) as Partial<ResultInputs>
-    // Completed courses stay current — restore rewinds the plan, not course history — but the drops go
-    // back to that version's, so "undo that" after a committed drop really puts the course back.
-    const droppedCourses = (saved.droppedCourses ?? []).filter((code) => base.enrolled.includes(code))
-    const own = new Set(programSpecIds(base.targetProgramId, base.targetIds))
-    return {
-      ...base,
-      inProgress: base.enrolled.filter((code) => !droppedCourses.includes(code)),
-      droppedCourses,
-      targetProgramId: version.targetProgramId,
-      minorProgramId: version.minorProgramId,
-      targetIds:
-        saved.targetIds ?? [...version.targetSpecializationIds, ...base.targetIds.filter((id) => !own.has(id) && !version.targetSpecializationIds.includes(id))],
-      coursesPerTerm: version.coursesPerTerm,
-      springSummer: saved.springSummer ?? base.springSummer,
-      summerPerTerm: saved.summerPerTerm ?? base.summerPerTerm,
-      start: { season: version.startSeason as TermStart['season'], year: version.startYear },
-      degreeVariant: saved.degreeVariant !== undefined ? saved.degreeVariant : base.degreeVariant,
-      pinned: saved.pinned ?? base.pinned,
-      added: saved.added ?? base.added,
-      ...(saved.internship !== undefined ? { internship: saved.internship, away: saved.away ?? null } : {}),
-    }
+  const [head, ...rest] = ops
+  if (head?.op === 'RESTORE_VERSION') {
+    const from = await restoredSnapshot(planId, base, head, scope)
+    if ('code' in from) return from
+    return rest.length > 0 ? applyPlanOps(from, rest) : from
   }
   return applyPlanOps(base, ops)
+}
+
+/** The snapshot a saved version describes, with this call's course history. */
+async function restoredSnapshot(
+  planId: bigint,
+  base: Snapshot,
+  restore: Extract<ScenarioOp, { op: 'RESTORE_VERSION' }>,
+  scope?: CallScope,
+): Promise<Snapshot | ToolError> {
+  if (typeof restore.versionNumber !== 'number') return err('UNKNOWN_VERSION', "I didn't catch which version to go back to.")
+  const version = await db().planVersion.findUnique({
+    where: { planId_versionNumber: { planId, versionNumber: restore.versionNumber } },
+    include: { scenario: { select: { resultInputs: true, callId: true } } },
+  })
+  // A guest's saved versions share one account with every other guest's: anything not saved on this
+  // call is someone else's plan. Going back past this call means the plan they started it with.
+  if (scope?.isGuest && scope.planInputs && version?.scenario?.callId !== scope.callId) {
+    return { ...snapshotFromCall(scope.planInputs.original ?? scope.planInputs), notRunning: base.notRunning }
+  }
+  if (!version) return err('UNKNOWN_VERSION', `I don't have a version ${restore.versionNumber} to go back to.`)
+  const saved = (version.scenario?.resultInputs ?? {}) as Partial<ResultInputs>
+  // Completed courses stay current — restore rewinds the plan, not course history — but the drops go
+  // back to that version's, so "undo that" after a committed drop really puts the course back.
+  const droppedCourses = (saved.droppedCourses ?? []).filter((code) => base.enrolled.includes(code))
+  const own = new Set(programSpecIds(base.targetProgramId, base.targetIds))
+  return {
+    ...base,
+    inProgress: base.enrolled.filter((code) => !droppedCourses.includes(code)),
+    droppedCourses,
+    targetProgramId: version.targetProgramId,
+    minorProgramId: version.minorProgramId,
+    targetIds:
+      saved.targetIds ?? [...version.targetSpecializationIds, ...base.targetIds.filter((id) => !own.has(id) && !version.targetSpecializationIds.includes(id))],
+    coursesPerTerm: version.coursesPerTerm,
+    springSummer: saved.springSummer ?? base.springSummer,
+    summerPerTerm: saved.summerPerTerm ?? base.summerPerTerm,
+    start: { season: version.startSeason as TermStart['season'], year: version.startYear },
+    degreeVariant: saved.degreeVariant !== undefined ? saved.degreeVariant : base.degreeVariant,
+    pinned: saved.pinned ?? base.pinned,
+    added: saved.added ?? base.added,
+    ...(saved.internship !== undefined ? { internship: saved.internship, away: saved.away ?? null } : {}),
+  }
 }
 
 /** What a scenario stores as its result inputs — enough to commit it, restore it and carry a call forward. */
@@ -668,7 +769,7 @@ export function captionOf(op: ScenarioOp, programId: string, completed: string[]
     case 'ADD_COURSE':
       return op.term ? `Adding ${spoken(op.courseCode)} in ${labelOf(op.term)}` : `Adding ${spoken(op.courseCode)}`
     case 'MOVE_COURSE':
-      return `Moving ${spoken(op.courseCode)} to ${labelOf(op.toTerm)}`
+      return op.toTerm ? `Moving ${spoken(op.courseCode)} to ${labelOf(op.toTerm)}` : `Moving ${spoken(op.courseCode)} later`
     case 'PIN_COURSE':
       return `Keeping ${spoken(op.courseCode)} in ${labelOf(op.term)}`
     case 'UNPIN_COURSE':
@@ -701,6 +802,8 @@ export interface ScenarioResult {
   /** One tree per new op, in order, for the live view to play step by step. */
   frames: LiveFrame[]
   requiresAppConfirmation: boolean
+  /** How a placement or target was carried out, for Max to say after the headline. */
+  notes: string[]
 }
 
 /**
@@ -720,34 +823,44 @@ export async function runScenario(
   if (!current) return err('NO_PLAN', "I don't have a roadmap on file for you yet.")
   const { plan, snapshot: baseSnapshot, baselineTerms } = current
 
-  const scenario = opts.scenarioId ? await db().scenario.findUnique({ where: { scenarioId: opts.scenarioId } }) : null
-  if (opts.scenarioId && (!scenario || scenario.userId !== userId)) {
+  const found = opts.scenarioId ? await db().scenario.findUnique({ where: { scenarioId: opts.scenarioId } }) : null
+  if (opts.scenarioId && (!found || found.userId !== userId)) {
     return err('UNKNOWN_SCENARIO', "I've lost track of that plan change — let's start a new one.")
   }
-  if (scenario && !['draft', 'computed', 'presented'].includes(scenario.status)) {
-    return err('SCENARIO_CLOSED', "That plan change isn't open anymore — let's start a new one.")
-  }
-  if (scenario && scenario.expiresAt && scenario.expiresAt < new Date()) {
-    return err('SCENARIO_EXPIRED', "That plan change has expired — let's look at it fresh.")
-  }
+  // Building on a change already saved, left or expired: start a new one from the plan as it is now
+  // (e.g. "leave it as it was" right after a save), rather than a dead end.
+  const open = found && ['draft', 'computed', 'presented'].includes(found.status) && !(found.expiresAt && found.expiresAt < new Date())
+  const scenario = open ? found : null
 
-  const priorOps = (scenario?.operations as unknown as ScenarioOp[]) ?? []
-  const allOps = [...priorOps, ...ops]
-  if (allOps.some((o) => o.op === 'RESTORE_VERSION') && allOps.length > 1) {
-    return err('UNSUPPORTED_OPERATION', 'Going back to an earlier version has to be a change on its own.')
+  // "The version before this one": resolved now, so the scenario stores the real number.
+  const restorePrevious = ops.find((o) => o.op === 'RESTORE_VERSION' && o.versionNumber === 'previous')
+  if (restorePrevious && plan.version <= 1) {
+    return err('NO_EARLIER_VERSION', "This is still your first saved plan, so there's nothing earlier to go back to.")
   }
+  for (const o of ops) if (o.op === 'RESTORE_VERSION' && o.versionNumber === 'previous') o.versionNumber = plan.version - 1
+
+  // Going back to a version starts the proposal over from it; changes after it build on it.
+  const restores = ops.filter((o) => o.op === 'RESTORE_VERSION')
+  if (restores.length > 1) return err('UNSUPPORTED_OPERATION', 'I can only go back to one version at a time.')
+  const priorOps = restores.length > 0 ? [] : ((scenario?.operations as unknown as ScenarioOp[]) ?? [])
+  const newOps = restores.length > 0 ? [...restores, ...ops.filter((o) => o.op !== 'RESTORE_VERSION')] : ops
+  const allOps = [...priorOps, ...newOps]
+
+  // A course being put in a term skips the terms USask's published timetable doesn't run it in.
+  const placed = allOps.flatMap((o) => (o.op === 'MOVE_COURSE' || o.op === 'PIN_COURSE' || (o.op === 'ADD_COURSE' && o.term) ? [o.courseCode] : []))
+  const base: Snapshot = placed.length > 0 ? { ...baseSnapshot, notRunning: await publishedAbsences(placed) } : baseSnapshot
 
   // One frame per new op, so the tree reshapes step by step as Max narrates (capped; the last is the result).
   const frames: LiveFrame[] = []
   let applied: Snapshot | null = null
-  const firstFramed = Math.max(0, ops.length - MAX_FRAMES)
-  for (let i = 0; i < ops.length; i++) {
-    const step = await applyOps(plan.planId, baseSnapshot, [...priorOps, ...ops.slice(0, i + 1)], opts.scope)
+  const firstFramed = Math.max(0, newOps.length - MAX_FRAMES)
+  for (let i = 0; i < newOps.length; i++) {
+    const step = await applyOps(plan.planId, base, [...priorOps, ...newOps.slice(0, i + 1)], opts.scope)
     if ('code' in step) return step
     applied = step
     if (i >= firstFramed) {
       frames.push({
-        caption: captionOf(ops[i], baseSnapshot.targetProgramId, baseSnapshot.completed),
+        caption: captionOf(newOps[i], baseSnapshot.targetProgramId, baseSnapshot.completed),
         terms: regenerate(adapterInput(step)).terms,
         inputs: liveInputs(step),
       })
@@ -794,6 +907,7 @@ export async function runScenario(
     frames,
     // Every change saves on a clear spoken yes now (types.ts PROGRAM_OPS); a tap on Keep still works.
     requiresAppConfirmation: false,
+    notes: applied.notes ?? [],
   }
 }
 

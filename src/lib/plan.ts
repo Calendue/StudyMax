@@ -801,6 +801,22 @@ export function buildStudentPlanResult(
     .sort((a, b) => termOrder(termFromLabel(a)!) - termOrder(termFromLabel(b)!))
     .map((label): [string, string[]] => [label, [...pinned[label]].sort()])
   if (pins.length > 0 || added.length > 0) {
+    // A pinned course counts as passed from its term on, so a prerequisite nothing else needs would drop
+    // out of the plan: plan those like added courses (one per unmet group, prerequisites first).
+    const catalog = options.catalog ?? defaultCatalog()
+    const pinnedCodes = new Set(pins.flatMap(([, codes]) => codes))
+    const have = new Set([...completed, ...inProgress, ...pinnedCodes])
+    const needed = new Set<string>()
+    for (const code of pinnedCodes) {
+      for (const group of catalog[code]?.requires ?? []) {
+        if (!group.some((o) => have.has(o) || needed.has(o))) needed.add(group[0])
+      }
+    }
+    if (needed.size > 0) {
+      const prereqs: Specialization = { id: 'pinned-prerequisites', name: 'Prerequisites for courses you placed', requirements: [...needed].sort().map((code) => ({ courses: [code], need: 1 })) }
+      targets = [...targets, prereqs]
+      allSpecializations = [...allSpecializations, prereqs]
+    }
     const booked: Record<string, string[]> = { ...(options.booked ?? {}) }
     for (const [label, codes] of pins) booked[label] = [...(booked[label] ?? []), ...codes]
     const inner = buildStudentPlanResult(targets, allSpecializations, completed, [...inProgress, ...pins.flatMap(([, codes]) => codes)], coursesPerTerm, start, { ...options, booked, pinned: {}, added: [] })

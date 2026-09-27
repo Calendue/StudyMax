@@ -10,7 +10,8 @@ export type Term = { season: 'Fall' | 'Winter' | 'Spring/Summer'; year: number }
 export type ScenarioOp =
   | { op: 'DROP_COURSE'; courseCode: string; term?: Term }
   | { op: 'ADD_COURSE'; courseCode: string; term?: Term }
-  | { op: 'MOVE_COURSE'; courseCode: string; toTerm: Term }
+  /** No toTerm: "later" — the next term after where it sits now that the plan can actually hold it. */
+  | { op: 'MOVE_COURSE'; courseCode: string; toTerm?: Term }
   | { op: 'PIN_COURSE'; courseCode: string; term: Term }
   | { op: 'UNPIN_COURSE'; courseCode: string }
   | { op: 'SET_PREFERENCE'; key: string; value: unknown }
@@ -18,7 +19,8 @@ export type ScenarioOp =
   | { op: 'SET_MAJOR'; programId: string }
   | { op: 'SET_MINOR'; programId: string | null }
   | { op: 'SET_SPECIALIZATIONS'; specializationIds: string[] }
-  | { op: 'RESTORE_VERSION'; versionNumber: number }
+  /** 'previous': the version before the current one ("leave it as it was" right after a save). */
+  | { op: 'RESTORE_VERSION'; versionNumber: number | 'previous' }
   | { op: 'SET_DEGREE'; variant: string }
   | { op: 'SET_INTERNSHIP'; year: 3 | 4 | null }
 

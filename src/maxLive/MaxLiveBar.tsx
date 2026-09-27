@@ -2,7 +2,8 @@
 // right now, what it does to graduation, and — for a proposal — Keep this plan / Not now. Desktop gets
 // the full bar; `compact` is the phone's one-line version. Reads the model; no state of its own.
 import { useModel } from '../model.ts'
-import { Button } from '../ui/primitives.tsx'
+import { Button, Chip } from '../ui/primitives.tsx'
+import type { SeatCheckStatus } from '../lib/max/live.ts'
 import { Icon } from '../ui/Icon.tsx'
 import { MaxOwl } from '../ui/MaxOwl.tsx'
 import { livePose } from '../ui/owlPose.ts'
@@ -19,6 +20,21 @@ const CALL_LINE: Record<string, string> = {
 }
 
 const ENDED = new Set(['ended', 'voicemail', 'no_answer', 'failed'])
+
+function seatLabel(status: SeatCheckStatus, seats: number): string {
+  switch (status) {
+    case 'open':
+      return seats === 1 ? '1 seat open' : `${seats} seats open`
+    case 'waitlist':
+      return 'Full · waitlist open'
+    case 'full':
+      return 'Full'
+    case 'not_running':
+      return 'Not running'
+    default:
+      return 'No seat data'
+  }
+}
 
 /** The Plan tab's way in: talk the plan through with Max, and watch the tree change as he does. */
 export function TalkToMax() {
@@ -79,6 +95,15 @@ export function MaxLiveBar({ compact = false }: { compact?: boolean }) {
       {caption && !unreached && (
         <p className="max-live__caption" aria-live="polite">
           {caption}
+        </p>
+      )}
+
+      {live.seats && !live.working && !unreached && (
+        <p className="max-live__seats">
+          <span>
+            {live.seats.courseCode.replace(/^([A-Z]+)(\d)/, '$1 $2')} · {live.seats.term}
+          </span>
+          <Chip tone={live.seats.status === 'open' ? 'accent' : 'quiet'}>{seatLabel(live.seats.status, live.seats.seatsOpen)}</Chip>
         </p>
       )}
 

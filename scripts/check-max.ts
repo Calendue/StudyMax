@@ -6,6 +6,7 @@ import { adapterInput, applyPlanOps, checkAffirmative, checkDecline, cleanOps, n
 import { parseCallPlanInputs } from '../src/lib/max/callInputs.ts'
 import { finishShift, planOptions } from '../src/lib/max/options.ts'
 import { planHash, regenerate, validate } from '../src/lib/max/planningAdapter.ts'
+import { courseRunsIn, termFromLabel, termOrder } from '../src/lib/plan.ts'
 import { completedCourses, inProgressCourses, inProgressTerms } from '../src/data/transcript.ts'
 
 // --- course codes as a voice model says them ---
@@ -26,7 +27,9 @@ assert.equal(refused(undefined), 'MISSING_OPS')
 assert.equal(refused([{ op: 'ENROLL_ME', courseCode: 'CMPT371' }]), 'UNSUPPORTED_OPERATION', 'an unknown op')
 assert.deepEqual(cleanOps([{ op: 'ADD_COURSE', courseCode: 'cmpt 318', term: 'winter 2028' }]), [{ op: 'ADD_COURSE', courseCode: 'CMPT318', term: { season: 'Winter', year: 2028 } }])
 assert.deepEqual(cleanOps([{ op: 'MOVE_COURSE', courseCode: 'CMPT370', toTerm: { season: 'summer', year: 2028 } }]), [{ op: 'MOVE_COURSE', courseCode: 'CMPT370', toTerm: { season: 'Spring/Summer', year: 2028 } }])
-assert.equal(refused([{ op: 'MOVE_COURSE', courseCode: 'CMPT370' }]), 'INVALID_TERM', 'a move needs a term')
+assert.deepEqual(cleanOps([{ op: 'MOVE_COURSE', courseCode: 'CMPT370' }]), [{ op: 'MOVE_COURSE', courseCode: 'CMPT370' }], 'a move without a term means later')
+assert.equal(refused([{ op: 'MOVE_COURSE', courseCode: 'CMPT370', toTerm: 'someday' }]), 'INVALID_TERM')
+assert.deepEqual(cleanOps([{ op: 'RESTORE_VERSION', versionNumber: 'previous' }]), [{ op: 'RESTORE_VERSION', versionNumber: 'previous' }])
 assert.equal(refused([{ op: 'SET_GRAD_TARGET', term: 'soon' }]), 'INVALID_TERM')
 assert.deepEqual(cleanOps([{ op: 'SET_MINOR', programId: 'none' }]), [{ op: 'SET_MINOR', programId: null }])
 assert.equal(refused([{ op: 'SET_MAJOR', programId: '' }]), 'INVALID_PROGRAM')
@@ -135,6 +138,33 @@ assert.equal(base.coursesPerTerm, 5, 'pure: the base snapshot is untouched')
 const afterPlan = regenerate(adapterInput(after)).terms
 assert.ok(validate(afterPlan, adapterInput(after)).ok, 'the resulting plan keeps every hard constraint')
 assert.ok(afterPlan.every((t) => t.courses.length <= 4), 'at the new pace')
+// --- moving a course like an advisor: the next term that works, never "you're taking it now" ---
+const where = (s: Snapshot, code: string) => regenerate(adapterInput(s)).terms.find((t) => t.courses.some((c) => c.code === code))?.label ?? null
+const now = { season: 'Fall', year: 2026 } as const
+for (const [said, code] of [
+  [{ op: 'MOVE_COURSE', courseCode: 'CMPT 370' }, 'CMPT370'], // under way, no term: later
+  [{ op: 'MOVE_COURSE', courseCode: 'CMPT370', toTerm: 'Spring 2027' }, 'CMPT370'], // summers are off
+] as const) {
+  const moved = applyPlanOps(base, cleanOps([said]) as never)
+  assert.ok(!('code' in moved), `${JSON.stringify(said)} is planned, not refused`)
+  const term = where(moved, code)
+  assert.ok(term && termOrder(termFromLabel(term)!) > termOrder(now), `${code} lands in a later term (${term})`)
+  assert.ok(courseRunsIn(code, termFromLabel(term)!.season, false), `${code} runs in ${term}`)
+  assert.ok(!moved.inProgress.includes(code) && moved.droppedCourses.includes(code), 'and is dropped from this term')
+  assert.ok(validate(regenerate(adapterInput(moved)).terms, adapterInput(moved)).ok, 'breaking no rule')
+  assert.ok(moved.notes?.some((n) => /registrar/.test(n)), 'with the registrar note')
+}
+const plannedCode = regenerate(adapterInput(base)).terms.flatMap((t) => t.courses.map((c) => c.code)).find((c) => /^CMPT3\d\d$/.test(c))!
+const plannedFrom = where(base, plannedCode)!
+const later = applyPlanOps(base, [{ op: 'MOVE_COURSE', courseCode: plannedCode }])
+assert.ok(!('code' in later))
+const laterTerm = where(later, plannedCode)!
+assert.ok(termOrder(termFromLabel(laterTerm)!) > termOrder(termFromLabel(plannedFrom)!), `a planned course moved "later" goes after ${plannedFrom} (${laterTerm})`)
+assert.ok(validate(regenerate(adapterInput(later)).terms, adapterInput(later)).ok)
+const required = applyPlanOps(base, [{ op: 'DROP_COURSE', courseCode: plannedCode }])
+assert.equal('code' in required && required.code, 'REQUIRED_COURSE', 'a planned course the degree needs is offered a move, not silently dropped')
+const ownPick = applyPlanOps({ ...base, added: ['PHIL140'] }, [{ op: 'DROP_COURSE', courseCode: 'PHIL140' }])
+assert.ok(!('code' in ownPick) && !ownPick.added.includes('PHIL140') && !ownPick.droppedCourses.includes('PHIL140'), 'one they added comes back out')
 const dropTwice = applyPlanOps({ ...base, droppedCourses: ['CMPT370'], inProgress: inProgressCourses.filter((c) => c !== 'CMPT370') }, [
   { op: 'DROP_COURSE', courseCode: 'CMPT370' },
 ])
@@ -165,14 +195,24 @@ assert.ok(validate(addedPlan, adapterInput(added)).ok, 'placed after its prerequ
 const placed = applied([{ op: 'ADD_COURSE', courseCode: 'PHIL140', term: 'Winter 2029' }])
 assert.ok(!('code' in placed))
 assert.ok(regenerate(adapterInput(placed)).terms.find((t) => t.label === 'Winter 2029')?.courses.some((c) => c.code === 'PHIL140' && c.pinned), 'a placed course sits in its term')
+// A named term that can't hold the course: the nearest later term that can, and Max says why.
 const early = applied([{ op: 'MOVE_COURSE', courseCode: 'STAT242', toTerm: 'Fall 2028' }])
-assert.ok(!('code' in early) && !validate(regenerate(adapterInput(early)).terms, adapterInput(early)).ok, 'a move that breaks the rules is shown, never saved')
+assert.ok(!('code' in early))
+const earlyPlan = regenerate(adapterInput(early)).terms
+const earlyTerm = earlyPlan.find((t) => t.courses.some((c) => c.code === 'STAT242'))!.label
+assert.ok(termOrder(termFromLabel(earlyTerm)!) > termOrder({ season: 'Fall', year: 2028 }), `moved past the term that can't hold it (${earlyTerm})`)
+assert.ok(courseRunsIn('STAT242', termFromLabel(earlyTerm)!.season, false), 'into a term that runs it')
+assert.ok(validate(earlyPlan, adapterInput(early)).ok, 'breaking no rule')
+assert.match(early.notes?.[0] ?? '', /Fall 2028 doesn't work for STAT 242 because .+ next term that does is/, 'and says why')
 const past = applied([{ op: 'ADD_COURSE', courseCode: 'PHIL140', term: 'Fall 2026' }])
 assert.equal('code' in past && past.code, 'TERM_PAST')
 const faster = applied([{ op: 'SET_GRAD_TARGET', term: 'Winter 2030' }])
 assert.ok(!('code' in faster) && gradOf(faster) === 'Winter 2030', 'a graduation target is met by the lightest load that makes it')
+// An impossible target: the soonest finish that is possible, offered with a note instead of a refusal.
 const impossible = applied([{ op: 'SET_GRAD_TARGET', term: 'Winter 2027' }])
-assert.equal('code' in impossible && impossible.code, 'CANT_MEET_TARGET')
+assert.ok(!('code' in impossible), 'an impossible target is answered with the soonest possible plan')
+assert.ok(termOrder(termFromLabel(gradOf(impossible)!)!) < termOrder(termFromLabel(gradOf(halfway)!)!), 'which finishes sooner than now')
+assert.match(impossible.notes?.[0] ?? '', /Winter 2027 isn't possible .+ soonest you could finish/)
 const minor = applied([{ op: 'SET_MINOR', programId: 'Statistics' }])
 assert.ok(!('code' in minor) && minor.minorProgramId === 'statistics-minor' && minor.targetIds.length > 1, 'a minor adds its lists')
 const noMinor = applyPlanOps(minor as Snapshot, cleanOps([{ op: 'SET_MINOR', programId: null }]) as never)

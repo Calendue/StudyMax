@@ -219,10 +219,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   console.log(`[Max] call ${call.callId} placed${dryRun ? ' (dry run)' : ''} — ${byPhone ? `guest → account ${account.userId} by phone, ` : ''}${planInputs ? `app inputs, parity=${parity}` : 'saved plan'}`)
 
+  const variableValues = {
+    name: firstName ?? "not given yet — ask what they'd like to be called if you need it",
+    programLine: [profile.degree, programName(programId)].filter(Boolean).join(', '),
+    currentTerm: `${currentTerm.season} ${currentTerm.year}`,
+    currentCoursesLine: currentLine ?? (currentCourses.length > 0 ? currentCourses.join(', ') : 'none'),
+    roadmapVersion: plan.version,
+    projectedGraduation: graduation ?? 'unknown',
+    isFirstCall,
+    wellnessResourceLine: WELLNESS_FALLBACK,
+  }
+  const firstMessage = isFirstCall
+    ? `Hi${firstName ? ` ${firstName}` : ''}, it's Max, the StudyMax owl. I've got your plan up — what's on your mind?`
+    : `Hey${firstName ? ` ${firstName}` : ''}, Max the owl here. What's up?`
+
   if (dryRun) {
-    // No phone: the rehearsal script plays Vapi's webhooks against this row.
+    // No phone: the rehearsal script plays Vapi's webhooks against this row, and scripts/max-chat.ts
+    // gives the model exactly what Vapi would get.
     await db().maxCall.update({ where: { callId: call.callId }, data: { vapiCallId: `dry-${call.callId}`, status: 'ringing' } })
-    res.status(200).json({ ok: true, callId: String(call.callId), liveToken, parity, dryRun: true })
+    res.status(200).json({ ok: true, callId: String(call.callId), liveToken, parity, dryRun: true, variableValues, firstMessage })
     return
   }
 
@@ -233,19 +248,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       phoneNumberId: phoneNumberId!,
       customer: { number: dial! },
       assistantOverrides: {
-        variableValues: {
-          name: firstName ?? "not given yet — ask what they'd like to be called if you need it",
-          programLine: [profile.degree, programName(programId)].filter(Boolean).join(', '),
-          currentTerm: `${currentTerm.season} ${currentTerm.year}`,
-          currentCoursesLine: currentLine ?? (currentCourses.length > 0 ? currentCourses.join(', ') : 'none'),
-          roadmapVersion: plan.version,
-          projectedGraduation: graduation ?? 'unknown',
-          isFirstCall,
-          wellnessResourceLine: WELLNESS_FALLBACK,
-        },
-        firstMessage: isFirstCall
-          ? `Hi${firstName ? ` ${firstName}` : ''}, it's Max, the StudyMax owl. I've got your plan up — what's on your mind?`
-          : `Hey${firstName ? ` ${firstName}` : ''}, Max the owl here. What's up?`,
+        variableValues,
+        firstMessage,
         metadata: { callRowId: String(call.callId) },
         // Per call, so a deploy changes it without re-running scripts/configure-max-assistant.ts.
         maxDurationSeconds: MAX_CALL_SECONDS,
