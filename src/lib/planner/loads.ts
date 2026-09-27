@@ -25,8 +25,8 @@ export function clampSummer(n: unknown, fallback = 0): number {
   return Math.min(MAX_SUMMER_LOAD, Math.max(0, v))
 }
 
-/** The effective Spring/Summer load from the edge fields: off → 0, on → the clamped count (at least 1). */
+/** The effective Spring/Summer load from the edge fields: off → 0; on → the clamped count (on with 0 is off). */
 export function summerLoadOf(springSummer: boolean | undefined, summerPerTerm: number | undefined): number {
   if (!springSummer) return 0
-  return Math.max(1, clampSummer(summerPerTerm ?? DEFAULT_SUMMER_LOAD, DEFAULT_SUMMER_LOAD))
+  return clampSummer(summerPerTerm ?? DEFAULT_SUMMER_LOAD, DEFAULT_SUMMER_LOAD)
 }
