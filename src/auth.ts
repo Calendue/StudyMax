@@ -96,6 +96,9 @@ export async function idToken(): Promise<string | null> {
   try {
     if (isNative) return (await (await native()).FirebaseAuthentication.getIdToken()).token || null
     const { auth } = await web()
+    // Wait for the saved session like currentAccount() does: right after a page load currentUser is
+    // still null, and a signed-in student's call to Max went out as a guest on the shared demo student.
+    await auth.authStateReady()
     return (await auth.currentUser?.getIdToken()) ?? null
   } catch {
     return null
