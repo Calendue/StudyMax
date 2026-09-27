@@ -2,6 +2,7 @@ import { useModel } from '../model.ts'
 import type { Provider } from '../auth.ts'
 import { Wordmark } from '../ui/Brand.tsx'
 import { Appear, Button } from '../ui/primitives.tsx'
+import { isNative } from '../platform.ts'
 
 function AppleLogo() {
   return (
@@ -79,8 +80,8 @@ export function WelcomeScreen() {
           Continue without an account
         </Button>
         <p className="welcome__note">Signing in keeps your courses and plan with your account on this device.</p>
-        <button type="button" className="inline-link welcome__home" disabled={m.authBusy !== null} onClick={m.toLanding}>
-          Back to the home page
+        <button type="button" className="inline-link welcome__home" disabled={m.authBusy !== null} onClick={isNative ? m.loadSampleStudent : m.toLanding}>
+          {isNative ? 'Skip to a sample student' : 'Back to the home page'}
         </button>
       </footer>
     </>

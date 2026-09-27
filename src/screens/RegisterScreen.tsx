@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useLayoutMode } from '../ui/layout.ts'
+import { useBackLayer } from '../ui/useBackLayer.ts'
 import { PracticeRun } from './register/PracticeRun.tsx'
 import { RegisterPlan } from './register/RegisterPlan.tsx'
 import { useRegistrationPlan, useRegistrationRequest } from './register/useRegistration.ts'
@@ -15,6 +16,7 @@ export function RegisterScreen() {
   const loaded = useRegistrationPlan(request)
   const phone = useLayoutMode() === 'tabs'
   const [view, setView] = useState<'plan' | 'practice'>('plan')
+  useBackLayer(view === 'practice', () => setView('plan'))
 
   if (view === 'practice' && loaded.plan) {
     return <PracticeRun plan={loaded.plan} scroll={phone} onBack={() => setView('plan')} />

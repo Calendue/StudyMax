@@ -729,6 +729,8 @@ function useStudyMax() {
     setCompletedTerms({})
     setOverrides([])
     setLastChange(null)
+    setPinned({})
+    setAddedCourses([])
     // The sample's own seven are the whole of what it's taking: onboarding's picks don't join them.
     setRegistered([])
     setRegisteredQuery('')
@@ -1633,7 +1635,7 @@ function useStudyMax() {
   /** Back out of the flow to the landing page, from its first step. */
   function toLanding() {
     haptic.selection()
-    go('landing', -1)
+    go(isNative ? 'welcome' : 'landing', -1)
   }
 
   /** The landing page's call to action: into the flow at its first step. */
