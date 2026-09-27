@@ -8,10 +8,25 @@
 // this is wired to a live assistant, and adjust extractToolCalls()/the response shape if it differs).
 import { Prisma } from '@prisma/client'
 import { db, hasDatabase } from '../_db.js'
-import { commitScenario, discardScenario, presentScenario, runScenario } from './_scenarios.js'
+import {
+  adapterInput,
+  commitScenario,
+  discardScenario,
+  droppedAt,
+  presentScenario,
+  runScenario,
+  snapshotFromCall,
+  type CallScope,
+} from './_scenarios.js'
+import { publish, uiVisible } from './_live.js'
+import { DEMO_AUTH_UID } from './_demoUser.js'
+import type { CallPlanInputs } from '../../src/lib/max/live.js'
 import type { ScenarioOp } from '../../src/lib/max/types.js'
 import { maxSkills } from '../../src/lib/max/skills.generated.js'
-import { programName, specializationName } from '../../src/lib/max/planningAdapter.js'
+import { planOptions, type OptionTopic } from '../../src/lib/max/options.js'
+import { programName, regenerate, speakableCourse, specializationName } from '../../src/lib/max/planningAdapter.js'
+import { computeMatches } from '../../src/lib/match.js'
+import { programs } from '../../src/data/programs/index.js'
 import { currentTermOf } from '../../src/lib/plan.js'
 
 interface VercelRequest {
@@ -80,14 +95,30 @@ function verifiedByServerSecret(req: VercelRequest): boolean {
 interface ResolvedCall {
   callId: bigint
   userId: bigint
+  /** The live Plan-tab channel for this call (null: placed by an app without live support). */
+  liveToken: string | null
+  /** The app's plan inputs at call time, advanced on each save — Max plans exactly what's on screen. */
+  planInputs: CallPlanInputs | null
+  uiSeenAt: Date | null
+  /** The shared demo student: nothing personal may be written to it (it reaches the next guest). */
+  isGuest: boolean
 }
 
 async function resolveCall(vapiCallId: string | null): Promise<ResolvedCall | null> {
   if (!vapiCallId) return null
-  const call = await db().maxCall.findUnique({ where: { vapiCallId } })
+  const call = await db().maxCall.findUnique({ where: { vapiCallId }, include: { user: { select: { authUid: true } } } })
   if (!call || call.status === 'ended' || call.status === 'failed') return null
-  return { callId: call.callId, userId: call.userId }
+  return {
+    callId: call.callId,
+    userId: call.userId,
+    liveToken: call.liveToken,
+    planInputs: (call.planInputs as CallPlanInputs | null) ?? null,
+    uiSeenAt: call.uiSeenAt,
+    isGuest: call.user.authUid === DEMO_AUTH_UID,
+  }
 }
+
+const scopeOf = (call: ResolvedCall): CallScope => ({ callId: call.callId, planInputs: call.planInputs, isGuest: call.isGuest })
 
 type ToolResponse = Record<string, unknown>
 
@@ -100,6 +131,7 @@ const SKILL_BY_TOOL: Record<string, string> = {
   discard_scenario: 'what_if/manage_roadmap',
   commit_scenario: 'manage_roadmap',
   update_name: 'correct_name',
+  get_plan_options: 'recommend_plan',
 }
 
 /** One short, tool-specific fact worth seeing in a log line — never the full payload. */
@@ -124,7 +156,56 @@ function digest(name: string, result: ToolResponse): string {
   }
 }
 
-async function runGetStudentOverview(userId: bigint, callId: bigint): Promise<ToolResponse> {
+/** What a call-scoped overview says: the plan on the student's screen, from the call's own inputs. */
+async function overviewFromCall(call: ResolvedCall, p: CallPlanInputs): Promise<ToolResponse> {
+  const s = snapshotFromCall(p)
+  const terms = regenerate(adapterInput(s)).terms
+  const program = programs.find((x) => x.id === p.programId)
+  const degree = program?.degrees?.find((d) => d.variant === p.degreeVariant) ?? program?.degree
+  const [activeScenario, saved] = await Promise.all([
+    db().scenario.findFirst({
+      where: { userId: call.userId, callId: call.callId, status: { in: ['computed', 'presented'] } },
+      orderBy: { updatedAt: 'desc' },
+    }),
+    db().scenario.count({ where: { callId: call.callId, status: 'committed' } }),
+  ])
+  const currentTerm = currentTermOf(s.today)
+  const own = new Set(program?.specializations.map((x) => x.id) ?? [])
+  return {
+    program: {
+      major: programName(p.programId),
+      minor: p.minorId ? programName(p.minorId) : null,
+      specializations: p.targetIds.filter((id) => own.has(id)).map((id) => specializationName(p.programId, id)),
+    },
+    currentTerm: `${currentTerm.season} ${currentTerm.year}`,
+    currentCourses: s.enrolled,
+    ...(s.droppedCourses.length > 0 ? { droppedInSavedPlan: s.droppedCourses } : {}),
+    roadmap: {
+      projectedGraduation: terms[terms.length - 1]?.label ?? null,
+      nextTerms: terms.slice(0, 3).map((t) => ({ term: t.label, courses: t.courses.map((c) => speakableCourse(c.code)) })),
+    },
+    preferences: { coursesPerTerm: s.coursesPerTerm, springSummer: s.springSummer, summerCoursesPerTerm: s.summerPerTerm },
+    // What Max may switch to, with how much each has left — for get_plan_options and a spoken name.
+    availableSpecializations: computeMatches(program?.specializations ?? [], new Set(s.completed), degree)
+      .filter((m) => m.remaining > 0 && !m.spec.unavailable)
+      .map((m) => ({ id: m.spec.id, name: m.spec.name, remaining: m.remaining })),
+    ...(saved > 0 ? { savedThisCall: saved } : {}),
+    uiVisible: uiVisible(call),
+    ...(activeScenario
+      ? {
+          activeScenario: {
+            id: String(activeScenario.scenarioId),
+            status: activeScenario.status,
+            opsSummary: (activeScenario.operations as unknown as ScenarioOp[]).map((op) => op.op),
+          },
+        }
+      : {}),
+  }
+}
+
+async function runGetStudentOverview(call: ResolvedCall): Promise<ToolResponse> {
+  if (call.planInputs) return overviewFromCall(call, call.planInputs)
+  const { userId, callId } = call
   const [profile, plan, courses, activeScenario] = await Promise.all([
     db().studentProfile.findUnique({ where: { userId } }),
     db().generatedPlan.findUnique({ where: { userId } }),
@@ -139,7 +220,12 @@ async function runGetStudentOverview(userId: bigint, callId: bigint): Promise<To
     return { ok: false, code: 'NO_PLAN', speakable: "I don't have a roadmap on file for you yet." }
   }
 
-  const currentCourses = courses.filter((c) => c.status === 'in_progress').map((c) => c.courseCode)
+  // Transcript in-progress and onboarding's "registered this term" are both what they're taking now.
+  const currentCourses = [
+    ...new Set(courses.filter((c) => c.status === 'in_progress' || c.status === 'registered').map((c) => c.courseCode)),
+  ]
+  // Courses the saved plan has dropped: still enrolled until they drop with the registrar (spec 06).
+  const droppedInPlan = (await droppedAt(plan.planId, plan.version)).filter((code) => currentCourses.includes(code))
   // plan.terms only holds courses not yet taken (buildStudentPlan assumes in-progress ones are done
   // "by start") — its last entry is the graduation term, never the term running now.
   const terms = plan.terms as unknown as { label: string; courses: { code: string }[] }[]
@@ -154,10 +240,11 @@ async function runGetStudentOverview(userId: bigint, callId: bigint): Promise<To
     },
     currentTerm: `${currentTerm.season} ${currentTerm.year}`,
     currentCourses,
+    ...(droppedInPlan.length > 0 ? { droppedInSavedPlan: droppedInPlan } : {}),
     roadmap: {
       versionNumber: plan.version,
       projectedGraduation: lastTerm?.label ?? null,
-      nextTerms: terms.slice(0, 3).map((t) => ({ term: t.label, courses: t.courses.map((c) => c.code) })),
+      nextTerms: terms.slice(0, 3).map((t) => ({ term: t.label, courses: t.courses.map((c) => speakableCourse(c.code)) })),
     },
     // No StudentPreference rows exist yet this weekend (nothing writes them) — empty, not an error.
     preferences: [],
@@ -173,17 +260,49 @@ async function runGetStudentOverview(userId: bigint, callId: bigint): Promise<To
   }
 }
 
-async function runRunScenario(userId: bigint, callId: bigint, args: Record<string, unknown>): Promise<ToolResponse> {
-  const ops = Array.isArray(args.ops) ? (args.ops as ScenarioOp[]) : []
-  const scenarioId = args.scenarioId ? BigInt(args.scenarioId as string | number) : undefined
+/** A scenario id from the model: digits only, else null (BigInt("abc") would throw mid-call). */
+function scenarioIdOf(value: unknown): bigint | null {
+  const text = typeof value === 'number' ? String(value) : typeof value === 'string' ? value.trim() : ''
+  return /^\d+$/.test(text) ? BigInt(text) : null
+}
 
-  const result = await runScenario(userId, ops, { scenarioId, callId })
-  if ('code' in result) return result
+const UNKNOWN_SCENARIO = { ok: false, code: 'UNKNOWN_SCENARIO', speakable: "I've lost track of that plan change — let's start a new one." }
+
+async function runRunScenario(call: ResolvedCall, args: Record<string, unknown>): Promise<ToolResponse> {
+  const scenarioId = args.scenarioId === undefined || args.scenarioId === null || args.scenarioId === '' ? undefined : scenarioIdOf(args.scenarioId)
+  if (scenarioId === null) return UNKNOWN_SCENARIO
+
+  // "Max is looking…" on the student's screen while the plans are built (not awaited against the tool).
+  const working = publish(call.liveToken, { type: 'max.working', tool: 'run_scenario' })
+  const result = await runScenario(call.userId, args.ops, { scenarioId, scope: scopeOf(call) })
+  if ('code' in result) {
+    await working
+    return result
+  }
 
   // Marking "presented" at return time is deliberate: the tool result is exactly what Max will
-  // speak (spec 07). uiVisible is hardcoded false — no realtime UI channel this weekend (→ 05, 07).
-  const presented = await presentScenario(userId, result.scenarioId, 'voice')
-  if ('code' in presented) return presented
+  // speak (spec 07), and what the live tree shows at the same moment.
+  const presented = await presentScenario(call.userId, result.scenarioId, 'voice')
+  if ('code' in presented) {
+    await working
+    return presented
+  }
+
+  const errors = result.validation.issues.filter((i) => i.severity === 'ERROR').map((i) => i.message)
+  await working
+  await publish(call.liveToken, {
+    type: 'scenario.presented',
+    scenario: {
+      scenarioId: String(result.scenarioId),
+      status: 'presented',
+      presentedHash: presented.presentedHash,
+      requiresAppConfirmation: result.requiresAppConfirmation,
+      headline: result.diff.headline,
+      errors,
+      graduation: { before: result.diff.graduation.before, after: result.diff.graduation.after },
+      frames: result.frames,
+    },
+  })
 
   return {
     scenarioId: String(result.scenarioId),
@@ -191,28 +310,58 @@ async function runRunScenario(userId: bigint, callId: bigint, args: Record<strin
     feasible: result.validation.ok,
     headline: result.diff.headline,
     warnings: result.validation.issues.filter((i) => i.severity === 'WARNING').map((i) => i.message),
-    errors: result.validation.issues.filter((i) => i.severity === 'ERROR').map((i) => i.message),
-    requiresAppConfirmation: false,
-    uiVisible: false,
+    errors,
+    // A specialization switch is saved only by the student's tap in the app (I2), never commit_scenario.
+    requiresAppConfirmation: result.requiresAppConfirmation,
+    uiVisible: uiVisible(call),
   }
 }
 
-async function runDiscardScenario(userId: bigint, args: Record<string, unknown>): Promise<ToolResponse> {
-  if (!args.scenarioId) return { ok: false, code: 'MISSING_SCENARIO_ID', speakable: "I don't know which change to drop." }
-  const result = await discardScenario(userId, BigInt(args.scenarioId as string | number))
+async function runDiscardScenario(call: ResolvedCall, args: Record<string, unknown>): Promise<ToolResponse> {
+  if (!args.scenarioId) return { ok: false, code: 'MISSING_SCENARIO_ID', speakable: "I don't know which change to leave." }
+  const scenarioId = scenarioIdOf(args.scenarioId)
+  if (scenarioId === null) return UNKNOWN_SCENARIO
+  const result = await discardScenario(call.userId, scenarioId)
+  if (!('code' in result)) await publish(call.liveToken, { type: 'scenario.discarded', scenarioId: String(scenarioId) })
   return result
 }
 
-async function runCommitScenario(userId: bigint, callId: bigint, args: Record<string, unknown>): Promise<ToolResponse> {
+async function runCommitScenario(call: ResolvedCall, args: Record<string, unknown>): Promise<ToolResponse> {
   if (!args.scenarioId || !args.presentedHash) {
     return { ok: false, code: 'MISSING_ARGS', speakable: "I don't have enough to save that yet." }
   }
-  const result = await commitScenario(userId, BigInt(args.scenarioId as string | number), String(args.presentedHash), {
+  const scenarioId = scenarioIdOf(args.scenarioId)
+  if (scenarioId === null) return UNKNOWN_SCENARIO
+  const result = await commitScenario(call.userId, scenarioId, String(args.presentedHash), {
     channel: 'voice',
     utterance: typeof args.confirmationUtterance === 'string' ? args.confirmationUtterance : '',
-    callId,
   })
-  return { ...result }
+  if ('code' in result) return result
+  // The app adopts the saved plan; Max only hears that it's saved (the plan itself isn't for speaking).
+  const { live, ...forMax } = result
+  await publish(call.liveToken, { type: 'scenario.committed', scenarioId: live.scenarioId, inputs: live.inputs, terms: live.terms })
+  return { ...forMax, uiVisible: uiVisible(call) }
+}
+
+const TOPICS = new Set<OptionTopic>(['specialization', 'pace', 'summer'])
+
+/** Max's recommendations: real alternatives, each scored by the plan it would give (src/lib/max/options.ts). */
+async function runGetPlanOptions(call: ResolvedCall, args: Record<string, unknown>): Promise<ToolResponse> {
+  const about = args.about as OptionTopic
+  if (!TOPICS.has(about)) return { ok: false, code: 'UNKNOWN_TOPIC', speakable: 'I can look at your pace, summers, or a different specialization.' }
+  if (!call.planInputs) {
+    return { ok: false, code: 'NO_LIVE_PLAN', speakable: "I can't compare options on this call — open the app and call me from there." }
+  }
+  const working = publish(call.liveToken, { type: 'max.working', tool: 'get_plan_options' })
+  const result = planOptions(adapterInput(snapshotFromCall(call.planInputs)), about)
+  await working
+  await publish(call.liveToken, {
+    type: 'options.presented',
+    about,
+    options: result.options.map(({ label, graduation, vsNow, coursesLeft }) => ({ label, graduation, vsNow, coursesLeft })),
+    recommended: result.recommended?.label ?? null,
+  })
+  return { ...result, uiVisible: uiVisible(call) }
 }
 
 /** Returns a skill's full playbook by name (docs/BayMax/skills/<name>/SKILL.md, compiled by
@@ -230,25 +379,30 @@ const NAME_RE = /^.{1,60}$/
 /** Lets Max update the student's name mid-call (e.g. "actually, call me James") and use it for the
  * rest of that same call — Vapi bakes {{name}} into the system prompt once at call start and never
  * re-templates it, so a tool result is the only way a correction actually takes for the rest of the call. */
-async function runUpdateName(userId: bigint, args: Record<string, unknown>): Promise<ToolResponse> {
+async function runUpdateName(call: ResolvedCall, args: Record<string, unknown>): Promise<ToolResponse> {
   const name = typeof args.name === 'string' ? args.name.trim() : ''
   if (!NAME_RE.test(name)) return { ok: false, code: 'INVALID_NAME', speakable: "I didn't catch a usable name there." }
-  const user = await db().userInfo.update({ where: { userId }, data: { firstName: name } })
+  // A guest is the demo student every guest shares: saving their name there would greet the next guest
+  // by it. The tool result alone carries it through this call.
+  if (call.isGuest) return { ok: true, name }
+  const user = await db().userInfo.update({ where: { userId: call.userId }, data: { firstName: name } })
   return { ok: true, name: user.firstName }
 }
 
-async function executeTool(name: string, userId: bigint, callId: bigint, args: Record<string, unknown>): Promise<ToolResponse> {
+async function executeTool(name: string, call: ResolvedCall, args: Record<string, unknown>): Promise<ToolResponse> {
   switch (name) {
     case 'get_student_overview':
-      return runGetStudentOverview(userId, callId)
+      return runGetStudentOverview(call)
     case 'run_scenario':
-      return runRunScenario(userId, callId, args)
+      return runRunScenario(call, args)
     case 'discard_scenario':
-      return runDiscardScenario(userId, args)
+      return runDiscardScenario(call, args)
     case 'commit_scenario':
-      return runCommitScenario(userId, callId, args)
+      return runCommitScenario(call, args)
+    case 'get_plan_options':
+      return runGetPlanOptions(call, args)
     case 'update_name':
-      return runUpdateName(userId, args)
+      return runUpdateName(call, args)
     case 'load_skill':
       return runLoadSkill(args)
     default:
@@ -296,7 +450,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       let ok = true
       let errorCode: string | null = null
       try {
-        result = await executeTool(raw.name, resolved.userId, resolved.callId, raw.arguments)
+        result = await executeTool(raw.name, resolved, raw.arguments)
         if (result.ok === false) {
           ok = false
           errorCode = String(result.code ?? 'ERROR')

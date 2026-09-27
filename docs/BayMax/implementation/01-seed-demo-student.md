@@ -51,6 +51,9 @@ duplicate rows):
    - Its requirements directly include `CMPT370` (`{ courses: ["CMPT370"], need: 1 }` in
      `src/data/specializations.ts`) — the same course already sitting in the seeded student's
      `inProgressCourses`.
+   - **Superseded 2026-09-27** — the seed now plans the whole degree at 5 a term through
+     `planningAdapter.regenerate()`; current numbers are in `docs/BayMax/HANDOFF.md` ("Demo student").
+     The historical record below is kept as it was.
    - Confirmed output, next Winter as `start`: **before** = one term (`Winter 2027: CMPT371, CMPT470`).
      **After** dropping `CMPT370` from in-progress = two terms (`Winter 2027: CMPT370`;
      `Fall 2027: CMPT371, CMPT470`) — graduation genuinely pushes out a term. This is the exact

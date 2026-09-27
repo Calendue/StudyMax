@@ -36,6 +36,7 @@
     "@capgo/capacitor-inappbrowser": "^8.20.0",
     "@fontsource/plus-jakarta-sans": "^5.3.0",
     "@prisma/client": "^6.19.3",
+    "@supabase/supabase-js": "^2.117.2",
     "@vapi-ai/server-sdk": "^2.0.1",
     "@vapi-ai/web": "^2.7.1",
     "firebase": "^12.19.0",

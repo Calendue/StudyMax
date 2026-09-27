@@ -23,6 +23,21 @@ someone to actually pick up the phone and talk to Max on the deployed site.
   unique indexes (`max_settings_verified_phone_uq`, `max_call_one_active_uq`) verified enforced.
 - **Planning adapter** (`src/lib/max/planningAdapter.ts`) — wraps the existing deterministic planner
   (`src/lib/plan.ts`'s `buildStudentPlan`) instead of building spec `04`'s full requirement-DSL.
+  **`regenerate()` builds exactly the app's own plan** (2026-09-27): the whole degree where the
+  program maps one, the concentrations + a declared minor as targets, the credentials the student is
+  partway through, at the student's own preferences (`StudentProfile.maxCoursesPerTerm`,
+  `springSummer`, `maxSummerCourses`; spec `03`'s fallback to `GeneratedPlan.coursesPerTerm`).
+  Before this it planned only the specialization at a hardcoded 4 a term. Every server path uses it —
+  Max's scenarios, `api/session.ts`'s autosave, the demo seed — so a scenario always diffs against a
+  baseline built the same way. `validate()` now really checks the hard constraints (`OVER_LOAD`,
+  `PREREQ_UNMET`, `NOT_OFFERED`, `DUPLICATE_COURSE`, using `plan.ts`'s own `courseRunsIn`/
+  `prerequisitesMet`) — they hold by construction until the planner relaxes its rules
+  (`RELAX_AFTER`), and an ERROR blocks the commit. Scenarios rebuild from scratch like the app; spec
+  `05`'s minimal-perturbation mode is deliberately not built. One known approximation: the server
+  doesn't know each in-progress course's own term (that's device-only), so it books them all in the
+  term running now — the app's own default. `scripts/check-planning-adapter.ts` asserts parity with
+  the app's call for 9 students, every constraint at loads 2–5 and with Spring/Summer, and that
+  `validate()` catches each ERROR code.
 - **Scenario/commit pipeline** (`api/max/_scenarios.ts`) — full `draft → computed → presented →
   committed/discarded` lifecycle, confirmation-hash check, voice affirmative classifier, stale-version
   detection, idempotent commits. `api/_planVersion.ts` is the one shared write path to
@@ -48,9 +63,14 @@ someone to actually pick up the phone and talk to Max on the deployed site.
   post-onboarding — `src/screens/EditProfileSheets.tsx`) and a "Max" section (name override + consent
   revoke — `src/screens/EditMaxNameSheet.tsx`, `AccountSheet.tsx`).
 - **Demo student**: `scripts/seed-demo-student.ts`, idempotent, targets `software-development`,
-  drop-CMPT370 scenario. **Numbers changed mid-session** (see below) — currently
-  `Winter 2027: CMPT371, CMPT470` baseline; dropping CMPT370 → `Winter 2027: CMPT370`,
-  `Winter 2028: CMPT371, CMPT470` (a full year out, not one term).
+  profile set to 5 courses a term with no Spring/Summer, drop-CMPT370 scenario. Reseeding also resets
+  the plan to v1 and deletes versions/scenarios a test call committed. **Current numbers (whole
+  degree, 2026-09-27)**: baseline `Winter 2027: CMPT371, CMPT470, Indigenous learning, Free elective,
+  Free elective`; dropping CMPT370 → `Winter 2027: CMPT370, Indigenous learning, Free elective, Free
+  elective` and `Winter 2028: CMPT371, CMPT470`. Headline unchanged: **"Graduation moves from Winter
+  2027 to Winter 2028."** (CMPT371/470 run only in Winter, so a full year out.) The three degree slots
+  are new — the old specialization-only plan never showed them. Verified end-to-end through
+  `runScenario` against the live DB.
 
 ## Two real bugs found and fixed during deploy (know these before touching this code)
 
@@ -121,8 +141,121 @@ All three verified against the live shared DB (demo student, `userId 8`) after t
 values. `npm run build`, `npm run lint`, and `check-plan.ts`/`check-planning-adapter.ts`/
 `check-skill-tree.ts` all pass with the change (the last one exercises the moved `currentTermOf`).
 
+## Max sweep, 2026-09-27 (bugs found and fixed)
+
+Every Max file read end to end, then the scenario flows run through the real code against the live DB
+(demo student, reseeded clean afterwards). Fixed:
+
+- **The demo's own save line didn't work.** A voice model says "cmpt 370"; the planner stores
+  `CMPT370`, so a drop failed with `COURSE_NOT_IN_PROGRESS`. And "Okay, yeah, save it" didn't count as a
+  yes (the classifier only matched a yes at the very start). Codes are now normalized
+  (`normalizeCourseCode`), ops validated before anything runs (`cleanOps` — empty lists, missing codes,
+  string version numbers, unsupported ops), and the classifier allows leading fillers and more yeses
+  while staying conservative (`scripts/check-max.ts`: 15 yeses, 13 not-yeses).
+- **A saved drop was forgotten by the next scenario.** A committed `DROP_COURSE` only models the drop —
+  `StudentCourse` keeps the course until the registrar drop (spec `06`) — so the next what-if rebuilt
+  from `StudentCourse` and silently un-dropped it, and "undo that" (restore v1) had nothing to undo. The
+  scenario's `resultInputs.droppedCourses` now carries the official version's drops forward; restore
+  resets them to that version's. `get_student_overview` reports them as `droppedInSavedPlan`.
+- **Identity:** a signed-in student with no saved account yet silently became the demo student — Max
+  would read them someone else's plan and they could overwrite the demo student's phone. Now `NO_PROFILE`
+  (409), with a "finish setting up your plan first" message in Ping Max.
+- **"What you're taking now" missed `registered` courses** (onboarding's this-term list) in `call.ts`
+  and `get_student_overview`, though the planner counts them — now the same set everywhere.
+- **Lock-outs:** a late out-of-order "ringing" webhook could reopen an ended call, and a call row that
+  never heard its end held `max_call_one_active_uq` forever (`ALREADY_ON_A_CALL` on every tap). The
+  webhook never reopens a finished call; `call.ts` expires "active" rows older than 30 min.
+- **A call nobody answered** set `hasMetMax`, so the next one greeted them as a returning caller; now
+  `no_answer`, and only an answered call counts.
+- **Max said false things:** "Everything we changed is in the app" (end-of-call) and "it's saved as a
+  draft in the app" — the app draws its own plan and shows neither saved plans nor drafts. Reworded in
+  the prompt, `manage_roadmap`, and the unreachable `REQUIRES_APP_CONFIRMATION` line ("I've sent you a
+  notification" — there are no notifications). **Needs the Vapi push** (`configure-max-assistant.ts`)
+  to take effect.
+- Smaller: `discard_scenario` no longer marks a committed scenario discarded; expired scenarios can't
+  be continued or committed; restore can't be mixed with a drop in one scenario; malformed scenario ids
+  return `UNKNOWN_SCENARIO` instead of a thrown `BigInt` error; an undone drop's headline says the course
+  is "back as something you're taking now", not "no longer needed"; Ping Max no longer dead-ends on a
+  blank error screen or advances to "Ready" when saving consent failed.
+
+## Max, live on the Skill Tree (2026-09-27)
+
+While Max is on the phone, the app's Plan tab shows his proposals reshaping the Academic Skill Tree as he
+talks — courses glide to new terms, new ones sprout, dropped ones fade, the canopy rises or falls with
+graduation — and a plan the student keeps becomes the app's own plan. Max can now recommend, too.
+
+**How it fits together**
+- **Same plan as the screen.** Ping Max sends the app's exact plan inputs (`CallPlanInputs`,
+  `src/lib/max/live.ts`, built in `App.tsx` `maxPlanInputs`; validated by `src/lib/max/callInputs.ts`).
+  They're stored on `MaxCall.planInputs`, and every scenario in the call plans from them
+  (`_scenarios.ts` call scope), so Max's "before" is exactly the tree on screen. `regenerate()` now
+  takes per-course seasons, the degree variant and the internship year — parity with the app is
+  checked for 14 students (`check-planning-adapter.ts`), and `call.ts` reports `parity` per call.
+- **Live channel.** Supabase Realtime **Broadcast** on a public channel named by the call's `liveToken`
+  (192 random bits, returned only to the caller). The server publishes over REST (`api/max/_live.ts`,
+  never throws, 1.5 s cap); the app listens with supabase-js, lazy-loaded (`src/maxLive/realtime.ts`).
+  `api/max/live.ts` (the one new function — Vercel Hobby's 12-function cap) serves the snapshot the app
+  catches up from on every (re)join, polls every 1.5 s when Realtime is missing or down, and heartbeats
+  every 10 s — which is what `uiVisible` ("it's on your screen now") rides on. It also takes the app's
+  Keep / Not now.
+- **Max's new powers.** `SET_PREFERENCE` (courses a term 1–5, Spring/Summer, courses a summer 1–3) and
+  `SET_SPECIALIZATIONS` (by id or spoken name). A switch can only be saved by the student's **Keep this
+  plan** tap (I2) — voice gets `REQUIRES_APP_CONFIRMATION`. New tool `get_plan_options` (pace / summer /
+  specialization, `src/lib/max/options.ts`) scores each option by building the whole plan it would give,
+  so every graduation Max says is what the tree will draw; new skill `recommend_plan`. Each
+  `run_scenario` call broadcasts one frame per change, played ≥1.2 s apart.
+- **The app adopts a save** (`adoptMaxPlan` in `App.tsx`): targets, pace, summers, drops — so the tree
+  stays in the new shape and signed-in students autosave it. Saved preferences also update
+  `StudentProfile`. `api/session.ts` no longer writes a new plan version when nothing changed (it bumped
+  the version under an open scenario and made Max's next save STALE).
+- **UI.** `src/maxLive/MaxLiveBar.tsx` above the tree (desktop full, phone compact) + `TalkToMax` entry
+  on the Plan page/tab; the tree reads `useTreeSource()` (`planView.ts`), and `useTreeTransition.ts`
+  animates between frames (FLIP via the Web Animations API, sprouts, fading ghosts for pruned courses,
+  bottom-anchored so the pinned roots stay put; reduced motion gets outlines and words instead).
+  `src/maxLive/treeDiff.ts` is the pure diff it runs on (`check-max-live.ts`).
+
+**Verification**: `check-max.ts` (ops, call inputs, recommendations: every option's ops apply and its
+graduation is what the tree draws), `check-max-live.ts` (a dropped course moves rather than vanishes; a
+switch sprouts and prunes; a 3-step proposal broadcasts ~13 KB; a whole-degree plan takes ~1.5 ms), and
+**`scripts/max-e2e.ts`** — the whole live call in-process against the real DB with the real handlers
+(passes; reseed afterwards). Phone-free rehearsal in the browser: `scripts/max-rehearse.ts` with a
+`?rehearse=1` dry-run call (needs `MAX_DRY_RUN=1` — local/Preview only).
+
+**Setup still needed (owner)** — until then the feature works by polling:
+1. Supabase → Project Settings → API Keys: publishable key + a **secret** key. Realtime → Settings:
+   **Allow public access** on (not private-channels-only).
+2. Env, `.env.local` **and** Vercel (Production + Preview): `VITE_SUPABASE_URL`,
+   `VITE_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY` (never `VITE_`-prefixed).
+   `MAX_DRY_RUN=1` in `.env.local` / Preview only. Kill switch: `MAX_LIVE=off`.
+3. Redeploy (the `VITE_*` values are baked in at build), then **push the assistant**:
+   `node --experimental-strip-types --env-file=.env.local scripts/configure-max-assistant.ts` — deploy
+   the API first; it overwrites the shared live assistant (new prompt, `get_plan_options`, the new
+   `run_scenario` ops, `recommend_plan`). Native apps: `npm run build && npx cap sync`, rebuild.
+4. Reseed the demo student before the demo: `npm run db:seed:demo-student`.
+
 ## Known gaps / not yet done
 
+- **Outside a live call, what Max saves still doesn't reach the app.** A saved plan is adopted by the
+  app only while it's open on that call (it follows the live channel). A save made with the app closed
+  lives only in `GeneratedPlan`, and a signed-in student's next app autosave regenerates over it.
+- **The degree variant isn't synced to the account** (`CloudSession` has no `degreeVariant`), so a
+  signed-in student's server-side autosave plans the program's default degree; live calls are
+  unaffected (the app sends its variant with the call).
+- The internship year: live calls use the app's own `away`; outside a call, scenarios and the autosave
+  read `StudentProfile.internshipAcademicYear` (Ibraheem's, merged 2026-09-27).
+- **Scenario baselines for real students built before 2026-09-27** (specialization-only, 4 a term) stay
+  stale until their next app autosave rewrites them with the whole-degree plan; a what-if in that window
+  diffs against the old plan. The demo student is reseeded, so it's unaffected.
+
+- **⚠️ Phone-ownership OTP verification is currently disabled** — `OTP_GATE_ENABLED = false` at the
+  top of `src/screens/PingMaxScreen.tsx`, added 2026-09-27 because Firebase Phone Auth was failing on
+  this project (Phone provider / Blaze plan still being sorted — authorized domains were already
+  correct). "Send code" currently just saves whatever number was typed as verified and moves straight
+  to consent, with no proof the person setting it up actually owns that number. **This is the exact
+  thing spec `11` calls out**: "Phone ownership verified by SMS OTP before the first call. Prevents
+  using Max to harass a third party." Flip `OTP_GATE_ENABLED` back to `true` once Firebase Phone Auth
+  actually works — do this before anyone outside the team can reach "Ping Max" unsupervised, not just
+  before the demo.
 - **No real phone call has actually been placed and completed end-to-end yet** (see Status above) —
   do this next, on the live site, not localhost.
 - **Vapi phone number is a US number** (`+1 314 661 9879`, imported from Twilio), not Canadian —

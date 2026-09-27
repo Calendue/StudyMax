@@ -1,4 +1,4 @@
-import type { PlannedTerm, Season } from './plan.ts'
+import type { PlannedTerm, Season } from './plan.js'
 
 // The courses a student is taking now, by term, and how they sit in the plan's timeline. The plan
 // itself only schedules what's left; this puts the courses already under way back into it, so the

@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
 import { electiveLabel, isElective } from '../lib/plan.ts'
+import { useElectivePicks } from '../lib/electivePicks.ts'
 import { createPortal } from 'react-dom'
 import { useReducedMotion } from 'motion/react'
 import { useModel } from '../model.ts'
@@ -8,7 +9,8 @@ import { haptic } from '../platform.ts'
 import { laneSeason, layoutSkillTree, pathThrough, type SkillTreeLayout, type TreeMilestone, type TreeNode } from '../lib/skillTree.ts'
 import { Icon } from '../ui/Icon.tsx'
 import { Sheet } from '../ui/Sheet.tsx'
-import { useTreeInputs, type TreeSelection } from './planView.ts'
+import { useTreeSource, type TreeSelection } from './planView.ts'
+import { useTreeTransition } from './useTreeTransition.ts'
 import { DegreeReadout } from './DegreeReadout.tsx'
 import { TreeDetail } from './TreeDetail.tsx'
 import { TreePeek } from './TreePeek.tsx'
@@ -65,7 +67,9 @@ export function SkillTree({
 }) {
   const m = useModel()
   const reduce = useReducedMotion() ?? false
-  const inputs = useTreeInputs()
+  // The app's plan, or Max's frame while he's reshaping it on a call (planView.ts useTreeSource).
+  const source = useTreeSource()
+  const { inputs } = source
 
   const sectionRef = useRef<HTMLElement>(null)
   const boardRef = useRef<HTMLDivElement>(null)
@@ -83,15 +87,15 @@ export function SkillTree({
     () =>
       width > 0
         ? layoutSkillTree({
-            completed: m.completed,
-            inProgress: m.inProgressCourses,
-            plan: m.plan,
+            completed: source.completed,
+            inProgress: source.inProgress,
+            plan: source.plan,
             ...inputs,
             internshipYear: m.internshipYear,
             width,
           })
         : null,
-    [m.completed, m.inProgressCourses, m.plan, m.internshipYear, inputs, width],
+    [source, m.internshipYear, inputs, width],
   )
 
   const [selection, setSelection] = useState<TreeSelection | null>(null)
@@ -198,6 +202,12 @@ export function SkillTree({
     const top = board.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop
     scroller.scrollTo({ top: top + y - scroller.clientHeight / 2, behavior: reduce ? 'auto' : 'smooth' })
   }
+
+  // Max reshaping the tree on a call: glide, sprout and prune between his frames, and bring what
+  // changed into view (after the roots re-pin to the new height).
+  const ghosts = useTreeTransition(boardRef, layout, source.liveKey, reduce, (y) => {
+    setTimeout(() => scrollToY(y), 150)
+  })
   const toRoots = () => {
     fromBottom.current = 0
     const board = boardRef.current
@@ -511,6 +521,19 @@ export function SkillTree({
                 }}
               />
             ))}
+            {/* What Max just took out, fading where it was (useTreeTransition). */}
+            {ghosts.map((g) => (
+              <div
+                key={`ghost-${g.node.code}`}
+                className="tree-node tree-node--ghost"
+                style={{ left: g.node.x, top: g.top, width: g.node.w, height: g.node.h }}
+                aria-hidden
+              >
+                <span className="tree-node__head">
+                  <span className="tree-node__code">{courseCode(g.node.code)}</span>
+                </span>
+              </div>
+            ))}
 
 
             {layout.leaves.map((leaf) => {
@@ -642,9 +665,12 @@ function NodeCard({
   selected: boolean
   onSelect: () => void
 }) {
+  const m = useModel()
+  const pick = useElectivePicks()[node.code]
   const status = node.status
   const classes = ['tree-node', `tree-node--${status}`]
-  if (node.elective) classes.push('tree-node--elective')
+  if (node.elective && !pick) classes.push('tree-node--elective')
+  if (pick) classes.push('tree-node--picked')
   if (selected) classes.push('is-selected')
   if (on === false) classes.push('is-dim')
   if (on === true) classes.push('is-on')
@@ -653,8 +679,8 @@ function NodeCard({
   const where = node.termKnown ? node.term : `${node.term}, placed by course level`
   const registered = status === 'inProgress' && !node.current
   const label = [
-    courseCode(node.code),
-    title,
+    pick ? `${courseCode(pick)}, your pick for ${electiveLabel(node.code)}` : courseCode(node.code),
+    pick ? m.courseTitle(pick) : title,
     node.termKnown ? node.term : `Year ${node.year}, ${laneSeason(node.lane)} side, placed by course level`,
     registered ? 'registered' : status === 'inProgress' ? 'in progress' : status === 'next' ? 'best next course' : status,
     isElective(node.code) ? 'your choice of course' : node.elective ? `elective, ${node.elective.need} of ${node.elective.of} choices` : '',
@@ -673,7 +699,9 @@ function NodeCard({
           : 'Needs its prerequisites first'
       : registered
         ? `Registered · ${node.term.replace(' ', '\u00a0')}`
-        : isElective(node.code)
+        : pick
+          ? m.courseTitle(pick)
+          : isElective(node.code)
           ? 'Your choice'
           : node.elective
             ? `Elective · ${node.elective.need} of ${node.elective.of}`
@@ -693,14 +721,16 @@ function NodeCard({
           '--i': index % 12,
         } as CSSProperties
       }
-      title={`${courseCode(node.code)}${title ? ` · ${title}` : ''} · ${where}`}
+      title={`${courseCode(pick ?? node.code)}${pick ? ` · ${m.courseTitle(pick)}` : title ? ` · ${title}` : ''} · ${where}`}
       aria-label={label}
       aria-pressed={selected}
       onClick={onSelect}
     >
       <span className="tree-node__head">
         {/* An unnamed slot's name is its label ("Breadth: Humanities or Social Science"): it wraps. */}
-        {isElective(node.code) ? (
+        {pick ? (
+          <span className="tree-node__code">{courseCode(pick)}</span>
+        ) : isElective(node.code) ? (
           <span className="tree-node__code tree-node__code--slot">{electiveLabel(node.code)}</span>
         ) : (
           <span className="tree-node__code">{courseCode(node.code)}</span>
@@ -719,7 +749,7 @@ function NodeCard({
           </svg>
         )}
       </span>
-      {sub && <span className={`tree-node__sub${status === 'locked' || node.elective ? ' tree-node__sub--one' : ''}`}>{sub}</span>}
+      {sub && <span className={`tree-node__sub${status === 'locked' || (node.elective && !pick) ? ' tree-node__sub--one' : ''}`}>{sub}</span>}
       {!filled && node.creds.length > 0 && (
         <span className="tree-node__dots" aria-hidden>
           {node.creds.map((c) => (

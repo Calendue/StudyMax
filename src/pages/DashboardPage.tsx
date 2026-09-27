@@ -1,12 +1,13 @@
 import { useModel } from '../model.ts'
-import { isElective } from '../lib/plan.ts'
 import { firstName } from '../auth.ts'
 import { KIND_LABEL, courseCode, plural } from '../format.ts'
 import { daysUntil } from '../lib/resources.ts'
+import { heroNextCourse } from '../lib/widgetSnapshot.ts'
+import { withoutRegistered } from '../lib/match.ts'
 import { statusLabel } from '../lib/classTracker.ts'
 import { Icon } from '../ui/Icon.tsx'
-import { Appear, Button, Chip, CountUp, Group, OptionList, Ring, Row } from '../ui/primitives.tsx'
-import { TargetRow, TargetSheet } from '../screens/OverviewTab.tsx'
+import { Appear, Button, Chip, CountUp, Group, Ring } from '../ui/primitives.tsx'
+import { HeroLeft, TargetRow, TargetSheet } from '../screens/OverviewTab.tsx'
 import { WhatIfSheet } from '../screens/WhatIfSheet.tsx'
 import { ShareSheet } from '../screens/ShareSheet.tsx'
 import { Deadline } from '../screens/AwardsTab.tsx'
@@ -29,7 +30,8 @@ function WelcomeCard() {
   const hero = m.hero
   const done = hero.remaining === 0
   const name = firstName(m.account)
-  const next = m.topOverlap?.course ?? m.plan[0]?.courses.find((c) => !isElective(c.code))?.code ?? null
+  const registered = withoutRegistered(hero.unsatisfied, m.inProgressCourses).registered.length
+  const next = heroNextCourse(hero, m.topOverlap, m.plan.flatMap((t) => t.courses.map((c) => c.code)), m.inProgressCourses)
   return (
     <Appear index={0} className="welcome-card">
       <span className="welcome-card__glow" aria-hidden />
@@ -43,7 +45,7 @@ function WelcomeCard() {
         <p className="welcome-card__lead">
           {done
             ? "Done. It'll show on your transcript."
-            : `${hero.doneCount} of ${plural(hero.totalRequired, 'course')} already done. ${plural(hero.remaining, 'course')} to go.`}
+            : `${hero.doneCount} of ${plural(hero.totalRequired, 'course')} already done. ${plural(hero.remaining, 'course')} to go${registered > 0 ? `, ${registered} already registered` : ''}.`}
         </p>
         {next && (
           <div className="welcome-card__next">
@@ -140,19 +142,12 @@ function WhatsLeft() {
   if (hero.remaining === 0) return null
   return (
     <Card index={5} title="What's left" icon="target" className="dash__left">
-      <Group>
-        {hero.unsatisfied.map((g, i) => (
-          <Row
-            key={i}
-            index={i}
-            leading={<span className="todo" aria-hidden />}
-            title={<OptionList options={g.options} label={m.courseLabel} />}
-            subtitle={g.need > 1 ? `Any ${g.need} of these` : g.options.length > 1 ? 'Any one of these' : undefined}
-          />
-        ))}
-      </Group>
+      <HeroLeft />
       {m.topOverlap && (
         <p className="footnote">
+          {withoutRegistered(hero.unsatisfied, m.inProgressCourses).left.some((g) => g.options.includes(m.topOverlap!.course))
+            ? ''
+            : 'Beyond this list, '}
           <strong>{courseCode(m.topOverlap.course)}</strong> counts toward {m.topOverlap.specs.length} specializations at once,
           more than any other course you haven&rsquo;t taken.
         </p>

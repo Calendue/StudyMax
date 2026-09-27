@@ -37,6 +37,9 @@ import { currentAccount, isAuthConfigured, signIn, signInErrorMessage, signOut, 
 import { loadCloudSession, saveCloudSession } from './cloudSync.ts'
 import type { CloudInternship, CloudSession } from './lib/cloudSession.ts'
 import { ModelContext } from './model.ts'
+import { useMaxLive } from './maxLive/useMaxLive.ts'
+import type { CallPlanInputs, LiveInputs } from './lib/max/live.ts'
+import { planHash } from './lib/max/planningAdapter.ts'
 import { useTheme } from './theme.ts'
 import type { Destination } from './ui/layout.ts'
 import { courseCode, registeredCode, type TargetKind } from './format.ts'
@@ -949,6 +952,51 @@ function useStudyMax() {
       ),
     [targets, planningSpecs, completed, inProgressCourses, coursesPerTerm, startTerm, springSummer, summerPerTerm, activeDegree, booked, internshipAY],
   )
+  // --- Max live on the Skill Tree (src/maxLive/) ---
+  // The plan above as inputs, sent when placing a Max call so Max plans exactly what's on screen.
+  const maxPlanInputs = useMemo<CallPlanInputs | null>(() => {
+    if (!selectedProgram) return null
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return {
+      v: 1,
+      programId: selectedProgram.id,
+      completed: [...completed],
+      inProgress: inProgressCourses,
+      inProgressSeasons: Object.fromEntries(inProgressCourses.flatMap((c) => (courseTerms[c] ? [[c, courseTerms[c]]] : []))),
+      targetIds: [hero.spec.id, ...extraTargetIds].filter(Boolean),
+      concentrationIds,
+      minorId,
+      degreeVariant,
+      away: internshipAY,
+      coursesPerTerm,
+      springSummer,
+      summerPerTerm,
+      start: startTerm,
+      today: `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`,
+      planHash: planHash(plan),
+    }
+  }, [selectedProgram, completed, inProgressCourses, courseTerms, hero, extraTargetIds, concentrationIds, minorId, degreeVariant, internshipAY, coursesPerTerm, springSummer, summerPerTerm, startTerm, today, plan])
+
+  /** A plan the student saved with Max becomes the app's own: its targets, pace, summers and drops. */
+  function adoptMaxPlan(inputs: LiveInputs) {
+    const [first, ...rest] = inputs.targetIds
+    if (first) setHeroId(first)
+    setExtraTargetIds(rest)
+    const own = new Set(selectedProgram?.specializations.map((s) => s.id) ?? [])
+    setConcentrationIds(inputs.targetIds.filter((id) => own.has(id)))
+    const gone = new Set(inProgressCourses.filter((c) => !inputs.inProgress.includes(c)))
+    if (gone.size > 0) {
+      setUploadInProgress((codes) => codes.filter((c) => !gone.has(c)))
+      setRegistered((codes) => codes.filter((c) => !gone.has(c)))
+      setCourseTerms((prev) => Object.fromEntries(Object.entries(prev).filter(([c]) => !gone.has(c))))
+    }
+    const programLoad = selectedProgram?.coursesPerTerm ?? DEFAULT_COURSES_PER_TERM
+    setCoursesPerTerm(inputs.coursesPerTerm === programLoad ? null : inputs.coursesPerTerm)
+    setSpringSummer(inputs.springSummer)
+    setSummerPerTerm(inputs.summerPerTerm)
+  }
+  const maxLive = useMaxLive({ onCommitted: adoptMaxPlan })
+
   // The plan as the roadmap draws it: what's left, plus the courses already under way in their terms.
   const roadmap = useMemo(() => withCurrentCourses(plan, currentByTerm, today), [plan, currentByTerm, today])
   // The degree in credit units for the tree's readout and milestones: done, under way and planned.
@@ -1476,11 +1524,12 @@ function useStudyMax() {
         hero,
         heroKind,
         topOverlap,
+        inProgress: inProgressCourses,
         // courseTitle()'s lookup, inline: courseTitle itself is a new function every render.
         courseTitle: (code) => selectedProgram?.courseTitles[code] ?? courseInfo[code]?.title ?? catalogueTitle(code),
         now: today,
       }),
-    [revealed, universityId, rankedAwards, hero, heroKind, topOverlap, selectedProgram, today],
+    [revealed, universityId, rankedAwards, hero, heroKind, topOverlap, inProgressCourses, selectedProgram, today],
   )
   useEffect(() => {
     syncWidgets(widgetSnapshot)
@@ -1599,6 +1648,9 @@ function useStudyMax() {
   return {
     features,
     classes,
+    // Max live on the Skill Tree
+    maxLive,
+    maxPlanInputs,
     // appearance
     themePref,
     theme,

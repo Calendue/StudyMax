@@ -1046,6 +1046,91 @@
   display: grid;
 }
 
+/* An elective with the student's own course in it: a real course now, marked as their pick. */
+.roadmap__node--picked {
+  box-shadow: inset 0 0 0 1.5px var(--taupe);
+}
+
+.course-detail__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin-bottom: var(--s3);
+}
+
+.elective-picker__lead {
+  margin: 0 0 var(--s3);
+}
+
+.elective-picker__list {
+  margin-top: var(--s3);
+}
+
+/* An elective the student can take off the roadmap: a small x in its corner. */
+.roadmap__cell {
+  position: relative;
+  min-width: 0;
+  height: 100%;
+}
+
+/* The node is a size container, so it has no width of its own: it fills the cell as it fills a grid
+   column. Room on the right for the x, so a two-line elective label never runs under it. */
+.roadmap__cell .roadmap__node {
+  width: 100%;
+  padding-right: 28px;
+}
+
+.roadmap__remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  color: var(--ink-3);
+  transition:
+    background-color var(--d-fast) var(--settle),
+    color var(--d-fast) var(--settle);
+}
+
+.roadmap__remove:hover,
+.roadmap__remove:focus-visible {
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.roadmap__hidden {
+  margin: 0 0 var(--s3);
+}
+
+.roadmap__hidden-show {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+/* The internship year: a dashed frame, like the tree's, so an empty year reads as planned. */
+.roadmap__internship {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s1);
+  padding: var(--s3) var(--s4);
+  border: 1.5px dashed var(--taupe);
+  border-radius: var(--r3);
+  background: var(--bg);
+  text-align: center;
+  font-size: 0.875rem;
+  color: var(--ink-2);
+}
+
+.roadmap__internship strong {
+  font: 600 var(--fs-body) / 1.2 var(--font-brand);
+  color: var(--ink);
+}
+
 /* Nodes are opaque, so a connector that spans several terms passes cleanly behind them. */
 .roadmap__node {
   display: flex;
@@ -1059,6 +1144,7 @@
   background: var(--surface);
   text-align: left;
   overflow: hidden;
+  container-type: inline-size;
   transition:
     background-color var(--d-fast) var(--settle),
     box-shadow var(--d-fast) var(--settle),
@@ -1077,6 +1163,8 @@
 }
 
 .roadmap__node-code {
+  flex: none;
+  max-width: 100%;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1121,6 +1209,23 @@
   font-size: 0.6875rem;
   font-weight: 600;
   color: var(--ink-2);
+}
+
+/* A narrow card (a five-course term at laptop width) can't fit the code and its tag on one line:
+   the code keeps its full width, the tag drops under it, and the title gives up its second line. */
+@container (max-width: 170px) {
+  .roadmap__node-head {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+
+  .roadmap__node-tag {
+    margin-left: 0;
+  }
+
+  .roadmap__node:has(.roadmap__node-tag) .roadmap__node-title {
+    -webkit-line-clamp: 1;
+  }
 }
 
 .roadmap__node-title {
