@@ -735,6 +735,37 @@ header,
   color: var(--ink-2);
 }
 
+.check-option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s3);
+  margin-top: var(--s5);
+  padding: var(--s3) var(--s4);
+  background: var(--bg);
+  border: 1px solid var(--edge);
+  border-radius: var(--r2);
+  cursor: pointer;
+}
+
+.check-option input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: 2px 0 0;
+  accent-color: var(--accent);
+}
+
+.check-option__title {
+  display: block;
+  font-weight: 500;
+}
+
+.check-option__hint {
+  display: block;
+  font-size: var(--fs-caption);
+  color: var(--ink-2);
+}
+
 .form .btn {
   margin-top: var(--s5);
 }

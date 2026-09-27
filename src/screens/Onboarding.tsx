@@ -77,13 +77,11 @@ function Step({
 export function StudentScreen() {
   const m = useModel()
   const fileInput = useRef<HTMLInputElement>(null)
-  // Where the transcript picked on this question has got to, since it's read in the background.
+  // Coming back to this question after a transcript was read: say what it found.
   const transcriptStatus =
-    m.uploadStatus === 'uploading'
-      ? 'Reading it now. Carry on while it works.'
-      : m.uploadStatus === 'success'
-        ? `Read: ${m.takenCourses.length} completed course${m.takenCourses.length === 1 ? '' : 's'} found.`
-        : null
+    m.uploadStatus === 'success'
+      ? `Read: ${m.takenCourses.length} completed course${m.takenCourses.length === 1 ? '' : 's'} found.`
+      : null
   return (
     <Step title="Are you just starting out?" lead="This decides whether we ask for your courses next." canContinue={m.studentType !== null}>
       <Group>
@@ -115,7 +113,7 @@ export function StudentScreen() {
           title="Upload my transcript"
           subtitle={
             transcriptStatus ??
-            "A DegreeWorks audit or unofficial transcript, as a PDF. We'll read it while you answer the rest."
+            "A DegreeWorks audit or unofficial transcript, as a PDF. StudyMax reads every course on it."
           }
           onClick={() => fileInput.current?.click()}
         />
@@ -411,6 +409,14 @@ export function RegisteredScreen() {
       {count === 0 && query === '' && (
         <p className="footnote">Optional. Skip it if you haven&rsquo;t registered yet.</p>
       )}
+
+      <label className="check-option">
+        <input type="checkbox" checked={m.springSummer} onChange={(e) => m.setSpringSummer(e.target.checked)} />
+        <span>
+          <span className="check-option__title">I want to take Spring/Summer classes</span>
+          <span className="check-option__hint">Your plan adds a light Spring/Summer term between Winter and Fall.</span>
+        </span>
+      </label>
     </Step>
   )
 }
