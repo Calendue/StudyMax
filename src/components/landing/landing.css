@@ -1011,7 +1011,7 @@
    wide screens it hangs to the left of the headline without moving anything; narrower, it sits in
    the flow under the QR card. */
 .canopy__meme {
-  width: clamp(170px, 15vw, 230px);
+  width: clamp(220px, 20vw, 310px);
   margin: var(--s6) 0 0;
   padding: 8px 8px 10px;
   border-radius: 12px;

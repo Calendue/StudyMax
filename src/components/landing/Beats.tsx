@@ -245,8 +245,8 @@ export function CanopyBeat({ grown, onGetStarted, onSkip }: BeatProps & { onGetS
         <figure className="canopy__meme">
           <img
             src="/study-maxing-meme.jpg"
-            width={230}
-            height={230}
+            width={310}
+            height={310}
             loading="lazy"
             alt="Drake meme: rejecting “Aura maxing,” approving “Study maxing.”"
           />
