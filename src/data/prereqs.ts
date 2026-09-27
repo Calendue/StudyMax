@@ -5,11 +5,41 @@
 // into AND-groups of OR-options, used only for sequencing; prose conditions the parser can't
 // read are omitted there but always survive in prerequisiteText.
 
+/**
+ * When the 2026-27 catalogue says a course runs: 'Term 1 only' → fall, 'Term 2 only' → winter,
+ * 'Either Term 1 or Term 2' → either, 'Term 1 and 2' → full-year (a two-term course), 'Term 3 only',
+ * 'Spring' or 'Summer' → spring-summer, and no value → none (not scheduled in 2026-27).
+ */
+export type Offered = 'fall' | 'winter' | 'either' | 'full-year' | 'spring-summer' | 'none'
+
+/** A prerequisite written as credit units rather than courses ("6 credit units of 300-level CMPT"). */
+export interface CreditRequirement {
+  cu: number
+  /** Only these subjects count (['MATH', 'STAT']); absent means any subject. */
+  subjects?: string[]
+  /** Only courses at this level (100, 300); absent means any level. */
+  level?: number
+  /** A standing rather than credits (CMPT 400: Honours students only). */
+  standing?: 'honours'
+}
+
 export interface CourseInfo {
   title: string
   creditUnits: number
   prerequisiteText: string
+  /** AND-groups of OR-options that must be passed in an EARLIER term. */
   requires: string[][]
+  /**
+   * AND-groups of OR-options that may also be taken in the SAME term: "Prerequisite(s) or
+   * Corequisite(s)", "Corequisite(s)", and options marked "(can be taken concurrently)".
+   */
+  concurrent?: string[][]
+  /** Credit-count prerequisites the course codes can't express. */
+  creditRequires?: CreditRequirement[]
+  /** The 2026-27 catalogue's `offered` field, normalised. Absent in data scraped before it existed. */
+  offered?: Offered
+  /** "Students with credit for X may not take this course for credit." */
+  antirequisites?: string[]
 }
 
 export const courseInfo: Record<string, CourseInfo> = {
