@@ -28,6 +28,7 @@ import { academicYearOfDegreeYear, currentTermOf } from './lib/skillTree.ts'
 import { searchCourses, catalogueTitle } from './lib/courseSearch.ts'
 import { courseInfo } from './data/prereqs.ts'
 import { artsAndScienceSubjects, catalogueCourses } from './data/courses.ts'
+import { artsAndSciencePrograms } from './data/programCatalogue.ts'
 import { api, haptic, isNative, onAppUrlOpen, onBackButton } from './platform.ts'
 import { cachedFeatures, fetchFeatures } from './features.ts'
 import { buildWidgetSnapshot } from './lib/widgetSnapshot.ts'
@@ -135,6 +136,9 @@ class UploadError extends Error {}
 // A program the school data doesn't cover yet is identified by its Arts & Science subject code, so
 // the choice survives a refresh the same way a real program id does.
 const SUBJECT_PROGRAM_PREFIX = 'subject:'
+/** An Arts & Science program area from programs.usask.ca that StudyMax has no requirement data for. */
+const AREA_PROGRAM_PREFIX = 'area:'
+const DEGREE_KINDS = new Set(['major', 'honours', 'double-honours'])
 
 // Shorthand for programs whose name doesn't match an Arts & Science subject's name.
 const PROGRAM_CODES: Record<string, string[]> = {
@@ -272,9 +276,14 @@ function useStudyMax() {
   const selectedSchool = universityId === 'usask' ? usask : null
   const availablePrograms = useMemo(() => selectedSchool?.programs ?? [], [selectedSchool])
 
-  // Every Arts & Science subject is pickable, not just the handful with requirement data. One
-  // without data still reaches the scholarship side of the app, which is most of its value.
+  // Every Arts & Science program USask publishes is pickable, not just the handful with requirement
+  // data. One without data still reaches the scholarship side of the app, which is most of its value.
+  // `subject:` ids are from before the list came from programs.usask.ca, kept so saved sessions load.
   const subjectProgram: Program | null = useMemo(() => {
+    if (programId.startsWith(AREA_PROGRAM_PREFIX)) {
+      const area = artsAndSciencePrograms.find((a) => a.id === programId.slice(AREA_PROGRAM_PREFIX.length))
+      return area ? { id: programId, name: area.name, specializations: [], courseTitles: {} } : null
+    }
     if (!programId.startsWith(SUBJECT_PROGRAM_PREFIX)) return null
     const code = programId.slice(SUBJECT_PROGRAM_PREFIX.length)
     const subject = artsAndScienceSubjects.find((s) => s.code === code)
@@ -307,16 +316,17 @@ function useStudyMax() {
         }
       })
     const named = new Set(availablePrograms.map((p) => p.name.toLowerCase()))
-    const fromSubjects = artsAndScienceSubjects
-      .filter((subject) => !named.has(subject.name.toLowerCase()))
-      .map((subject) => ({
-        id: `${SUBJECT_PROGRAM_PREFIX}${subject.code}`,
-        name: subject.name,
-        subjectCode: subject.code,
+    // The areas a student can major in (minor- and certificate-only areas aren't a major).
+    const fromCatalogue = artsAndSciencePrograms
+      .filter((area) => area.programs.some((p) => DEGREE_KINDS.has(p.kind)) && !named.has(area.name.toLowerCase()))
+      .map((area) => ({
+        id: `${AREA_PROGRAM_PREFIX}${area.id}`,
+        name: area.name,
+        subjectCode: artsAndScienceSubjects.find((s) => s.name.toLowerCase() === area.name.toLowerCase())?.code,
         aliases: [],
         hasData: false,
       }))
-    return [...fromSchool, ...fromSubjects]
+    return [...fromSchool, ...fromCatalogue]
   }, [availablePrograms])
 
   const [programPickQuery, setProgramPickQuery] = useState('')
