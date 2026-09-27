@@ -19,6 +19,8 @@
   --tree-locked: color-mix(in srgb, var(--ink) 30%, transparent);
   --tree-halo: color-mix(in srgb, var(--cherry) 34%, transparent);
   --tree-link: var(--accent);
+  --tree-signal: var(--accent);
+  --tree-signal-core: color-mix(in srgb, var(--accent) 30%, var(--old-lace));
 
   /* The hero is the brand's own rose; the rest are quiet, brand-adjacent tints, only ever a ring, a
      dot or a branch. */
@@ -78,16 +80,68 @@
 
 .tree--compact .tree__legend {
   display: grid;
-  grid-template-columns: repeat(3, max-content);
-  column-gap: var(--s4);
+  grid-template-columns: repeat(4, max-content);
+  column-gap: var(--s3);
+  animation: tree-fade-in var(--d-med) var(--settle);
 }
 
+/* Phones pin one row (Key, then the credential chips); the key opens above it on request. */
 .tree--compact {
-  --tree-bar-h: 104px;
+  --tree-bar-h: 56px;
+}
+
+.tree--compact.tree--key-open {
+  --tree-bar-h: 108px;
+}
+
+.tree__bar-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
+}
+
+.tree__bar-row .tree__chips {
+  flex: 1;
+  min-width: 0;
+  margin-left: 0;
+  padding-left: 0;
+}
+
+.tree__key-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 32px;
+  padding: 0 8px 0 12px;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px var(--divider);
+  color: var(--ink-2);
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  transition:
+    background-color var(--d-fast),
+    color var(--d-fast);
+}
+
+.tree__key-btn.is-on {
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.tree__key-chev {
+  transform: rotate(90deg);
+  transition: transform var(--d-fast) var(--settle);
+}
+
+.tree__key-btn.is-on .tree__key-chev {
+  transform: rotate(-90deg);
 }
 
 .tree__legend::-webkit-scrollbar,
-.tree__chips::-webkit-scrollbar {
+.tree__chips::-webkit-scrollbar,
+.tree__scroll::-webkit-scrollbar {
   display: none;
 }
 
@@ -201,8 +255,9 @@
   pointer-events: none;
 }
 
+/* Under the cards, so a link passes behind a course instead of across its text. */
 .tree__links {
-  z-index: 2;
+  z-index: 0;
 }
 
 .tree__hairline {
@@ -267,8 +322,10 @@
   opacity: 0.25;
 }
 
-/* Relationships on demand: the chosen course's prerequisites below it and what it unlocks above. */
-.tree__link {
+/* Relationships on demand: the chosen course's prerequisites below it and what it unlocks above.
+   Each link draws in, lands on an arrowhead at the course it unlocks, then a glowing signal keeps
+   running along it in that direction, rippling up from the roots. */
+.tree__link-line {
   fill: none;
   stroke: var(--tree-link);
   stroke-width: 2;
@@ -278,8 +335,70 @@
   animation: tree-draw 520ms var(--settle) forwards;
 }
 
-.tree__link--or {
+.tree__link--or .tree__link-line {
   stroke-width: 1.6;
+}
+
+.tree__arrow {
+  fill: var(--tree-link);
+  opacity: 0;
+  animation: tree-fade-in 200ms var(--settle) 420ms forwards;
+}
+
+/* A short bead of light, the same size on every link (its length comes in as --len). */
+.tree__signal {
+  fill: none;
+  stroke: var(--tree-signal);
+  stroke-width: 3.5;
+  stroke-linecap: round;
+  stroke-dasharray: 16px calc(var(--len) * 1px + 32px);
+  stroke-dashoffset: 16px;
+  opacity: 0;
+  animation: tree-signal 2.8s cubic-bezier(0.45, 0, 0.35, 1) calc(600ms + var(--signal-delay, 0ms)) infinite;
+}
+
+/* Its bright centre, over the rose glow, so it reads as light rather than a smudge. */
+.tree__signal--core {
+  stroke: var(--tree-signal-core);
+  stroke-width: 1.8;
+}
+
+@keyframes tree-signal {
+  0% {
+    stroke-dashoffset: 16px;
+    opacity: 0;
+  }
+  6%,
+  46% {
+    opacity: 1;
+  }
+  52%,
+  100% {
+    stroke-dashoffset: calc(var(--len) * -1px);
+    opacity: 0;
+  }
+}
+
+@keyframes tree-fade-in {
+  to {
+    opacity: 1;
+  }
+}
+
+.tree__key-arrow {
+  flex: none;
+  overflow: visible;
+}
+
+.tree__key-arrow path:first-child {
+  fill: none;
+  stroke: var(--tree-link);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+.tree__key-arrow path:last-child {
+  fill: var(--tree-link);
 }
 
 @keyframes tree-draw {
@@ -438,7 +557,6 @@
 
 .tree-node--locked {
   border-color: var(--tree-locked);
-  background: transparent;
   box-shadow: none;
   color: var(--ink-2);
 }
@@ -655,6 +773,133 @@
   pointer-events: none;
 }
 
+.tree__float-inner[hidden] {
+  display: none;
+}
+
+/* ── the phone's peek: what a tapped course needs and unlocks, over the tab bar ── */
+.tree-peek {
+  display: grid;
+  gap: 10px;
+  width: min(calc(100% - 2 * var(--s3)), 520px);
+  padding: var(--s3) var(--s3) var(--s4) var(--s4);
+  border-radius: var(--r3);
+  background: var(--raised);
+  box-shadow: var(--shadow-float), inset 0 0 0 1px var(--hairline);
+  pointer-events: auto;
+  animation: tree-peek-in var(--d-med) var(--settle);
+}
+
+@keyframes tree-peek-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+.tree-peek__head {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+}
+
+.tree-peek__id {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 10px;
+}
+
+.tree-peek__id--leaf {
+  flex-wrap: nowrap;
+  align-items: center;
+}
+
+.tree-peek__name {
+  margin: 0;
+  font: 700 1.0625rem / 1.25 var(--font-brand);
+  color: var(--ink);
+}
+
+.tree-peek__status {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.tree-peek__more {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 36px;
+  padding: 0 8px 0 14px;
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--fs-caption);
+  font-weight: 600;
+}
+
+.tree-peek__close {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  color: var(--ink-2);
+}
+
+.tree-peek__title {
+  margin: -6px 0 0;
+  overflow: hidden;
+  font-size: var(--fs-caption);
+  color: var(--ink-2);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.tree-peek__row {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
+}
+
+.tree-peek__label {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: 66px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.tree-peek__codes {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tree-peek__codes::-webkit-scrollbar {
+  display: none;
+}
+
+.tree-peek__code-chip {
+  flex: none;
+}
+
 .tree__float-inner {
   display: flex;
   gap: var(--s2);
@@ -748,9 +993,23 @@
   }
 
   .tree__grow-line.is-drawing,
-  .tree__link {
+  .tree__link-line {
     animation: none;
     stroke-dashoffset: 0;
+  }
+
+  .tree__arrow {
+    animation: none;
+    opacity: 1;
+  }
+
+  .tree__signal {
+    display: none;
+  }
+
+  .tree-peek,
+  .tree--compact .tree__legend {
+    animation: none;
   }
 
   .tree__branch.is-folded {
@@ -892,6 +1151,7 @@
   height: clamp(460px, calc(100dvh - 300px), 1100px);
   overflow-x: hidden;
   overflow-y: auto;
+  scrollbar-width: none; /* it scrolls by wheel, touch and keys; Back to roots is the way home */
   overscroll-behavior: contain;
   border-radius: var(--r2);
   box-shadow: inset 0 0 0 1px var(--hairline);

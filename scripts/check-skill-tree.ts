@@ -59,7 +59,7 @@ function checkLayout(name: string, s: ReturnType<typeof student>) {
     const b = byCode.get(l.to)!
     assert.ok(a.y >= b.y + b.h, `${name}: ${l.from} → ${l.to} runs down the tree`)
   }
-  const paths = [layout.trunk, layout.trunkLine, ...layout.links.map((l) => l.d), ...layout.twigs.map((t) => t.d), ...layout.branches.map((b) => b.d), ...layout.roots.map((r) => r.d)]
+  const paths = [layout.trunk, layout.trunkLine, ...layout.links.flatMap((l) => [l.d, l.arrow]), ...layout.twigs.map((t) => t.d), ...layout.branches.map((b) => b.d), ...layout.roots.map((r) => r.d)]
   for (const d of paths) assert.ok(d.startsWith('M') && !d.includes('NaN') && !d.includes('undefined'), `${name}: a drawable path`)
   assert.equal(layout.twigs.length, layout.nodes.length, `${name}: every course hangs on a twig`)
   assert.equal(layout.branches.length, layout.leaves.length, `${name}: every leaf has a branch`)

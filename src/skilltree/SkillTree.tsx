@@ -5,9 +5,11 @@ import { useModel } from '../model.ts'
 import { courseCode, KIND_LABEL } from '../format.ts'
 import { haptic } from '../platform.ts'
 import { layoutSkillTree, pathThrough, type SkillTreeLayout, type TreeNode } from '../lib/skillTree.ts'
+import { Icon } from '../ui/Icon.tsx'
 import { Sheet } from '../ui/Sheet.tsx'
 import { useTreeInputs, type TreeSelection } from './planView.ts'
 import { TreeDetail } from './TreeDetail.tsx'
+import { TreePeek } from './TreePeek.tsx'
 import './skilltree.css'
 
 // The first time the tree opens in a session it grows; after that it's simply there.
@@ -20,6 +22,7 @@ const LEGEND: { key: string; label: string }[] = [
   { key: 'planned', label: 'Planned' },
   { key: 'elective', label: 'Elective' },
   { key: 'locked', label: 'Locked' },
+  { key: 'link', label: 'Unlocks' },
 ]
 
 /** The page's scrolling element: the phone's screen body, or the desktop shell's page. */
@@ -44,7 +47,7 @@ function hueVar(cred: number | undefined): string {
  * it and owns the interaction.
  *
  * `dock`, when given, is where the details of the selected course go (the desktop's side panel);
- * otherwise they open in a bottom sheet.
+ * otherwise a tap shows a slim peek over the tab bar (TreePeek), with the full sheet one tap away.
  */
 export function SkillTree({
   dock,
@@ -91,6 +94,10 @@ export function SkillTree({
   )
 
   const [selection, setSelection] = useState<TreeSelection | null>(null)
+  // Phones: a tap shows the slim peek over the tab bar; Details opens the full sheet.
+  const [sheetOpen, setSheetOpen] = useState(false)
+  // Phones fold the key away: the cards already say Done, Now, Next, Needs and Elective.
+  const [keyOpen, setKeyOpen] = useState(false)
   const [credFilter, setCredFilter] = useState<number | null>(null)
   // A selection that stops resolving (the course was un-ticked, a target dropped) clears itself.
   const selectedNode = selection?.kind === 'node' ? layout?.nodes.find((n) => n.code === selection.code) : undefined
@@ -105,6 +112,16 @@ export function SkillTree({
     const leaf = layout.leaves[cred]
     return leaf ? { codes: new Set(leaf.codes), creds: new Set([cred]) } : null
   }, [layout, live, credFilter])
+
+  // The chosen course's own links, the same ones its Prerequisites and Unlocks list: arrows in from
+  // what it needs, arrows out to what it opens (the rest of the chain stays lit, without lines). The
+  // signal runs in along the prerequisites first, then out, so it reads as flowing up the tree.
+  const focusLinks = useMemo(() => {
+    if (!layout || live?.kind !== 'node') return []
+    return layout.links
+      .filter((l) => l.to === live.code || l.from === live.code)
+      .map((l) => ({ ...l, delay: l.to === live.code ? 0 : 1300 }))
+  }, [layout, live])
 
   const ready = layout !== null
 
@@ -191,6 +208,8 @@ export function SkillTree({
   function select(next: TreeSelection | null, scroll = false) {
     if (next) haptic.selection()
     setSelection(next)
+    if (!next) setSheetOpen(false)
+    if (next && !scroll && !dock) keepClearOfPeek(next)
     if (next && scroll && layout) {
       const target = next.kind === 'node' ? layout.nodes.find((n) => n.code === next.code) : layout.leaves[next.index]
       if (target) scrollToY(target.y + target.h / 2)
@@ -199,6 +218,18 @@ export function SkillTree({
         boardRef.current?.querySelector<HTMLElement>(`[data-key="${key}"]`)?.focus({ preventScroll: true })
       }, reduce ? 0 : 320)
     }
+  }
+
+  // A card tapped low on a phone slides up, clear of the peek that's about to cover the bottom.
+  function keepClearOfPeek(next: TreeSelection) {
+    const board = boardRef.current
+    const key = next.kind === 'node' ? next.code : `leaf-${next.index}`
+    const el = board?.querySelector<HTMLElement>(`[data-key="${key}"]`)
+    if (!board || !el) return
+    const scroller = scrollerOf(board)
+    const clear = scroller.getBoundingClientRect().bottom - 230
+    const bottom = el.getBoundingClientRect().bottom
+    if (bottom > clear) scroller.scrollBy({ top: bottom - clear, behavior: reduce ? 'auto' : 'smooth' })
   }
 
   // ── keyboard: arrows move between cards, Home and End jump to the roots and the canopy ──
@@ -248,6 +279,45 @@ export function SkillTree({
   if (focus) classes.push('tree--focus')
   if (layout?.compact) classes.push('tree--compact')
   if (contained) classes.push('tree--contained')
+  const compact = layout?.compact ?? false
+  if (compact && keyOpen) classes.push('tree--key-open')
+  const chips = layout && layout.leaves.length > 0 && (
+    <div className="tree__chips" role="group" aria-label="Highlight a credential">
+      {layout.leaves.map((leaf) => (
+        <button
+          key={leaf.id}
+          type="button"
+          className={`tree__chip${credFilter === leaf.index ? ' tree__chip--on' : ''}`}
+          style={{ '--hue': hueVar(leaf.index) } as CSSProperties}
+          aria-pressed={credFilter === leaf.index}
+          onClick={() => {
+            haptic.selection()
+            setSelection(null)
+            setCredFilter((c) => (c === leaf.index ? null : leaf.index))
+          }}
+        >
+          <span className="tree__chip-dot" aria-hidden />
+          <span className="tree__chip-name" title={leaf.name}>
+            {leaf.kind === 'specialization' ? leaf.name : `${shortName(leaf.name)} ${KIND_LABEL[leaf.kind].toLowerCase()}`}
+          </span>
+          <span className="tree__chip-count">
+            {leaf.done}/{leaf.total}
+          </span>
+        </button>
+      ))}
+    </div>
+  )
+
+  const peek = !dock && layout && live ? (
+    <TreePeek
+      layout={layout}
+      selection={live}
+      title={live.kind === 'node' ? m.courseTitle(live.code) : undefined}
+      onSelect={(s) => select(s, true)}
+      onDetails={() => setSheetOpen(true)}
+      onClose={() => select(null)}
+    />
+  ) : null
 
   return (
     <section
@@ -257,39 +327,39 @@ export function SkillTree({
       style={{ '--tree-sticky-top': `${stickyTop}px` } as CSSProperties}
     >
       <div className="tree__bar">
-        <ul className="tree__legend" aria-label="Key">
-          {LEGEND.map((k) => (
-            <li key={k.key}>
-              <span className={`tree__key tree__key--${k.key}`} aria-hidden />
-              {k.label}
-            </li>
-          ))}
-        </ul>
-        {layout && layout.leaves.length > 0 && (
-          <div className="tree__chips" role="group" aria-label="Highlight a credential">
-            {layout.leaves.map((leaf) => (
-              <button
-                key={leaf.id}
-                type="button"
-                className={`tree__chip${credFilter === leaf.index ? ' tree__chip--on' : ''}`}
-                style={{ '--hue': hueVar(leaf.index) } as CSSProperties}
-                aria-pressed={credFilter === leaf.index}
-                onClick={() => {
-                  haptic.selection()
-                  setSelection(null)
-                  setCredFilter((c) => (c === leaf.index ? null : leaf.index))
-                }}
-              >
-                <span className="tree__chip-dot" aria-hidden />
-                <span className="tree__chip-name" title={leaf.name}>
-                  {leaf.kind === 'specialization' ? leaf.name : `${shortName(leaf.name)} ${KIND_LABEL[leaf.kind].toLowerCase()}`}
-                </span>
-                <span className="tree__chip-count">
-                  {leaf.done}/{leaf.total}
-                </span>
-              </button>
+        {(!compact || keyOpen) && (
+          <ul id="tree-key" className="tree__legend" aria-label="Key">
+            {LEGEND.map((k) => (
+              <li key={k.key}>
+                {k.key === 'link' ? (
+                  <svg className="tree__key-arrow" width="10" height="14" viewBox="0 0 10 14" aria-hidden>
+                    <path d="M5 13V5" />
+                    <path d="M1 6 5 1l4 5Z" />
+                  </svg>
+                ) : (
+                  <span className={`tree__key tree__key--${k.key}`} aria-hidden />
+                )}
+                {k.label}
+              </li>
             ))}
+          </ul>
+        )}
+        {compact ? (
+          <div className="tree__bar-row">
+            <button
+              type="button"
+              className={`tree__key-btn${keyOpen ? ' is-on' : ''}`}
+              aria-expanded={keyOpen}
+              aria-controls="tree-key"
+              onClick={() => setKeyOpen((o) => !o)}
+            >
+              Key
+              <Icon name="chevron" size={14} className="tree__key-chev" />
+            </button>
+            {chips}
           </div>
+        ) : (
+          chips
         )}
       </div>
 
@@ -328,6 +398,42 @@ export function SkillTree({
             <div className="tree__band-sentinel" style={{ top: 0, height: layout.trunkTop }} data-band="canopy" aria-hidden />
             <div className="tree__band-sentinel" style={{ top: layout.trunkBase, height: layout.height - layout.trunkBase }} data-band="roots" aria-hidden />
 
+            {focusLinks.length > 0 && (
+              <svg className="tree__links" width={layout.width} height={layout.height} aria-hidden>
+                <defs>
+                  <filter id="tree-glow" filterUnits="userSpaceOnUse" x={0} y={0} width={layout.width} height={layout.height}>
+                    <feGaussianBlur stdDeviation="3.5" result="blur" />
+                    <feMerge>
+                      <feMergeNode in="blur" />
+                      <feMergeNode in="blur" />
+                      <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                  </filter>
+                  {/* Every card is cut out of the links, so a line passes under a course, never across its text. */}
+                  <mask id="tree-cards" maskUnits="userSpaceOnUse" x={0} y={0} width={layout.width} height={layout.height}>
+                    <rect width={layout.width} height={layout.height} fill="white" />
+                    {layout.nodes.map((n) => (
+                      <rect key={n.code} x={n.x} y={n.y} width={n.w} height={n.h} rx={8} fill="black" />
+                    ))}
+                  </mask>
+                </defs>
+                <g mask="url(#tree-cards)">
+                  {focusLinks.map((l) => (
+                    <g
+                      key={`${l.from}-${l.to}`}
+                      className={`tree__link${l.conditional ? ' tree__link--or' : ''}`}
+                      style={{ '--signal-delay': `${l.delay}ms`, '--len': l.length } as CSSProperties}
+                    >
+                      <path d={l.d} className="tree__link-line" pathLength={1} />
+                      <path d={l.d} className="tree__signal" filter="url(#tree-glow)" />
+                      <path d={l.d} className="tree__signal tree__signal--core" />
+                      <path d={l.arrow} className="tree__arrow" />
+                    </g>
+                  ))}
+                </g>
+              </svg>
+            )}
+
             {layout.nodes.map((n, i) => (
               <NodeCard
                 key={n.code}
@@ -345,15 +451,6 @@ export function SkillTree({
               />
             ))}
 
-            {live?.kind === 'node' && focus && (
-              <svg className="tree__links" width={layout.width} height={layout.height} aria-hidden>
-                {layout.links
-                  .filter((l) => focus.codes.has(l.from) && focus.codes.has(l.to))
-                  .map((l) => (
-                    <path key={`${l.from}-${l.to}`} d={l.d} className={`tree__link${l.conditional ? ' tree__link--or' : ''}`} pathLength={1} />
-                  ))}
-              </svg>
-            )}
 
             {layout.leaves.map((leaf) => {
               const on = focus ? focus.creds.has(leaf.index) : null
@@ -408,8 +505,9 @@ export function SkillTree({
         )}
       </div>
 
-      <div className="tree__float" aria-hidden={!awayFromRoots}>
-        <div className={`tree__float-inner${awayFromRoots ? ' is-on' : ''}`}>
+      <div className="tree__float" aria-hidden={peek ? undefined : !awayFromRoots}>
+        {peek}
+        <div className={`tree__float-inner${awayFromRoots && !peek ? ' is-on' : ''}`} hidden={peek !== null}>
           <button type="button" className="tree__float-btn" tabIndex={awayFromRoots ? 0 : -1} onClick={toRoots}>
             <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden>
               <path d="M6 2v8M2.5 6.5 6 10l3.5-3.5" />
@@ -438,14 +536,14 @@ export function SkillTree({
         ? createPortal(
             detail ?? (
               <p className="card__empty tree-detail__empty">
-                Pick a course on the tree to see its prerequisites, what it unlocks and what it counts toward. Pick a leaf
-                to light up its whole branch.
+                Pick a course to trace its path: arrows run from each prerequisite up to the course it unlocks. Pick a
+                leaf to light up its whole branch.
               </p>
             ),
             dock,
           )
         : (
-          <Sheet open={detail !== null} onClose={() => setSelection(null)} title={detailTitle}>
+          <Sheet open={detail !== null && sheetOpen} onClose={() => setSheetOpen(false)} title={detailTitle}>
             {detail}
           </Sheet>
         )}

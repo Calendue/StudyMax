@@ -7,7 +7,7 @@ import type { SkillTreeLayout, TreeNode } from '../lib/skillTree.ts'
 import { Button, Ring } from '../ui/primitives.tsx'
 import { STATUS_LABEL, type TreeSelection } from './planView.ts'
 
-function Swatch({ kind, hue }: { kind?: string; hue?: number }) {
+export function Swatch({ kind, hue }: { kind?: string; hue?: number }) {
   return (
     <span
       className={`tree-swatch${kind ? ` tree-swatch--${kind}` : ''}`}

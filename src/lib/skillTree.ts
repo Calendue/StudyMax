@@ -100,7 +100,12 @@ export interface TreeLeaf {
 export interface TreeLink {
   from: string
   to: string
+  /** Ends just under the unlocked course, where the arrowhead takes over. */
   d: string
+  /** The arrowhead: its tip touches the unlocked course's bottom edge, pointing up. */
+  arrow: string
+  /** Roughly how long `d` is, in pixels, so a signal can run along it at a steady size. */
+  length: number
   /** One of several options ("CMPT 260 or CMPT 263"). */
   conditional: boolean
 }
@@ -562,14 +567,24 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
   })
 
   // Prerequisite links, drawn only for the course you pick: out of the top of the prerequisite,
-  // into the bottom of what it unlocks.
+  // up into the bottom of what it unlocks, ending in an arrowhead. A course stacked straight above
+  // its prerequisite gets a short straight arrow; everything else a curve that arrives vertically.
+  const ARROW = 7
   const treeLinks: TreeLink[] = upward.map((l) => {
     const a = byCode.get(l.from)!
     const b = byCode.get(l.to)!
     const x1 = Math.round(a.x + a.w / 2)
     const x2 = Math.round(b.x + b.w / 2)
-    const k = Math.max(24, Math.min(110, (a.y - b.y - b.h) / 2))
-    return { from: l.from, to: l.to, conditional: l.conditional, d: `M ${x1} ${a.y} C ${x1} ${a.y - k}, ${x2} ${b.y + b.h + k}, ${x2} ${b.y + b.h}` }
+    const tip = b.y + b.h
+    const end = tip + ARROW
+    const arrow = `M ${x2 - 4.5} ${end + 1} L ${x2} ${tip} L ${x2 + 4.5} ${end + 1} Z`
+    const stacked = Math.abs(x1 - x2) < 24 && a.y - tip < 48
+    const k = Math.max(24, Math.min(110, (a.y - end) / 2))
+    const d = stacked ? `M ${x1} ${a.y} L ${x2} ${end}` : `M ${x1} ${a.y} C ${x1} ${a.y - k}, ${x2} ${end + k}, ${x2} ${end}`
+    // A cubic's length sits between its chord and its control polygon; their mean is close enough.
+    const chord = Math.hypot(x2 - x1, a.y - end)
+    const length = Math.round(stacked ? chord : (chord + k + Math.hypot(x2 - x1, a.y - end - 2 * k) + k) / 2)
+    return { from: l.from, to: l.to, conditional: l.conditional, d, arrow, length }
   })
 
   return {
