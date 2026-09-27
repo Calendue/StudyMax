@@ -185,10 +185,14 @@ async function overviewFromCall(call: ResolvedCall, p: CallPlanInputs): Promise<
     currentCourses: s.enrolled,
     // Term by term: "what am I taking in Fall" is answered from its own term, never the whole year's list.
     currentCoursesByTerm: underWayByTerm(adapterInput(s)),
+    // Already passed: never "add" one of these; "have I done X" is answered from here.
+    completedCourses: [...p.completed].sort(),
     ...(s.droppedCourses.length > 0 ? { droppedInSavedPlan: s.droppedCourses } : {}),
     roadmap: {
       projectedGraduation: terms[terms.length - 1]?.label ?? null,
       nextTerms: terms.slice(0, 3).map((t) => ({ term: t.label, courses: t.courses.map((c) => speakableCourse(c.code)) })),
+      // Every term to graduation, so "what's in Winter 2028" is read from here, never guessed.
+      allTerms: Object.fromEntries(terms.map((t) => [t.label, t.courses.map((c) => speakableCourse(c.code))])),
     },
     preferences: { coursesPerTerm: s.coursesPerTerm, springSummer: s.springSummer, summerCoursesPerTerm: s.summerPerTerm },
     // What Max may switch to, with how much each has left — for get_plan_options and a spoken name.
