@@ -64,14 +64,12 @@ function Step({
   lead,
   canContinue = true,
   continueLabel,
-  skip,
   children,
 }: {
   title: ReactNode
   lead?: ReactNode
   canContinue?: boolean
   continueLabel?: string
-  skip?: () => void
   children: ReactNode
 }) {
   const m = useModel()
@@ -123,17 +121,10 @@ function Step({
               <Icon name="back" size={18} />
               {backLabel}
             </button>
-            <span className="onb__foot-end">
-              {skip && (
-                <Button variant="quiet" onClick={skip}>
-                  Skip
-                </Button>
-              )}
-              <Button disabled={!canContinue} onClick={m.next} className="onb__continue">
-                {label}
-                <Icon name="arrow" size={18} />
-              </Button>
-            </span>
+            <Button disabled={!canContinue} onClick={m.next} className="onb__continue">
+              {label}
+              <Icon name="arrow" size={18} />
+            </Button>
           </div>
           <p className="onb__keys" aria-hidden>
             <kbd>Enter</kbd> to continue · <kbd>Esc</kbd> to go back
@@ -163,11 +154,6 @@ function Step({
         <Button block disabled={!canContinue} onClick={m.next}>
           {label}
         </Button>
-        {skip && (
-          <Button block variant="quiet" onClick={skip}>
-            Skip for now
-          </Button>
-        )}
       </ActionBar>
     </>
   )
