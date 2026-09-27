@@ -1,5 +1,12 @@
 export type TargetKind = 'specialization' | 'certificate' | 'minor'
 
+/** The one-line version, with the full sentence a tap away. */
+export const WHY_SHORT: Record<TargetKind, string> = {
+  specialization: 'It goes on your official transcript.',
+  certificate: 'Its own line on your transcript.',
+  minor: 'Its own line on your transcript.',
+}
+
 export const WHY_IT_MATTERS: Record<TargetKind, string> = {
   specialization:
     'Specializations appear on your official transcript and signal focused expertise to employers, beyond the base degree.',

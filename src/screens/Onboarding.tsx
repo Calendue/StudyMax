@@ -1,114 +1,293 @@
-import { useRef, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
+import { motion, useReducedMotion } from 'motion/react'
 import { useModel } from '../model.ts'
+import type { Screen } from '../App.tsx'
 import { courseCode } from '../format.ts'
 import { ActionBar, ScreenBody, ScreenTitle, TopBar } from '../ui/chrome.tsx'
-import { Icon } from '../ui/Icon.tsx'
-import { Appear, Button, Group, IconButton, Row, RowIcon, SectionLabel } from '../ui/primitives.tsx'
+import { Icon, type IconName } from '../ui/Icon.tsx'
+import { useLayoutMode } from '../ui/layout.ts'
+import { DUR, INSTANT, SETTLE, appearTransition } from '../ui/motion.ts'
+import { Appear, Button, Group, Row } from '../ui/primitives.tsx'
+import { profileRows } from './profile.ts'
 
-const check = <Icon name="check" size={20} className="row__check" />
-
-/** Where the student is in onboarding: one dot per question, the ones answered in Cherry Rose. */
-function StepDots() {
+/** The slim bar every step shares: how far through, never how many dots. */
+export function StepProgress({ compact = false }: { compact?: boolean }) {
   const m = useModel()
+  const reduce = useReducedMotion()
   if (m.stepIndex < 0) return null
+  const at = m.stepIndex + 1
+  const from = Math.min(Math.max(at - m.direction, 0), m.stepCount)
   return (
-    <span className="steps" role="img" aria-label={`Step ${m.stepIndex + 1} of ${m.stepCount}`}>
-      {Array.from({ length: m.stepCount }, (_, i) => (
-        <span key={i} className={`steps__dot${i <= m.stepIndex ? ' steps__dot--on' : ''}`} />
-      ))}
-    </span>
+    <div
+      className={`onb-progress${compact ? ' onb-progress--compact' : ''}`}
+      role="progressbar"
+      aria-label="Setup progress"
+      aria-valuemin={1}
+      aria-valuemax={m.stepCount}
+      aria-valuenow={at}
+    >
+      {!compact && (
+        <span className="onb-progress__text">
+          Step {at} of {m.stepCount}
+          {at === 1 && <span className="onb-progress__hint"> · about a minute</span>}
+        </span>
+      )}
+      <span className="onb-progress__track">
+        <motion.span
+          className="onb-progress__fill"
+          initial={compact ? { scaleX: from / m.stepCount } : false}
+          animate={{ scaleX: at / m.stepCount }}
+          transition={reduce ? INSTANT : { duration: DUR.slow, ease: SETTLE }}
+        />
+      </span>
+    </div>
   )
 }
 
 /**
- * The frame every question shares: Back (Home on the first step, out to the landing page), the dots,
- * and the question. A single-select question advances the moment an option is clicked, so it has no
- * Continue button — only a multi-select or typed-in question needs one, since there's no single click
- * that means "done". `skip` adds a quiet way past an optional question.
+ * The frame every step shares. On a phone: Back and the count on top, a slim progress bar, and the
+ * primary action anchored at the bottom. On a wide screen (inside the wizard, which draws the
+ * progress): the question block centred, with Back as a quiet link and Continue at its bottom right.
+ * Keyboard: arrows move between options, Enter continues, Esc goes back.
  */
 function Step({
   title,
   lead,
   canContinue = true,
-  multiSelect = false,
-  skip,
+  continueLabel,
   children,
 }: {
   title: ReactNode
   lead?: ReactNode
   canContinue?: boolean
-  multiSelect?: boolean
-  skip?: () => void
+  continueLabel?: string
   children: ReactNode
 }) {
   const m = useModel()
+  const wide = useLayoutMode() !== 'tabs'
+  const goBack = m.canGoBack ? m.back : m.toLanding
+  const backLabel = m.canGoBack ? 'Back' : 'Home'
+  const label = continueLabel ?? 'Continue'
+
+  const keys = useRef({ goBack, canContinue, next: m.next, sheet: m.sheet })
+  keys.current = { goBack, canContinue, next: m.next, sheet: m.sheet }
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const k = keys.current
+      if (k.sheet || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return
+      const target = e.target as HTMLElement
+      const typing = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA'
+      if (e.key === 'Escape') {
+        if (typing && (target as HTMLInputElement).value) return // Esc clears the field first
+        e.preventDefault()
+        k.goBack()
+      } else if (e.key === 'Enter') {
+        if (typing || target.closest('button, a, label')) return
+        if (k.canContinue) {
+          e.preventDefault()
+          k.next()
+        }
+      } else if (e.key.startsWith('Arrow') && !typing) {
+        const group = target.closest('[data-choices]')
+        const items = [...(group ?? document).querySelectorAll<HTMLElement>('[data-choice]')]
+        if (items.length === 0) return
+        const at = items.indexOf(target.closest('[data-choice]') as HTMLElement)
+        const step = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : -1
+        e.preventDefault()
+        items[at < 0 ? 0 : (at + step + items.length) % items.length].focus()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  if (wide) {
+    return (
+      <ScreenBody className="onb">
+        <div className="onb__block">
+          <ScreenTitle lead={lead}>{title}</ScreenTitle>
+          {children}
+          <div className="onb__foot">
+            <button type="button" className="onb__back" onClick={goBack}>
+              <Icon name="back" size={18} />
+              {backLabel}
+            </button>
+            <Button disabled={!canContinue} onClick={m.next} className="onb__continue">
+              {label}
+              <Icon name="arrow" size={18} />
+            </Button>
+          </div>
+          <p className="onb__keys" aria-hidden>
+            <kbd>Enter</kbd> to continue · <kbd>Esc</kbd> to go back
+          </p>
+        </div>
+      </ScreenBody>
+    )
+  }
+
   return (
     <>
-      <TopBar onBack={m.canGoBack ? m.back : m.toLanding} backLabel={m.canGoBack ? 'Back' : 'Home'} right={<StepDots />} />
-      <ScreenBody>
+      <TopBar
+        onBack={goBack}
+        backLabel={backLabel}
+        right={
+          <span className="onb__count tnum">
+            {m.stepIndex + 1} of {m.stepCount}
+          </span>
+        }
+      />
+      <StepProgress compact />
+      <ScreenBody className="onb">
         <ScreenTitle lead={lead}>{title}</ScreenTitle>
         {children}
       </ScreenBody>
-      {multiSelect && (
-        <ActionBar>
-          <Button block disabled={!canContinue} onClick={m.next}>
-            {m.nextIsReveal ? 'Reveal what my school hides' : 'Continue'}
-          </Button>
-          {skip && (
-            <Button block variant="quiet" onClick={skip}>
-              Skip for now
-            </Button>
-          )}
-        </ActionBar>
-      )}
+      <ActionBar>
+        <Button block disabled={!canContinue} onClick={m.next}>
+          {label}
+        </Button>
+      </ActionBar>
     </>
   )
 }
 
+/** A large selectable card: icon, title, one line of help. */
+function Choice({
+  icon,
+  title,
+  help,
+  selected = false,
+  index = 0,
+  wide,
+  onClick,
+}: {
+  icon: IconName
+  title: ReactNode
+  help: ReactNode
+  selected?: boolean
+  index?: number
+  wide?: boolean
+  onClick: () => void
+}) {
+  const reduce = useReducedMotion()
+  return (
+    <motion.button
+      type="button"
+      data-choice
+      role="radio"
+      aria-checked={selected}
+      className={`choice${selected ? ' choice--on' : ''}${wide ? ' choice--wide' : ''}`}
+      onClick={onClick}
+      initial={{ opacity: 0, y: reduce ? 0 : 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={appearTransition(index, reduce)}
+    >
+      <span className="choice__icon">
+        <Icon name={icon} size={22} />
+      </span>
+      <span className="choice__body">
+        <span className="choice__title">{title}</span>
+        <span className="choice__help">{help}</span>
+      </span>
+      <span className="choice__check" aria-hidden>
+        <Icon name="check" size={14} />
+      </span>
+    </motion.button>
+  )
+}
+
+/** A compact selectable option, for short answers (a degree, a year, a specialization). */
+function OptionChip({
+  children,
+  selected,
+  multi,
+  title,
+  onClick,
+}: {
+  children: ReactNode
+  selected: boolean
+  multi?: boolean
+  title?: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      data-choice
+      role={multi ? 'checkbox' : 'radio'}
+      aria-checked={selected}
+      title={title}
+      className={`opt-chip${selected ? ' opt-chip--on' : ''}`}
+      onClick={onClick}
+    >
+      {selected && <Icon name="check" size={16} />}
+      {children}
+    </button>
+  )
+}
+
+/** A labelled answer inside a step with more than one. */
+function Field({ label, hint, children, index = 0 }: { label: string; hint?: ReactNode; children: ReactNode; index?: number }) {
+  return (
+    <Appear index={index} className="onb-field">
+      <div className="onb-field__label">
+        <span>{label}</span>
+        {hint && <span className="onb-field__hint">{hint}</span>}
+      </div>
+      {children}
+    </Appear>
+  )
+}
+
+function PlanBadge({ full }: { full: boolean }) {
+  return <span className={`plan-badge${full ? ' plan-badge--full' : ''}`}>{full ? 'Full plan' : 'Awards only'}</span>
+}
+
+// ─────────────────────────────────────────────────────────────── 1. where you are
+
 export function StudentScreen() {
   const m = useModel()
   const fileInput = useRef<HTMLInputElement>(null)
-  // Coming back to this question after a transcript was read: say what it found.
-  const transcriptStatus =
-    m.uploadStatus === 'success'
-      ? `Read: ${m.takenCourses.length} completed course${m.takenCourses.length === 1 ? '' : 's'} found.`
-      : null
+  const reading = m.uploadStatus === 'success'
   return (
-    <Step title="Are you just starting out?" lead="This decides whether we ask for your courses next." canContinue={m.studentType !== null}>
-      <Group>
-        <Row
-          index={1}
-          leading={<RowIcon name="plan" />}
-          title="First-year student"
-          subtitle="No courses yet. We'll build your path from scratch."
+    <Step
+      title="Let's map your degree"
+      lead="A few quick answers and StudyMax shows what you're closest to finishing. Change anything later."
+      canContinue={m.studentType !== null}
+    >
+      <div className="choices choices--2" role="radiogroup" aria-label="Where you are" data-choices>
+        <Choice
+          index={0}
+          icon="spark"
+          title="Just starting"
+          help="First year, no courses yet. We'll plan from day one."
           selected={m.studentType === 'first-year'}
-          trailing={m.studentType === 'first-year' ? check : null}
           onClick={() => m.chooseStudentType('first-year')}
         />
-        <Row
-          index={2}
-          leading={<RowIcon name="upload" />}
-          title="Existing student"
-          subtitle={
-            m.features.ai
-              ? "You've got courses on the books. Upload a transcript or add them by hand."
-              : "You've got courses on the books. Add them from the catalogue."
-          }
-          selected={m.studentType === 'existing'}
-          trailing={m.studentType === 'existing' ? check : null}
+        <Choice
+          index={1}
+          icon="layers"
+          title="Taking courses"
+          help={m.features.ai ? 'Add them from a transcript or the catalogue.' : 'Add them from the catalogue.'}
+          selected={m.studentType === 'existing' && !reading}
           onClick={() => m.chooseStudentType('existing')}
         />
-        <Row
-          index={3}
-          leading={<RowIcon name="upload" />}
-          title="Upload my transcript"
-          subtitle={
-            transcriptStatus ??
-            "A DegreeWorks audit or unofficial transcript, as a PDF. StudyMax reads every course on it."
-          }
-          onClick={() => fileInput.current?.click()}
-        />
-      </Group>
+        {/* Reading a transcript is the AI's job, so the shortcut needs the OpenAI key. */}
+        {m.features.ai && (
+          <Choice
+            index={2}
+            wide
+            icon="upload"
+            title={reading ? 'Transcript read' : 'Upload my transcript'}
+            help={
+              reading
+                ? `${m.takenCourses.length} completed course${m.takenCourses.length === 1 ? '' : 's'} found. Pick another PDF to replace it.`
+                : 'The fastest way in: a DegreeWorks audit or unofficial transcript, as a PDF.'
+            }
+            selected={reading}
+            onClick={() => fileInput.current?.click()}
+          />
+        )}
+      </div>
       <input
         ref={fileInput}
         type="file"
@@ -137,49 +316,60 @@ export function StudentScreen() {
   )
 }
 
+// ─────────────────────────────────────────────────────────────── 2. school
+
 export function UniversityScreen() {
   const m = useModel()
   return (
     <Step
       title="Where do you study?"
-      lead="StudyMax finds the specializations, certificates and awards your school spreads across dozens of pages."
+      lead="StudyMax gathers the specializations, certificates and awards your school spreads across dozens of pages."
       canContinue={m.universityId !== ''}
     >
-      <Group>
-        <Row
-          index={1}
-          leading={<RowIcon name="school" />}
+      <div className="choices" role="radiogroup" aria-label="Your university" data-choices>
+        <Choice
+          index={0}
+          icon="school"
           title="University of Saskatchewan"
-          subtitle="Full plans for Computer Science, Applied Mathematics, Physics and Applied Computing"
+          help="Full plans for Computer Science and more, plus every award."
           selected={m.universityId === 'usask'}
-          trailing={m.universityId === 'usask' ? check : null}
           onClick={() => m.handleUniversityChange('usask')}
         />
         {/* Everything on the other-school path is AI guidance, so it needs the OpenAI key. */}
         {m.features.ai && (
-          <Row
-            index={2}
-            leading={<RowIcon name="globe" />}
+          <Choice
+            index={1}
+            icon="globe"
             title="Another university"
-            subtitle="Scholarship direction for any school"
+            help="Scholarship direction for any school."
             selected={m.universityId === 'other'}
-            trailing={m.universityId === 'other' ? check : null}
             onClick={() => m.handleUniversityChange('other')}
           />
         )}
-      </Group>
+      </div>
     </Step>
   )
 }
 
-export function MajorScreen() {
+// ─────────────────────────────────────────────────────────────── 3. degree, major, graduation
+
+// The programs students pick most, first; the rest of the planned ones follow alphabetically.
+const POPULAR = ['computer-science', 'biology', 'psychology', 'commerce', 'engineering', 'applied-mathematics', 'physics', 'nursing']
+const popularRank = (id: string) => (POPULAR.includes(id) ? POPULAR.indexOf(id) : POPULAR.length)
+
+function MajorPicker() {
   const m = useModel()
+  const query = m.programPickQuery.trim()
+  const popular = query
+    ? []
+    : m.programResults
+        .filter((o) => o.hasData)
+        .sort((a, b) => popularRank(a.id) - popularRank(b.id))
+        .slice(0, 8)
+  const chosen = m.programId ? m.programResults.find((o) => o.id === m.programId) : undefined
+  const chosenName = m.programId ? m.selectedProgram?.name : undefined
   return (
-    <Step
-      title="What's your major?"
-      lead="The programs StudyMax can plan are first. Any other Arts & Science subject still gets its awards."
-      canContinue={m.selectedProgram !== null}
-    >
+    <>
       <div className="field field--search">
         <Icon name="search" size={20} />
         <input
@@ -187,116 +377,154 @@ export function MajorScreen() {
           enterKeyHint="search"
           value={m.programPickQuery}
           onChange={(e) => m.setProgramPickQuery(e.target.value)}
+          onFocus={(e) => {
+            // On a phone the keyboard takes the bottom half: keep the field and its first hits above it.
+            const field = e.currentTarget
+            if (window.innerWidth < 768) setTimeout(() => field.scrollIntoView({ block: 'start', behavior: 'smooth' }), 300)
+          }}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && m.programResults.length > 0) {
+            if (e.key === 'Enter' && m.programResults.length > 0 && query) {
               e.preventDefault()
               m.handleProgramChange(m.programResults[0].id)
+              m.setProgramPickQuery('')
               e.currentTarget.blur()
             }
           }}
-          placeholder="Computer science, psychology, PHYS…"
+          placeholder="Search: computer science, psychology, PHYS…"
           aria-label="Search programs"
           autoComplete="off"
         />
       </div>
-      {m.programResults.length === 0 ? (
-        <p className="empty">No Arts &amp; Science program matches &ldquo;{m.programPickQuery}&rdquo;.</p>
+      {query ? (
+        m.programResults.length === 0 ? (
+          <p className="empty">No Arts &amp; Science program matches &ldquo;{query}&rdquo;.</p>
+        ) : (
+          <Group className="onb-results">
+            {m.programResults.slice(0, 6).map((option, i) => (
+              <Row
+                key={option.id}
+                index={i}
+                title={option.name}
+                selected={option.id === m.programId}
+                trailing={
+                  <>
+                    <PlanBadge full={option.hasData} />
+                    {option.id === m.programId && <Icon name="check" size={18} className="row__check" />}
+                  </>
+                }
+                onClick={() => {
+                  m.handleProgramChange(option.id)
+                  m.setProgramPickQuery('')
+                }}
+              />
+            ))}
+          </Group>
+        )
       ) : (
-        <Group>
-          {m.programResults.map((option, i) => (
-            <Row
-              key={option.id}
-              index={i}
-              title={option.name}
-              subtitle={option.hasData ? 'Full plan' : 'Awards only'}
-              selected={option.id === m.programId}
-              trailing={option.id === m.programId ? check : null}
-              onClick={() => m.handleProgramChange(option.id)}
-            />
+        <>
+          {chosenName && !popular.some((o) => o.id === m.programId) && (
+            <div className="opt-chips">
+              <OptionChip selected onClick={() => {}}>
+                {chosenName}
+              </OptionChip>
+              {chosen && <PlanBadge full={chosen.hasData} />}
+            </div>
+          )}
+          <div className="opt-chips" role="radiogroup" aria-label="Popular majors" data-choices>
+            {popular.map((o) => (
+              <OptionChip key={o.id} selected={o.id === m.programId} onClick={() => m.handleProgramChange(o.id)}>
+                {o.name}
+              </OptionChip>
+            ))}
+          </div>
+          <p className="onb-field__note">
+            {popular.length > 0 ? 'These get a full term-by-term plan. ' : ''}Any other Arts &amp; Science subject gets its awards.
+          </p>
+        </>
+      )}
+    </>
+  )
+}
+
+export function DegreeScreen() {
+  const m = useModel()
+  const other = m.universityId === 'other'
+  const thisYear = m.today.getFullYear()
+  const years = Array.from({ length: 7 }, (_, i) => thisYear + i)
+  // A transcript that named a major StudyMax knows has answered it; only the year is left.
+  const askMajor = !other && !m.majorFromTranscript
+  const valid = m.gradYear !== null && (!askMajor || (m.selectedProgram !== null && m.programId !== ''))
+  return (
+    <Step
+      title={askMajor ? 'Your degree' : 'When do you finish?'}
+      lead={
+        askMajor
+          ? 'Two quick picks. Your major decides how much StudyMax can plan.'
+          : other
+            ? 'Awards often depend on your year, so this shapes what we look for.'
+            : `Your transcript says ${m.selectedProgram?.name ?? 'your major'}. Just your year, then your results.`
+      }
+      canContinue={valid}
+    >
+      {askMajor && (
+        <Field label="Major" index={0}>
+          <MajorPicker />
+        </Field>
+      )}
+      <Field label="Expected graduation" index={1}>
+        <div className="opt-chips" role="radiogroup" aria-label="Expected graduation" data-choices>
+          {years.map((year) => (
+            <OptionChip key={year} selected={m.gradYear === year} onClick={() => m.chooseGradYear(year)}>
+              <span className="tnum">{year}</span>
+            </OptionChip>
           ))}
-        </Group>
+        </div>
+      </Field>
+    </Step>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────── 4. goals (optional)
+
+export function GoalsScreen() {
+  const m = useModel()
+  const count = m.concentrationIds.length + (m.minorId ? 1 : 0)
+  return (
+    <Step
+      title="Anything else you're aiming for?"
+      lead="Optional. Your plan is built around what you pick, and StudyMax still spots any minor you're close to."
+      continueLabel={count > 0 ? 'Continue' : 'Skip'}
+    >
+      {m.concentrationOptions.length > 0 && (
+        <Field label={`Specializations in ${m.selectedProgram?.name ?? 'your major'}`} hint="Pick any" index={0}>
+          <div className="opt-chips" role="group" aria-label="Specializations" data-choices>
+            {m.concentrationOptions.map((spec) => (
+              <OptionChip key={spec.id} multi selected={m.concentrationIds.includes(spec.id)} onClick={() => m.toggleConcentration(spec.id)}>
+                {spec.name}
+              </OptionChip>
+            ))}
+          </div>
+        </Field>
+      )}
+      {m.minorOptions.length > 0 && (
+        <Field label="A minor" hint="Pick one" index={1}>
+          <div className="opt-chips" role="radiogroup" aria-label="Minor" data-choices>
+            <OptionChip selected={m.minorId === null} onClick={() => m.chooseMinor(null)}>
+              No minor
+            </OptionChip>
+            {m.minorOptions.map((minor) => (
+              <OptionChip key={minor.id} selected={m.minorId === minor.id} onClick={() => m.chooseMinor(minor.id)}>
+                {minor.name}
+              </OptionChip>
+            ))}
+          </div>
+        </Field>
       )}
     </Step>
   )
 }
 
-export function MinorScreen() {
-  const m = useModel()
-  return (
-    <Step title="Working on a minor?" lead="Optional. StudyMax finds any minor you're close to either way, declared or not.">
-      <Group>
-        <Row
-          index={1}
-          title="No minor, or not sure yet"
-          selected={m.minorId === null}
-          trailing={m.minorId === null ? check : null}
-          onClick={() => m.chooseMinor(null)}
-        />
-        {m.minorOptions.map((minor, i) => (
-          <Row
-            key={minor.id}
-            index={i + 2}
-            title={minor.name}
-            selected={m.minorId === minor.id}
-            trailing={m.minorId === minor.id ? check : null}
-            onClick={() => m.chooseMinor(minor.id)}
-          />
-        ))}
-      </Group>
-    </Step>
-  )
-}
-
-export function ConcentrationScreen() {
-  const m = useModel()
-  const count = m.concentrationIds.length
-  return (
-    <Step
-      title="Any specializations you're aiming for?"
-      lead={`Optional. Pick as many as you're considering in ${m.selectedProgram?.name ?? 'your major'}; your plan is built around them.`}
-      multiSelect
-    >
-      <Group>
-        {m.concentrationOptions.map((spec, i) => {
-          const on = m.concentrationIds.includes(spec.id)
-          return (
-            <Row
-              key={spec.id}
-              index={i + 1}
-              title={spec.name}
-              selected={on}
-              trailing={<Icon name={on ? 'check' : 'plus'} size={20} className={on ? 'row__check' : 'row__add'} />}
-              onClick={() => m.toggleConcentration(spec.id)}
-            />
-          )
-        })}
-      </Group>
-      {count > 0 && <p className="footnote">{count === 1 ? 'One target' : `${count} targets`} picked. You can change them on the plan later.</p>}
-    </Step>
-  )
-}
-
-export function GraduationScreen() {
-  const m = useModel()
-  const thisYear = m.today.getFullYear()
-  const years = Array.from({ length: 7 }, (_, i) => thisYear + i)
-  return (
-    <Step title="Expected year of graduation" canContinue={m.gradYear !== null}>
-      <Group>
-        {years.map((year, i) => (
-          <Row
-            key={year}
-            index={i + 1}
-            title={String(year)}
-            selected={m.gradYear === year}
-            trailing={m.gradYear === year ? check : null}
-            onClick={() => m.chooseGradYear(year)}
-          />
-        ))}
-      </Group>
-    </Step>
-  )
-}
+// ─────────────────────────────────────────────────────────────── 5. this term (optional)
 
 export function RegisteredScreen() {
   const m = useModel()
@@ -304,9 +532,9 @@ export function RegisteredScreen() {
   const query = m.registeredQuery.trim()
   return (
     <Step
-      title="What courses have you registered for?"
-      lead="Search by subject or code and tick every course you're taking. Your plan counts them as underway."
-      multiSelect
+      title="Taking anything this term?"
+      lead="Optional. Courses you're registered in count as underway, so your plan builds on them."
+      continueLabel={count > 0 ? 'Continue' : 'Skip'}
     >
       <div className="field field--search">
         <Icon name="search" size={20} />
@@ -315,6 +543,10 @@ export function RegisteredScreen() {
           enterKeyHint="search"
           value={m.registeredQuery}
           onChange={(e) => m.setRegisteredQuery(e.target.value)}
+          onFocus={(e) => {
+            const field = e.currentTarget
+            if (window.innerWidth < 768) setTimeout(() => field.scrollIntoView({ block: 'start', behavior: 'smooth' }), 300)
+          }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault()
@@ -323,7 +555,7 @@ export function RegisteredScreen() {
               if (top && !m.registered.includes(top.code)) m.toggleRegistered(top.code)
             }
           }}
-          placeholder="CMPT 214, GEOG 120, PHYS 117…"
+          placeholder="Search: CMPT 214, GEOG 120, PHYS 117…"
           aria-label="Search courses"
           autoComplete="off"
           autoCorrect="off"
@@ -331,12 +563,29 @@ export function RegisteredScreen() {
         />
       </div>
 
+      {count > 0 && (
+        <div className="opt-chips onb-picked" aria-label="Registered courses">
+          {m.registered.map((code) => (
+            <button
+              key={code}
+              type="button"
+              className="opt-chip opt-chip--on"
+              aria-label={`Remove ${courseCode(code)}`}
+              onClick={() => m.removeRegistered(code)}
+            >
+              {courseCode(code)}
+              <Icon name="close" size={14} />
+            </button>
+          ))}
+        </div>
+      )}
+
       {query !== '' &&
         (m.registeredResults.length === 0 ? (
           <p className="empty">No USask course matches &ldquo;{query}&rdquo;.</p>
         ) : (
-          <Group>
-            {m.registeredResults.map((hit, i) => {
+          <Group className="onb-results">
+            {m.registeredResults.slice(0, 30).map((hit, i) => {
               const on = m.registered.includes(hit.code)
               return (
                 <Row
@@ -353,83 +602,81 @@ export function RegisteredScreen() {
           </Group>
         ))}
 
-      {count > 0 && (
-        <>
-          <SectionLabel>
-            Registered <span className="section-label__count tnum">{count}</span>
-          </SectionLabel>
-          <Group>
-            {m.registered.map((code, i) => (
-              <Row
-                key={code}
-                index={i}
-                title={courseCode(code)}
-                subtitle={m.courseTitle(code)}
-                trailing={
-                  <IconButton
-                    icon="close"
-                    label={`Remove ${courseCode(code)}`}
-                    onClick={() => m.removeRegistered(code)}
-                  />
-                }
-              />
-            ))}
-          </Group>
-        </>
-      )}
-      {count === 0 && query === '' && (
-        <p className="footnote">Optional. Skip it if you haven&rsquo;t registered yet.</p>
-      )}
-
-      <label className="check-option">
-        <input type="checkbox" checked={m.springSummer} onChange={(e) => m.setSpringSummer(e.target.checked)} />
-        <span>
-          <span className="check-option__title">I want to take Spring/Summer classes</span>
-          <span className="check-option__hint">Your plan adds a light Spring/Summer term between Winter and Fall.</span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={m.springSummer}
+        className={`toggle-card${m.springSummer ? ' toggle-card--on' : ''}`}
+        onClick={() => m.setSpringSummer(!m.springSummer)}
+      >
+        <span className="toggle-card__body">
+          <span className="toggle-card__title">Spring and Summer classes</span>
+          <span className="toggle-card__help">Adds a light Spring/Summer term between Winter and Fall.</span>
         </span>
-      </label>
+        <span className="toggle-card__switch" aria-hidden>
+          <span />
+        </span>
+      </button>
     </Step>
   )
 }
 
-export function PhoneScreen() {
+// ─────────────────────────────────────────────────────────────── 6. review
+
+export function ReviewScreen() {
   const m = useModel()
   const digits = m.phone.replace(/\D/g, '').length
-  const canCall = digits >= 7
+  const phoneOk = digits === 0 || digits >= 7
+  const rows = profileRows(m).filter((r) => r.shown)
   return (
     <Step
-      title="Enter your phone number"
-      lead="So Max can call you and help you with your university roadmap and questions."
-      canContinue={canCall}
-      multiSelect
-      skip={() => {
-        m.setPhone('')
-        m.next()
-      }}
+      title="Ready when you are"
+      lead="Check your answers, then StudyMax maps your path."
+      canContinue={phoneOk}
+      continueLabel={m.nextIsReveal ? 'Reveal my path' : 'Next: your courses'}
     >
-      <Appear index={1} className="form">
-        <div className="field">
-          <input
-            id="onboarding-phone"
-            type="tel"
-            inputMode="tel"
-            autoComplete="tel"
-            enterKeyHint="go"
-            value={m.phone}
-            onChange={(e) => m.setPhone(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && canCall) m.next()
-            }}
-            placeholder="+1 306 555 0123"
-            aria-label="Your phone number"
-          />
-        </div>
-        <p className="footnote">
-          {m.account
-            ? 'Saved to your account so Max can reach you. Max only calls when you ask.'
-            : 'Max only calls when you ask. Your number isn\u2019t saved.'}
-        </p>
+      <Appear index={0} className="review">
+        {rows.map((row) => (
+          <div key={row.key} className="review__row">
+            <span className="review__label">{row.label}</span>
+            <span className={`review__value${row.value ? '' : ' review__value--empty'}`}>{row.value ?? row.empty}</span>
+            <button type="button" className="review__edit" onClick={() => m.editStep(row.step as Screen)} aria-label={`Edit ${row.label.toLowerCase()}`}>
+              Edit
+            </button>
+          </div>
+        ))}
       </Appear>
+      {m.features.call && (
+        <Field label="Want a call before an award closes?" hint="Optional" index={1}>
+          <div className="field">
+            <Icon name="phone" size={20} className="field__icon" />
+            <input
+              id="onboarding-phone"
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel"
+              enterKeyHint="go"
+              value={m.phone}
+              onChange={(e) => m.setPhone(e.target.value)}
+              onFocus={(e) => {
+                const field = e.currentTarget
+                if (window.innerWidth < 768) setTimeout(() => field.scrollIntoView({ block: 'center', behavior: 'smooth' }), 300)
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && phoneOk) m.next()
+              }}
+              placeholder="+1 306 555 0123"
+              aria-label="Your phone number"
+            />
+          </div>
+          <p className="onb-field__note">
+            {m.account
+              ? 'Saved to your account so Max can reach you. Max calls only when you ask, about the award closing soonest.'
+              : 'Max calls only when you ask, about the award closing soonest. Your number isn’t saved.'}
+          </p>
+        </Field>
+      )}
     </Step>
   )
 }
+

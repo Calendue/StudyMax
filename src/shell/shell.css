@@ -704,8 +704,8 @@
   width: 28px;
   height: 28px;
   border-radius: var(--r1);
-  background: var(--selected);
-  color: var(--accent);
+  background: var(--card-surface);
+  color: var(--ink-2);
 }
 
 .card__link {
@@ -783,8 +783,8 @@ p.card__empty {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: var(--selected);
-  color: var(--accent);
+  background: var(--card-surface);
+  color: var(--ink-2);
 }
 
 .stat__text {
@@ -811,6 +811,16 @@ p.card__empty {
   font: 600 0.875rem / 1 var(--font-text);
   letter-spacing: 0;
   color: var(--ink-2);
+}
+
+.stat__invite {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  margin: var(--s1) 0 2px;
+  white-space: nowrap;
+  font: 600 var(--fs-label) / 1.3 var(--font-brand);
+  color: var(--accent);
 }
 
 .stat__sub {
@@ -1035,6 +1045,12 @@ p.card__empty {
   grid-template-columns: minmax(0, 1fr) 360px;
   gap: var(--s5);
   align-items: start;
+}
+
+/* The Plan page hosts the skill tree: the tree's box ends above the fold at 1440x900, so the roots
+   and the program's name under them are in view on arrival and only the box scrolls. */
+.plan-page__tree .tree--contained .tree__scroll {
+  height: clamp(380px, calc(100dvh - 390px), 1100px);
 }
 
 .plan-page__lead {
@@ -1335,85 +1351,149 @@ p.card__empty {
 .wizard {
   height: 100%;
   display: grid;
-  grid-template-columns: minmax(320px, 5fr) minmax(0, 7fr);
+  grid-template-columns: minmax(340px, 5fr) minmax(0, 7fr);
+  /* One row the height of the window: a long answer list scrolls inside the pane, never stretching
+     the panel beside it. */
+  grid-template-rows: minmax(0, 1fr);
 }
 
+/* Deep ink with a soft Cherry Rose glow rising from the corner: the brand without a rose slab. */
 .wizard__art {
   position: relative;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
   gap: var(--s5);
-  padding: var(--s6);
-  background: var(--sidebar);
-  color: var(--on-sidebar);
-}
-
-/* The brand mark, large and quiet, bleeding off the art's corner. */
-.wizard__art::after {
-  content: '';
-  position: absolute;
-  right: -30%;
-  bottom: -30%;
-  width: 80%;
-  aspect-ratio: 1;
-  border-radius: 50%;
-  background: radial-gradient(closest-side, var(--sidebar-hover), transparent);
-  pointer-events: none;
-}
-
-.wizard__progress {
-  display: grid;
-  gap: var(--s2);
-  min-height: 34px;
-}
-
-.wizard__progress-text {
-  font: 600 var(--fs-caption) / 1.3 var(--font-brand);
-  color: var(--on-sidebar-2);
-}
-
-.wizard__track {
-  display: block;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--sidebar-hover);
-  overflow: hidden;
-}
-
-.wizard__fill {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--on-sidebar);
-  transform-origin: left center;
-}
-
-.wizard__brand {
-  display: grid;
-  gap: var(--s4);
-  justify-items: start;
-}
-
-.wizard__mark {
-  color: var(--on-sidebar);
-  margin-left: -12px;
+  padding: var(--s6) var(--s7);
+  background:
+    radial-gradient(90% 60% at 0% 100%, var(--welcome-glow), transparent 70%),
+    linear-gradient(160deg, var(--welcome-from), var(--welcome-to));
+  color: var(--on-welcome);
 }
 
 .wizard__wordmark {
-  color: var(--on-sidebar);
+  flex: none;
+  color: var(--on-welcome);
 }
 
-.wizard__tagline {
-  max-width: 34ch;
-  font: 500 1.125rem / 1.5 var(--font-brand);
-  color: var(--on-sidebar-2);
+.wizard__center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--s4);
+  width: 100%;
+  max-width: 400px;
 }
 
 .wizard__foot {
+  flex: none;
   font-size: var(--fs-caption);
-  color: var(--on-sidebar-2);
+  color: var(--on-welcome-2);
+}
+
+.sapling {
+  width: 132px;
+  height: auto;
+  margin-left: calc(var(--s2) * -1);
+  overflow: visible;
+}
+
+.sapling__ground {
+  fill: var(--welcome-track);
+}
+
+.sapling__trunk {
+  fill: none;
+  stroke: var(--on-welcome-2);
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+.sapling__leaf {
+  fill: var(--taupe);
+}
+
+.sapling__leaf--new,
+.sapling__bud {
+  fill: var(--welcome-accent);
+}
+
+.profile-card {
+  padding: var(--s2) var(--s5) var(--s3);
+  background: var(--panel-surface);
+  border: 1px solid var(--panel-edge);
+  border-radius: var(--r3);
+}
+
+.profile-card ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.profile-card__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: var(--s3) 0 var(--s2);
+  font: 600 var(--fs-label) / 1.3 var(--font-brand);
+}
+
+.profile-card__count {
+  font: 500 var(--fs-caption) / 1.3 var(--font-text);
+  color: var(--on-welcome-2);
+}
+
+.profile-card__row {
+  display: grid;
+  grid-template-columns: 20px 6rem minmax(0, 1fr);
+  align-items: center;
+  gap: var(--s3);
+  min-height: 40px;
+  font-size: var(--fs-caption);
+}
+
+.profile-card__row + .profile-card__row {
+  border-top: 1px solid var(--panel-edge);
+}
+
+.profile-card__mark {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1.5px dashed var(--welcome-track);
+}
+
+.profile-card__mark > span {
+  display: grid;
+  place-items: center;
+}
+
+.profile-card__row--on .profile-card__mark {
+  border: 0;
+  background: var(--welcome-accent);
+  color: var(--welcome-to);
+}
+
+.profile-card__label {
+  color: var(--on-welcome-2);
+}
+
+.profile-card__value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-label);
+  font-weight: 500;
+  color: var(--welcome-track);
+}
+
+.profile-card__row--on .profile-card__value {
+  color: var(--on-welcome);
 }
 
 .wizard__pane {
@@ -1421,25 +1501,104 @@ p.card__empty {
   height: 100%;
   display: flex;
   flex-direction: column;
-  align-items: center;
 }
 
-.wizard__pane > .screen {
+.wizard__top {
+  flex: none;
   width: 100%;
-  max-width: 600px;
+  max-width: 640px;
+  min-height: 72px;
+  margin: 0 auto;
+  padding: var(--s6) var(--s6) 0;
 }
 
-.wizard .topbar {
-  padding-top: var(--s4);
+.wizard__stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.wizard__stage > .screen {
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+/* A question block sits in the middle of the pane, not the top third. */
+.wizard .onb > .screen__content {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: var(--s5) var(--s6) var(--s7);
 }
 
 .wizard .screen__content {
-  padding-left: var(--s5);
-  padding-right: var(--s5);
+  padding-left: var(--s6);
+  padding-right: var(--s6);
+}
+
+.wizard .screen-title {
+  margin-top: 0;
+  margin-bottom: var(--s6);
 }
 
 .wizard .screen-title h1 {
   font-size: 2.125rem;
+}
+
+.wizard .choices--2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.wizard .choice--wide {
+  grid-column: 1 / -1;
+}
+
+.onb__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  margin-top: var(--s6);
+}
+
+.onb__back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  min-height: 44px;
+  margin-left: calc(var(--s2) * -1);
+  padding: 0 var(--s2);
+  border-radius: var(--r2);
+  font-weight: 500;
+  color: var(--ink-2);
+  transition: background-color var(--d-fast) var(--settle);
+}
+
+.onb__back:hover {
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.onb__continue {
+  min-width: 168px;
+}
+
+.onb__keys {
+  margin-top: var(--s3);
+  text-align: right;
+  font-size: var(--fs-section);
+  color: var(--ink-2);
+}
+
+.onb__keys kbd {
+  padding: 1px 6px;
+  border: 1px solid var(--edge);
+  border-radius: 5px;
+  font: inherit;
+  font-weight: 600;
 }
 
 .wizard .actionbar {
@@ -1447,8 +1606,21 @@ p.card__empty {
   border-radius: var(--r4);
 }
 
+.wizard__stage > .screen:has(> .welcome) {
+  justify-content: center;
+  padding: 0 var(--s6) var(--s7);
+}
+
 .wizard .welcome {
-  padding-top: var(--s7);
+  flex: none;
+  padding: 0 0 var(--s5);
+}
+
+.wizard .welcome__actions {
+  padding: var(--s4) 0 0;
+  margin: 0;
+  background: none;
+  border-radius: 0;
 }
 
 /* ─────────────────────────────────────────────────────────── sheets become modals */
@@ -1549,13 +1721,26 @@ p.card__empty {
   }
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
   .wizard {
-    grid-template-columns: 280px minmax(0, 1fr);
+    grid-template-columns: 340px minmax(0, 1fr);
   }
 
   .wizard__art {
     padding: var(--s5);
+  }
+
+  .profile-card {
+    padding: var(--s2) var(--s4) var(--s3);
+  }
+
+  .profile-card__row {
+    grid-template-columns: 20px 4.5rem minmax(0, 1fr);
+    gap: var(--s2);
+  }
+
+  .profile-card__value {
+    font-size: var(--fs-caption);
   }
 }
 

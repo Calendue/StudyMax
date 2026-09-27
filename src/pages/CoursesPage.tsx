@@ -149,7 +149,7 @@ export function CoursesPage() {
         </Card>
         <div className="courses-page__action">
           <Button block disabled={count === 0} onClick={m.startReveal}>
-            {m.revealed ? 'Update my results' : 'Reveal what my school hides'}
+            {m.revealed ? 'Update my results' : 'Reveal my path'}
           </Button>
           {count === 0 && <p className="footnote">Add at least one course to see what it opens up.</p>}
           {count > 0 && m.uploadStatus !== 'sample' && (

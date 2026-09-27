@@ -17,7 +17,7 @@ export function AccountSheet() {
     <Sheet
       open={m.sheet === 'account'}
       onClose={() => m.setSheet(null)}
-      title={account ? 'Your account' : 'Settings'}
+      title="Settings"
       footer={
         account ? (
           <Button block variant="secondary" icon="signout" onClick={() => void m.signOutOfAccount()}>

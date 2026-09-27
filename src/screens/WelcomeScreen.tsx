@@ -54,7 +54,7 @@ export function WelcomeScreen() {
     <>
       <main className="welcome">
         <Appear index={0} className="welcome__brand">
-          <Wordmark height={56} className="welcome__mark" />
+          <Wordmark height={52} className="welcome__mark" />
         </Appear>
         <Appear index={1}>
           <h1 className="welcome__title">See what your school hides</h1>

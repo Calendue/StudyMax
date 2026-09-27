@@ -90,7 +90,7 @@ export function ClassFinder() {
                 type="button"
                 role="radio"
                 aria-checked={c.term === t.code}
-                className={`chip ${c.term === t.code ? 'chip--target' : 'chip--add'}${offeredBy?.[t.code] === 0 ? ' classes__term--off' : ''}`}
+                className={`chip chip--choice${offeredBy?.[t.code] === 0 ? ' classes__term--off' : ''}`}
                 onClick={() => c.chooseTerm(t.code)}
               >
                 {(offeredBy?.[t.code] ?? 0) > 0 && <Icon name="check" size={14} />}
@@ -221,7 +221,7 @@ function SectionRow({ section, index }: { section: Section; index: number }) {
           {when}
           {section.instructors[0] && <> · {section.instructors[0]}</>}
           <span className="classes__status">
-            <Chip tone={section.status === 'open' ? 'urgent' : 'quiet'}>{statusLabel(section.status, seats)}</Chip>
+            <Chip tone={section.status === 'open' ? 'accent' : 'quiet'}>{statusLabel(section.status, seats)}</Chip>
             {section.hasReservedSeats && <span> Some seats are reserved.</span>}
           </span>
         </>

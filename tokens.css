@@ -66,6 +66,9 @@
   --on-welcome-2: rgb(255 248 235 / 0.74);
   --welcome-track: rgb(255 248 235 / 0.16);
   --welcome-accent: #e6a8b6;
+  /* A surface and a hairline on those dark panels (the onboarding wizard's profile card). */
+  --panel-surface: rgb(255 248 235 / 0.06);
+  --panel-edge: rgb(255 248 235 / 0.12);
 
   /* A dark band on a light page (the landing page's problem statement). */
   --band: #12262b;
@@ -167,10 +170,11 @@
   --inactive: #4a3a40;
   --scrim: rgb(4 10 12 / 0.62);
 
-  --sidebar: #0f2126;
+  /* Lifted clear of the page, so the page-coloured notch reads as a cut-out. */
+  --sidebar: #18343a;
   --on-sidebar: var(--old-lace);
   --on-sidebar-2: rgb(255 248 235 / 0.72);
-  --sidebar-hover: rgb(255 248 235 / 0.06);
+  --sidebar-hover: rgb(255 248 235 / 0.07);
   --notch-ink: var(--old-lace);
   --notch-accent: #e6a8b6;
 

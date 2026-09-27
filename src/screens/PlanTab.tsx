@@ -5,6 +5,9 @@ import { Icon } from '../ui/Icon.tsx'
 import { Appear, Button, Group, Ring, Row, SectionLabel } from '../ui/primitives.tsx'
 import { Sheet } from '../ui/Sheet.tsx'
 import { PlanRoadmap } from './PlanRoadmap.tsx'
+import { SkillTree } from '../skilltree/SkillTree.tsx'
+import { PlanViewSwitch } from '../skilltree/PlanViewSwitch.tsx'
+import { usePlanView } from '../skilltree/planView.ts'
 
 // The plan's pieces, shared by the phone's Plan tab and the desktop's Plan page.
 
@@ -179,9 +182,38 @@ export function AddTargetSheet() {
 
 export function PlanTab() {
   const m = useModel()
-  if (m.plan.length === 0) return <PlanEmpty />
+  const [view, setView] = usePlanView()
+  if (view === 'tree') {
+    // The tree opens at its roots and grows up; the plan's settings sit under the roots.
+    return (
+      <>
+        <PlanViewSwitch view={view} onChange={setView} sticky />
+        <SkillTree bleed stickyTop={56} />
+        <div className="plan-after">
+          {m.plan.length > 0 && (
+            <p className="lead">
+              <PlanLead />
+            </p>
+          )}
+          <PlanTargets />
+          <PlanControls />
+          {m.plan.length > 0 && <PlanCopy />}
+        </div>
+        <AddTargetSheet />
+      </>
+    )
+  }
+  if (m.plan.length === 0) {
+    return (
+      <>
+        <PlanViewSwitch view={view} onChange={setView} />
+        <PlanEmpty />
+      </>
+    )
+  }
   return (
     <>
+      <PlanViewSwitch view={view} onChange={setView} />
       <ScreenTitle lead={<PlanLead />}>Your plan</ScreenTitle>
       <PlanTargets />
       <PlanControls />
