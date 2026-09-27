@@ -227,8 +227,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           wellnessResourceLine: WELLNESS_FALLBACK,
         },
         firstMessage: isFirstCall
-          ? `Hi${firstName ? ` ${firstName}` : ''}, this is Max from StudyMax — I help you plan your degree. I've got your roadmap in front of me. What's on your mind?`
-          : `Hi${firstName ? ` ${firstName}` : ''}, it's Max. What can I help with?`,
+          ? `Hi${firstName ? ` ${firstName}` : ''}, this is Max, the StudyMax owl — I help you plan your degree. I've got your roadmap in front of me. What's on your mind?`
+          : `Hi${firstName ? ` ${firstName}` : ''}, it's Max, your StudyMax owl. What can I help with?`,
         metadata: { callRowId: String(call.callId) },
         // Per call, so a deploy changes it without re-running scripts/configure-max-assistant.ts.
         maxDurationSeconds: MAX_CALL_SECONDS,

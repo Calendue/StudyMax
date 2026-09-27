@@ -9,6 +9,7 @@ import { Icon } from '../ui/Icon.tsx'
 import { Appear, Button, Chip, Group, IconButton, Row, RowIcon, SectionLabel } from '../ui/primitives.tsx'
 import { Sheet } from '../ui/Sheet.tsx'
 import { InProgressChanges } from '../ui/WhatChanged.tsx'
+import { inProgressActions } from '../lib/overrides.ts'
 
 // Arts & Science courses only, grouped by subject: the college this app's programs live in. The rest
 // of USask's catalogue stays reachable through search, not this list.
@@ -138,10 +139,23 @@ export function SampleRow() {
   )
 }
 
+/** "CMPT 360 removed · Undo", under a list a course was just taken off. */
+function RemovedNote({ code, onUndo }: { code: string; onUndo: () => void }) {
+  return (
+    <p className="footnote removed-note" role="status">
+      {courseCode(code)} removed.{' '}
+      <button type="button" className="inline-link" onClick={onUndo}>
+        Undo
+      </button>
+    </p>
+  )
+}
+
 export function CompletedList({ label = true }: { label?: boolean }) {
   const m = useModel()
+  const [removed, setRemoved] = useState<string | null>(null)
   const count = m.takenCourses.length
-  if (count === 0) return null
+  if (count === 0 && !removed) return null
   return (
     <>
       {label && (
@@ -158,10 +172,28 @@ export function CompletedList({ label = true }: { label?: boolean }) {
             index={4 + i}
             title={courseCode(code)}
             subtitle={m.courseTitle(code)}
-            trailing={<IconButton icon="close" label={`Remove ${courseCode(code)}`} onClick={() => m.toggleCourse(code)} />}
+            trailing={
+              <IconButton
+                icon="close"
+                label={`Remove ${courseCode(code)}`}
+                onClick={() => {
+                  m.toggleCourse(code)
+                  setRemoved(code)
+                }}
+              />
+            }
           />
         ))}
       </Group>
+      {removed && (
+        <RemovedNote
+          code={removed}
+          onUndo={() => {
+            if (!m.takenCourses.includes(removed)) m.toggleCourse(removed)
+            setRemoved(null)
+          }}
+        />
+      )}
     </>
   )
 }
@@ -175,7 +207,9 @@ const SEASONS: Season[] = ['Fall', 'Winter', 'Spring/Summer']
  */
 export function InProgressList({ label = true }: { label?: boolean }) {
   const m = useModel()
-  if (m.currentByTerm.length === 0) return null
+  const [menu, setMenu] = useState<{ code: string; term: string } | null>(null)
+  const [removed, setRemoved] = useState<{ code: string; undo: () => void } | null>(null)
+  if (m.currentByTerm.length === 0 && !removed) return null
   let index = 0
   return (
     <>
@@ -194,7 +228,7 @@ export function InProgressList({ label = true }: { label?: boolean }) {
                 subtitle={
                   <>
                     {m.courseTitle(code)}
-                    <InProgressChanges code={code} term={termLabel(group.season, m.today)} />
+                    <InProgressChanges code={code} />
                   </>
                 }
                 trailing={
@@ -211,7 +245,11 @@ export function InProgressList({ label = true }: { label?: boolean }) {
                         </option>
                       ))}
                     </select>
-                    <IconButton icon="close" label={`Remove ${courseCode(code)}`} onClick={() => m.removeInProgress(code)} />
+                    <IconButton
+                      icon="more"
+                      label={`More for ${courseCode(code)}`}
+                      onClick={() => setMenu({ code, term: termLabel(group.season, m.today) })}
+                    />
                   </>
                 }
               />
@@ -219,8 +257,76 @@ export function InProgressList({ label = true }: { label?: boolean }) {
           </Group>
         </div>
       ))}
+      {removed && (
+        <RemovedNote
+          code={removed.code}
+          onUndo={() => {
+            removed.undo()
+            setRemoved(null)
+          }}
+        />
+      )}
       <p className="footnote">Courses in progress don&rsquo;t count yet. They&rsquo;re planned around, not planned again.</p>
+      <InProgressMenu
+        target={menu}
+        onClose={() => setMenu(null)}
+        onRemove={(code) => {
+          setRemoved({ code, undo: m.removeInProgress(code) })
+          setMenu(null)
+        }}
+      />
     </>
+  )
+}
+
+/**
+ * The "..." on an in-progress course: what happened to it this term (the plan moves around it, and
+ * each can be undone under the row), or take it off the list altogether.
+ */
+function InProgressMenu({
+  target,
+  onClose,
+  onRemove,
+}: {
+  target: { code: string; term: string } | null
+  onClose: () => void
+  onRemove: (code: string) => void
+}) {
+  const m = useModel()
+  const said = target ? m.overrides.some((o) => o.code === target.code) : false
+  const actions = target && !said ? inProgressActions(target.term, m.currentTermLabel) : []
+  return (
+    <Sheet open={target !== null} onClose={onClose} title={target ? courseCode(target.code) : ''}>
+      {target && (
+        <div className="course-menu">
+          {actions.length > 0 && (
+            <>
+              <p className="footnote">Something changed in {target.term}? Tell Max and the plan moves around it.</p>
+              <Group>
+                {actions.map((a) => (
+                  <Row
+                    key={a.kind}
+                    title={a.label}
+                    onClick={() => {
+                      m.addOverride({ code: target.code, kind: a.kind, term: a.when })
+                      onClose()
+                    }}
+                  />
+                ))}
+              </Group>
+            </>
+          )}
+          <Group>
+            <Row
+              leading={<RowIcon name="close" tone="quiet" />}
+              title="Remove from my courses"
+              subtitle="For a course that was added by mistake. You can undo it."
+              onClick={() => onRemove(target.code)}
+            />
+          </Group>
+        </div>
+      )}
+    </Sheet>
   )
 }
 

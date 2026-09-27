@@ -10,7 +10,7 @@ export function MaxNudge({ index = 1 }: { index?: number }) {
   const next = m.plan[0]?.label
   return (
     <Appear index={index} className="max-nudge">
-      <MaxOwl pose="idle" size={56} />
+      <MaxOwl pose="idle" size={96} className="max-nudge__owl" />
       <div className="max-nudge__text">
         <p className="max-nudge__line">
           {next ? `Want me to walk you through ${next}?` : 'Want me to walk you through your plan?'}

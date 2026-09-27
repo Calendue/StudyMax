@@ -216,28 +216,15 @@ export function PlanIssues() {
 }
 
 /**
- * Under an in-progress course on the Courses list: Failed / Withdrew / Cancelled for its term, or what
- * was said with an Undo, and why the plan moved a registration the cascade un-booked.
+ * Under an in-progress course on the Courses list: what was said about it (Failed, Withdrew,
+ * Cancelled) with an Undo, and why the plan moved a registration the cascade un-booked. The actions
+ * themselves live in the row's "..." menu.
  */
-export function InProgressChanges({ code, term }: { code: string; term: string }) {
+export function InProgressChanges({ code }: { code: string }) {
   const m = useModel()
-  const current = m.currentTermLabel
   const said = m.overrides.filter((o) => o.code === code)
   const unbooked = m.planNotes.find((n) => n.code === 'UNBOOKED' && n.course === code)
-  const now = termOrd(term) <= termOrd(current)
-  const actions: { kind: OverrideKind; label: string; when: string }[] =
-    said.length > 0
-      ? []
-      : now
-        ? [
-            { kind: 'failed', label: 'Failed', when: term },
-            { kind: 'withdrew', label: 'Withdrew', when: term },
-            { kind: 'not-offered', label: 'Cancelled this term', when: term },
-          ]
-        : [
-            { kind: 'withdrew', label: 'Dropped', when: current },
-            { kind: 'not-offered', label: 'Cancelled', when: term },
-          ]
+  if (said.length === 0 && !unbooked) return null
   return (
     <span className="changes__row-actions">
       {said.map((o) => (
@@ -247,17 +234,6 @@ export function InProgressChanges({ code, term }: { code: string; term: string }
             Undo
           </button>
         </span>
-      ))}
-      {actions.map((a) => (
-        <button
-          key={a.kind}
-          type="button"
-          className="chip chip--quiet"
-          aria-label={`${a.label}: ${courseCode(code)}`}
-          onClick={() => m.addOverride({ code, kind: a.kind, term: a.when })}
-        >
-          {a.label}
-        </button>
       ))}
       {unbooked && said.length === 0 && (
         <span className="changes__row-note">

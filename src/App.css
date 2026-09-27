@@ -1865,6 +1865,11 @@
   margin-top: var(--s4);
 }
 
+/* Courses matching what's typed, under the search box, refreshed on every key. */
+.classes__suggest {
+  margin-top: var(--s2);
+}
+
 .classes__status {
   display: flex;
   flex-wrap: wrap;

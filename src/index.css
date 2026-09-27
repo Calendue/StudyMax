@@ -188,6 +188,13 @@ header,
   color: var(--accent);
 }
 
+/* In dark the "S" symbol is the brand's own Cherry Rose, filled; the wordmark keeps its colour. */
+:root[data-theme='dark'] .sidebar__mark,
+:root[data-theme='dark'] .rail__mark,
+:root[data-theme='dark'] .wait__mark {
+  color: var(--cherry);
+}
+
 .screen__body {
   flex: 1;
   min-height: 0;

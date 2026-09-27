@@ -105,7 +105,7 @@
   margin-bottom: var(--s3);
 }
 
-/* The Courses list's in-progress rows: the three "life happened" actions under the course. */
+/* The Courses list's in-progress rows: what was said about the course (from its "..." menu), with Undo. */
 .changes__row-actions {
   display: flex;
   flex-wrap: wrap;
@@ -127,4 +127,14 @@
   flex-basis: 100%;
   font-size: var(--fs-caption);
   color: var(--ink-2);
+}
+
+/* The "..." sheet on an in-progress course. */
+.course-menu {
+  display: grid;
+  gap: var(--s3);
+}
+
+.removed-note {
+  margin-top: var(--s2);
 }
