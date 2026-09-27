@@ -287,3 +287,7 @@ switch sprouts and prunes; a 3-step proposal broadcasts ~13 KB; a whole-degree p
 4. Tell the team: the migration landed, the `.js`-extension convention now applies to
    `src/lib/plan.ts`/`src/data/programs/*`, and Ping Max is live on the real site for anyone who opens
    it (feature-flagged on real Vapi keys, not a toy).
+
+## Who Max may call (MAX_ALLOWED_NUMBERS)
+
+While the SMS OTP gate is off and guests send their number with each call, `api/max/call.ts` only dials numbers listed in the `MAX_ALLOWED_NUMBERS` environment variable (comma-separated, any formatting, compared by digits). With none listed, Max calls nobody and the app says so (`NUMBER_NOT_ALLOWED`). Add the team's demo phones in Vercel (Production). Remove the allowlist check only once phone ownership is verified server-side again.

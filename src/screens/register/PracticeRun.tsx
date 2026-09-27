@@ -11,7 +11,8 @@ import { timeText } from './sectionText.ts'
 
 // The practice run: a simulated look-alike of the university's registration page (layout only: no
 // crest, no wordmark, no sign-in step) where Max plays out his REAL picks for the term, with their
-// real CRNs, sections, times and seats. Nothing is sent anywhere; the "Simulated · demo" tag says so.
+// real CRNs, sections, times and seats. Max fills the summary and stops, as he does on PAWS: the
+// student presses the simulated Submit. Nothing is sent anywhere; the "Simulated · demo" tag says so.
 
 const STEP_DELAY_MS = 700
 const TYPE_CHAR_MS = 60
@@ -72,15 +73,17 @@ function Run({ plan, scope, onBack }: { plan: RegPlan; scope: RegScope; onBack: 
   const studentName = firstName(m.account) ?? 'Student'
   const script = useMemo(() => scriptFromPlan(plan), [plan])
   const { courses, booked, steps } = script
+  // The script always ends on its ready beat, where Max waits for the student's Submit.
+  const readyIndex = steps.length - 1
   const colorOf = (code: string) => COLORS[Math.max(0, courses.findIndex((c) => c.code === code)) % COLORS.length]
 
   // A finished run for this scope opens finished; otherwise the script starts, or, under reduced
-  // motion, jumps straight to its end.
+  // motion, jumps straight to its ready beat (never past it: Submit stays the student's).
   const [initial] = useState(() => {
     const existing = load(scope)
     return existing
       ? { saved: existing, rows: existing.rows, stepIndex: -1 }
-      : { saved: null, rows: script.rows, stepIndex: reduce ? script.steps.length : 0 }
+      : { saved: null, rows: script.rows, stepIndex: reduce ? readyIndex : 0 }
   })
   const [saved, setSaved] = useState<RegState | null>(initial.saved)
   const [rows, setRows] = useState<RegRow[]>(initial.rows)
@@ -98,18 +101,18 @@ function Run({ plan, scope, onBack }: { plan: RegPlan; scope: RegScope; onBack: 
   const subjectRef = useRef<HTMLInputElement>(null)
   const numberRef = useRef<HTMLInputElement>(null)
   const searchBtnRef = useRef<HTMLButtonElement>(null)
-  const submitBtnRef = useRef<HTMLButtonElement>(null)
   const addRefs = useRef(new Map<number, HTMLButtonElement | null>())
   const [cursorRect, setCursorRect] = useState<{ left: number; top: number } | null>(null)
 
   const currentStep = stepIndex >= 0 && stepIndex < steps.length ? steps[stepIndex] : null
 
-  // Advance one step at a time, revealing typed characters and marking rows added along the way.
+  // Advance one step at a time, revealing typed characters and marking rows added along the way. The
+  // ready beat never advances by itself: only the student's Submit ends the run.
   useEffect(() => {
-    if (saved || !currentStep) return
-    // Reduced motion switched on mid-run: finish now rather than wait on timers that never start.
+    if (saved || !currentStep || currentStep.action === 'ready') return
+    // Reduced motion switched on mid-run: go to the ready beat rather than wait on timers that never start.
     if (reduce) {
-      setStepIndex(steps.length)
+      setStepIndex(readyIndex)
       return
     }
     if (currentStep.courseIndex !== undefined) setActiveCourseIndex(currentStep.courseIndex)
@@ -129,7 +132,7 @@ function Run({ plan, scope, onBack }: { plan: RegPlan; scope: RegScope; onBack: 
       setAddedRows((set) => new Set(set).add(rowIndex))
       haptic.selection()
     }
-    if (currentStep.action === 'search' || currentStep.action === 'add' || currentStep.action === 'submit') {
+    if (currentStep.action === 'search' || currentStep.action === 'add') {
       setClicking(true)
       clickTimer.current = window.setTimeout(() => setClicking(false), 250)
     }
@@ -139,23 +142,11 @@ function Run({ plan, scope, onBack }: { plan: RegPlan; scope: RegScope; onBack: 
       if (typeTimer.current) window.clearInterval(typeTimer.current)
       if (clickTimer.current) window.clearTimeout(clickTimer.current)
     }
-  }, [stepIndex, steps, saved, reduce]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [stepIndex, steps, saved, reduce, readyIndex]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Finalize once the script runs out: every added section is registered, except a full one, which
-  // Banner would refuse.
+  // Move the cursor to whatever the current step targets. On the ready beat it goes: Max's hands are off.
   useEffect(() => {
-    if (saved || stepIndex < steps.length) return
-    const registered = rows.map((r) => ({ ...r, status: r.seatStatus === 'full' ? ('error' as const) : ('registered' as const) }))
-    setRows(registered)
-    haptic.medium()
-    const finished: RegState = { termLabel, rows: registered, submittedAt: new Date().toISOString() }
-    save(scope, finished)
-    setSaved(finished)
-  }, [stepIndex, steps.length, saved, rows, termLabel, scope])
-
-  // Move the cursor to whatever the current step targets.
-  useEffect(() => {
-    if (saved || reduce || !currentStep || !containerRef.current) {
+    if (saved || reduce || !currentStep || currentStep.action === 'ready' || !containerRef.current) {
       setCursorRect(null)
       return
     }
@@ -164,7 +155,6 @@ function Run({ plan, scope, onBack }: { plan: RegPlan; scope: RegScope; onBack: 
     if (currentStep.action === 'type-subject') target = subjectRef.current
     else if (currentStep.action === 'type-number') target = numberRef.current
     else if (currentStep.action === 'search') target = searchBtnRef.current
-    else if (currentStep.action === 'submit') target = submitBtnRef.current
     else if (currentStep.action === 'add' && currentStep.rowIndex !== undefined) target = addRefs.current.get(currentStep.rowIndex)
     if (!target) return
     const rect = target.getBoundingClientRect()
@@ -174,7 +164,24 @@ function Run({ plan, scope, onBack }: { plan: RegPlan; scope: RegScope; onBack: 
   function skip() {
     if (timer.current) window.clearTimeout(timer.current)
     if (typeTimer.current) window.clearInterval(typeTimer.current)
-    setStepIndex(steps.length)
+    setStepIndex(readyIndex)
+  }
+
+  const done = saved !== null
+  const ready = !done && currentStep?.action === 'ready'
+
+  /**
+   * The student's own tap on the simulated Submit: every added section is registered, except a full
+   * one, which Banner would refuse.
+   */
+  function submit() {
+    if (!ready) return
+    const registered = rows.map((r) => ({ ...r, status: r.seatStatus === 'full' ? ('error' as const) : ('registered' as const) }))
+    setRows(registered)
+    haptic.medium()
+    const finished: RegState = { termLabel, rows: registered, submittedAt: new Date().toISOString() }
+    save(scope, finished)
+    setSaved(finished)
   }
 
   function reset() {
@@ -184,12 +191,12 @@ function Run({ plan, scope, onBack }: { plan: RegPlan; scope: RegScope; onBack: 
     setAddedRows(new Set())
     setTypedSubject('')
     setTypedNumber('')
-    // Under reduced motion there are no timers to run the script, so it goes straight to the end.
-    setStepIndex(reduce ? steps.length : 0)
+    // Under reduced motion there are no timers to run the script, so it goes straight to the ready beat.
+    setStepIndex(reduce ? readyIndex : 0)
   }
 
-  const done = saved !== null
-  const visibleRows = done ? rows : rows.filter((_, i) => addedRows.has(i))
+  // On the ready beat everything is in the summary (under reduced motion, without the adds played out).
+  const visibleRows = done || ready ? rows : rows.filter((_, i) => addedRows.has(i))
   // Only what's in the summary counts, and only lectures carry credit units.
   const credits = visibleRows.filter((r) => r.main).reduce((sum, r) => sum + r.credits, 0)
   const registeredCredits = visibleRows.filter((r) => r.main && r.status === 'registered').reduce((sum, r) => sum + r.credits, 0)
@@ -197,7 +204,7 @@ function Run({ plan, scope, onBack }: { plan: RegPlan; scope: RegScope; onBack: 
   const showResults = !done && (currentStep?.action === 'search' || currentStep?.action === 'add')
   const activeCourse = courses[activeCourseIndex]
   const results = showResults && activeCourse ? rows.map((r, i) => ({ r, i })).filter(({ r }) => r.code === activeCourse.code) : []
-  const canSubmit = !done && visibleRows.length > 0
+  const canSubmit = ready && visibleRows.length > 0
   const week = [...booked, ...visibleRows]
   const { start: gridStart, end: gridEnd } = gridWindow(week)
   const bubbleText = done
@@ -252,7 +259,10 @@ function Run({ plan, scope, onBack }: { plan: RegPlan; scope: RegScope; onBack: 
             <>
               <div className="reg-search__head">
                 <strong>Enter Your Search Criteria</strong> <span className="reg-info">ⓘ</span>
-                <span className="reg-search__term">Term: {termLabel}</span>
+                <span className="reg-search__term">
+                  Term: {termLabel}
+                  {plan.preview && <span className="reg-search__note">on {plan.preview.termLabel}&rsquo;s timetable</span>}
+                </span>
               </div>
               <div className="reg-search__form">
                 <label className="reg-field">
@@ -346,7 +356,10 @@ function Run({ plan, scope, onBack }: { plan: RegPlan; scope: RegScope; onBack: 
             </span>
             <span className="reg-pane-tab">Schedule Details</span>
           </div>
-          <p className="reg-caption">Class Schedule for {termLabel}</p>
+          <p className="reg-caption">
+            Class Schedule for {termLabel}
+            {plan.preview && <span className="reg-search__note">on {plan.preview.termLabel}&rsquo;s timetable</span>}
+          </p>
           <div className="reg-week">
             {DAYS.map((day) => (
               <div key={day} className="reg-week__col">
@@ -436,7 +449,12 @@ function Run({ plan, scope, onBack }: { plan: RegPlan; scope: RegScope; onBack: 
             <input type="checkbox" disabled />
             Switch class sections (prior to registration deadline)
           </label>
-          <button ref={submitBtnRef} type="button" className="reg-btn reg-btn--submit" disabled={!canSubmit}>
+          <button
+            type="button"
+            className={`reg-btn reg-btn--submit${canSubmit ? ' reg-btn--ready' : ''}`}
+            disabled={!canSubmit}
+            onClick={submit}
+          >
             Submit
           </button>
         </div>
@@ -450,12 +468,14 @@ function Run({ plan, scope, onBack }: { plan: RegPlan; scope: RegScope; onBack: 
           {!done ? (
             <>
               <p className="reg-bubble__line">
-                {currentStep ? <span className="spinner" /> : <Icon name="check" size={16} />}
+                {currentStep && !ready ? <span className="spinner" /> : <Icon name="check" size={16} />}
                 {bubbleText}
               </p>
-              <button type="button" className="reg-bubble__skip" onClick={skip}>
-                Skip
-              </button>
+              {!ready && (
+                <button type="button" className="reg-bubble__skip" onClick={skip}>
+                  Skip
+                </button>
+              )}
             </>
           ) : (
             <>

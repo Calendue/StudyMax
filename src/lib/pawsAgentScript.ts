@@ -8,6 +8,9 @@
 // Whatever mode it runs in, the script never presses or even looks up Submit (the outline is a CSS
 // rule; the id's only other use is click()'s refusal), never retries, never reads an input's value,
 // skips password and hidden fields, and never reads cookies, storage or Banner's synchronizer token.
+// Its diagnostics look only inside the registration content (never the header, nav or user menu) and
+// carry an element's text only when it's one of Banner's control words, so no name or student number
+// can land in them.
 
 /** Banner 9's registration entry. Signed out, it sends the student to CAS and back. */
 export const REG_URL = 'https://banner.usask.ca/StudentRegistrationSsb/ssb/registration/registerPostSignIn?mode=registration'
@@ -102,7 +105,8 @@ export interface AgentSession {
 
 /**
  * The rules for one openPawsAgent call, apart from the plugin: the script is injected at most once,
- * only into a finished load of Banner's class registration page, and page messages count only
+ * only into a finished load of Banner's class registration page reached by leaving Banner to sign in
+ * and coming back (never a registration page loaded without that hop), and page messages count only
  * after that. `execute` is the plugin's executeScript.
  */
 export function agentSession(opts: {
@@ -125,7 +129,7 @@ export function agentSession(opts: {
   const ours = (e: ViewEvent) => !id || !e?.id || e.id === id
 
   const inject = () => {
-    if (done || injected || !id || !loaded || !isClassRegistration(url)) return
+    if (done || injected || !id || !loaded || !leftBanner || !isClassRegistration(url)) return
     injected = true
     emit({ type: 'status', text: 'Max is filling in your CRNs.' })
     opts.execute(id, opts.code).catch(() => {
@@ -148,7 +152,7 @@ export function agentSession(opts: {
       if (pageOf(e.url) !== pageOf(url)) loaded = false
       url = e.url
       if (url.startsWith('https://') && !isBanner(url)) leftBanner = true
-      if (!signedIn && isBanner(url) && (leftBanner || isTermSelection(url) || isClassRegistration(url))) {
+      if (!signedIn && isBanner(url) && (leftBanner || isTermSelection(url))) {
         signedIn = true
         emit({ type: 'signed-in', text: 'Signed in. Opening registration.' })
       }
@@ -419,9 +423,11 @@ __DIAGNOSE__
     step = 'finding the Enter CRNs tab';
     var tab = await waitFor(function () { return crnTab() || (termChooser() ? 'term' : null); }, 20000, 'The Enter CRNs tab');
     if (tab === 'term') {
-      post({ type: 'progress', text: 'Choose ' + CFG.termLabel + ' and press Continue.' });
-      step = 'waiting for you to choose ' + CFG.termLabel;
-      tab = await waitFor(crnTab, 180000, 'The Enter CRNs tab');
+      var again = CFG.mode === 'native'
+        ? 'Close PAWS, tap Fill it in on PAWS again and pick ' + CFG.termLabel + ' on Banner’s term page when it asks.'
+        : 'Choose ' + CFG.termLabel + ', press Continue, then click Fill it in for me again.';
+      post({ type: 'error', text: 'Banner is asking for the term first. ' + again });
+      return;
     }
     if (CFG.year && !termShown()) post({ type: 'progress', text: 'These CRNs are for ' + CFG.termLabel + '. If Banner shows another term, stop here.' });
     step = 'opening Enter CRNs';
@@ -470,12 +476,46 @@ const DIAGNOSE = `  function termShown() {
     return t.indexOf(CFG.year) >= 0 && t.indexOf(CFG.season) >= 0;
   }
 
+  function chrome(el) {
+    for (var n = el; n && n.nodeType === 1; n = n.parentElement) {
+      var role = n.getAttribute('role') || '';
+      var cls = typeof n.className === 'string' ? n.className : '';
+      if (n.tagName === 'HEADER' || n.tagName === 'NAV' || role === 'banner' || role === 'navigation') return true;
+      if (/^user/i.test(n.id || '') || /(^|\\s)user/i.test(cls)) return true;
+    }
+    return false;
+  }
+
+  function content() {
+    var p = panel();
+    if (p !== document) {
+      var up = p.parentElement;
+      return up && up !== document.body && up !== document.documentElement ? up : p;
+    }
+    return document.querySelector('main,[role=main]') || document.getElementById('content');
+  }
+
+  function inside(sel) {
+    var root = content();
+    var els = root ? root.querySelectorAll(sel) : [];
+    var out = [];
+    for (var i = 0; i < els.length; i++) {
+      if (!ours(els[i]) && !chrome(els[i]) && shown(els[i])) out.push(els[i]);
+    }
+    return out;
+  }
+
+  function control(text) {
+    var t = String(text || '').replace(/\\s+/g, ' ').replace(/^[^a-z]+|[^a-z]+$/gi, '');
+    return /^(enter\\s+crns|add\\s+another\\s+crn|add\\s+to\\s+summary|submit|continue|find\\s+classes|plans|blocks|schedule|summary)$/i.test(t) ? t : '';
+  }
+
   function notices() {
     var out = [];
-    var els = document.querySelectorAll('[role=alert],.notification-center-message,.notification-message');
+    var els = inside('[role=alert],.notification-center-message,.notification-message');
     for (var i = 0; i < els.length && out.length < 3; i++) {
       var t = words(els[i]).slice(0, 160);
-      if (t && !ours(els[i]) && shown(els[i]) && out.indexOf(t) < 0) out.push(t);
+      if (t && out.indexOf(t) < 0) out.push(t);
     }
     return out;
   }
@@ -490,18 +530,17 @@ const DIAGNOSE = `  function termShown() {
     var type = el.getAttribute('type');
     if (type) s += ' type=' + type;
     var formy = tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA';
-    var label = formy ? el.getAttribute('placeholder') || el.getAttribute('aria-label') || '' : words(el) || el.getAttribute('aria-label') || '';
+    var label = formy ? el.getAttribute('placeholder') || el.getAttribute('aria-label') || '' : control(words(el)) || control(el.getAttribute('aria-label'));
     if (label) s += ' ' + JSON.stringify(label.slice(0, 40));
     return s.slice(0, 160);
   }
 
   function dump() {
     var rows = [];
-    var els = document.querySelectorAll('a,button,[role=tab],[role=button],input,select,textarea');
+    var els = inside('a,button,[role=tab],[role=button],input,select,textarea');
     for (var i = 0; i < els.length && rows.length < 80; i++) {
-      var el = els[i];
-      if (ours(el) || !shown(el) || (el.tagName === 'INPUT' && secret(el))) continue;
-      rows.push(describe(el));
+      if (els[i].tagName === 'INPUT' && secret(els[i])) continue;
+      rows.push(describe(els[i]));
     }
     return rows;
   }
