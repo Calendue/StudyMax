@@ -70,9 +70,20 @@
   --panel-surface: rgb(255 248 235 / 0.06);
   --panel-edge: rgb(255 248 235 / 0.12);
 
-  /* A dark band on a light page (the landing page's problem statement). */
-  --band: #12262b;
-  --on-band: var(--old-lace);
+  /* The landing page's climb: dark soil under the roots, a warm dusk sky over the canopy, and the
+     quiet band behind the skill tree showcase. Text on the soil and the sky is Old Lace. */
+  --climb-soil-top: #16303a;
+  --climb-soil: #0b1a1e;
+  --climb-rim: rgb(195 141 148 / 0.55);
+  --climb-root: rgb(195 141 148 / 0.62);
+  --climb-root-glow: rgb(152 38 73 / 0.7);
+  --climb-dusk-top: #0e1f24;
+  --climb-dusk-mid: #1b2c31;
+  --climb-dusk-low: #3e2c33;
+  --climb-horizon: rgb(230 168 182 / 0.45);
+  --climb-band: var(--surface);
+  --on-climb: var(--old-lace);
+  --on-climb-2: rgb(255 248 235 / 0.74);
 
   --shadow-card: 0 1px 2px rgb(18 38 43 / 0.04), 0 4px 16px rgb(18 38 43 / 0.05);
   --shadow-card-hover: 0 2px 4px rgb(18 38 43 / 0.05), 0 12px 32px rgb(18 38 43 / 0.09);
@@ -99,13 +110,13 @@
   --fs-label: 0.9375rem;
   --fs-caption: 0.8125rem;
   --fs-section: 0.75rem;
-  /* The landing page's marketing sizes, beyond the app's own scale. */
+  /* The landing page's sizes, beyond the app's own scale. */
   --fs-small: 0.875rem;
   --fs-lead: 1.125rem;
-  --fs-lede: 1.375rem;
-  --fs-headline: 2.25rem;
-  --fs-hero: clamp(2.25rem, 4.4vw + 1rem, 3.5rem);
-  --fs-lede-fluid: clamp(1.25rem, 1.4vw + 1rem, 1.75rem);
+  /* The climb's three sizes: one display (the roots and the canopy), a beat's title, its body. */
+  --fs-climb-display: clamp(2.5rem, 3.4vw + 1rem, 4.75rem);
+  --fs-climb-title: clamp(1.625rem, 1.5vw + 1rem, 2.625rem);
+  --fs-climb-body: clamp(1.0625rem, 0.35vw + 0.95rem, 1.3125rem);
   --lh-body: 1.55;
 
   /* ── space: a 4pt rhythm. Seven numbers, not thirty. ── */
@@ -116,7 +127,6 @@
   --s5: 24px;
   --s6: 32px;
   --s7: 48px;
-  --s8: 72px; /* the landing page's section rhythm */
 
   --r1: 8px;
   --r2: 12px;
@@ -182,9 +192,16 @@
   --welcome-to: #0f2126;
   --welcome-glow: rgb(152 38 73 / 0.5);
 
-  --band: #12262b;
-  --on-band: var(--old-lace);
-
+  --climb-soil-top: #15292e;
+  --climb-soil: #081316;
+  --climb-rim: rgb(195 141 148 / 0.4);
+  --climb-root: rgb(195 141 148 / 0.5);
+  --climb-root-glow: rgb(152 38 73 / 0.85);
+  --climb-dusk-top: #050d10;
+  --climb-dusk-mid: #0f1b1f;
+  --climb-dusk-low: #2a1f25;
+  --climb-horizon: rgb(230 168 182 / 0.4);
+  --climb-band: #0f2126;
   --shadow-float: 0 8px 24px rgb(4 10 12 / 0.45), 0 1px 4px rgb(4 10 12 / 0.3);
   --shadow-card: 0 1px 2px rgb(4 10 12 / 0.3), 0 4px 16px rgb(4 10 12 / 0.25);
   --shadow-card-hover: 0 2px 4px rgb(4 10 12 / 0.35), 0 14px 36px rgb(4 10 12 / 0.4);
