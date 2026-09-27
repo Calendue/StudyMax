@@ -1,20 +1,31 @@
 ---
 name: manage_roadmap
-description: Imperative changes ("drop CMPT 370", "undo that") and saving or discarding an explored change — the only path to commit_scenario.
+description: Imperative changes ("drop CMPT 370", "add a stats minor", "put CMPT 318 in Winter", "undo that"), app actions, and saving or discarding an explored change — the only path to commit_scenario.
 ---
 
 Two entry points land here: an imperative request stated as a command rather than a question, and a
 student responding to a change already explored under `what_if`.
 
-**Imperative request** ("drop CMPT 370", "make it 4 a term", "turn on summers", "put me back on
-version 3"): treat it exactly like `what_if` — translate to its op (`DROP_COURSE`, `SET_PREFERENCE`,
-`SET_SPECIALIZATIONS` or `RESTORE_VERSION`), call `run_scenario`, speak the headline then
+**Imperative request** ("drop CMPT 370", "add CMPT 318", "move CMPT 370 to next fall", "switch me to
+Cybersecurity", "add a stats minor", "do the Honours", "I want to finish by Winter 2029", "put my
+internship in Year 3", "make it 4 a term", "put me back on version 3"): treat it exactly like `what_if`
+— translate to its op(s) (the list is in `what_if`), call `run_scenario`, speak the headline then
 warnings/errors — but skip the "keep it, tweak it, leave it" framing and go straight to the save
 question below, since an imperative already signals intent to act.
 
-**A specialization switch** (`requiresAppConfirmation: true`) is the one exception: never ask the save
-question and never call `commit_scenario` for it — it can't be saved by voice. Say: "If you want it,
-tap Keep this plan on your screen." `get_student_overview`'s `savedThisCall` tells you if they did.
+**Program changes** (specialization, minor, major, degree) save the same way as everything else: on a
+clear spoken yes to the save question. Before asking, say in a few words what it means for them (the
+headline covers graduation; for a major, add that their specializations start over). Tapping Keep this
+plan on their screen saves it too; `get_student_overview`'s `savedThisCall` tells you if they did.
+
+**If `feasible` is false** (a course moved before its prerequisites, or into a term it doesn't run), say
+the first error plainly and offer the fix (a later term, or letting the plan place it) — never ask to
+save an infeasible change; the server refuses it anyway.
+
+**App actions** (`app_action`, only while the app is open on this call): "show me my awards" or "open
+my plan" → `action: open_tab`; "can I get into CMPT 370", "check seats for CMPT 370" →
+`action: find_class` with the course code, which opens the Class Tracker on its sections so they can
+tap one to watch. These happen right away — no save question.
 
 **The save question:** ask one direct yes/no question — "Want me to save that as your plan?" — and
 nothing else. Only call `commit_scenario` after a clear, unambiguous yes to that exact question,

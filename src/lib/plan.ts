@@ -35,6 +35,8 @@ export interface PlannedCourse {
   group?: string
   /** The advising year (1-4) it's recommended in. */
   year?: number
+  /** The student put it in this term themselves (PlanOptions.pinned); the planner didn't choose it. */
+  pinned?: boolean
 }
 
 export interface PlannedTerm {
@@ -75,6 +77,13 @@ export interface PlanOptions {
   maxSeniorCmpt?: number
   /** An academic year (by its Fall's calendar year) spent away on an internship: nothing is planned in it. */
   away?: number | null
+  /**
+   * Courses the student put in a term themselves, by term label ("Winter 2028"): they stay there,
+   * take up room in it like a booked course, count toward what they fill, and appear in its courses.
+   */
+  pinned?: Record<string, string[]>
+  /** Courses the student asked to take, in no particular term: planned like a requirement, prerequisites and all. */
+  added?: string[]
 }
 
 /** An unnamed elective slot in a plan. It has no prerequisites, no catalogue page and no sections. */
@@ -322,11 +331,11 @@ export function academicYearOf({ season, year }: TermStart): number {
   return season === 'Fall' ? year : year - 1
 }
 
-function termOrder({ season, year }: TermStart): number {
+export function termOrder({ season, year }: TermStart): number {
   return year * 10 + (season === 'Winter' ? 0 : season === 'Spring/Summer' ? 1 : 2)
 }
 
-function termFromLabel(label: string): TermStart | null {
+export function termFromLabel(label: string): TermStart | null {
   const match = label.match(/^(Fall|Winter|Spring\/Summer) (\d{4})$/)
   return match ? { season: match[1] as Season, year: Number(match[2]) } : null
 }
@@ -716,14 +725,41 @@ export function buildStudentPlan(
   start: TermStart,
   options: PlanOptions = {},
 ): PlannedTerm[] {
-  const { degree } = options
-  const done = new Set([...completed, ...inProgress])
+  const { degree, pinned = {}, added = [] } = options
+  if (added.length > 0) {
+    // Asked for by name, so planned like a target's requirement: in a term that runs it, after its prerequisites.
+    const asked: Specialization = { id: 'added-courses', name: 'Courses you added', requirements: added.map((code) => ({ courses: [code], need: 1 })) }
+    targets = [...targets, asked]
+    allSpecializations = [...allSpecializations, asked]
+  }
+  const pins = Object.entries(pinned).filter(([label, codes]) => termFromLabel(label) && codes.length > 0)
+  const pinnedCodes = pins.flatMap(([, codes]) => codes)
+  // A pinned course is taken in its term, so nothing plans it again; like a booked one, it holds room
+  // there and only counts as passed once that term is over.
+  const done = new Set([...completed, ...inProgress, ...pinnedCodes])
   // With the degree mapped, the plan is the whole degree: the targets and the degree's own slots
   // together, so every pick has to fit the degree too, and its open slots become unnamed electives.
   const whole = degree ? degreeTarget(degree) : null
   const open = computeMatches(whole ? [...targets, whole] : targets, done).filter((m) => m.remaining > 0)
-  if (!degree && open.length === 0) return []
-  return buildPlan(open, whole ? [...allSpecializations, whole] : allSpecializations, done, coursesPerTerm, start, options)
+  if (!degree && open.length === 0) return withPinned([], pins)
+  if (pins.length === 0) return buildPlan(open, whole ? [...allSpecializations, whole] : allSpecializations, done, coursesPerTerm, start, options)
+  const booked: Record<string, string[]> = { ...options.booked }
+  for (const [label, codes] of pins) booked[label] = [...(booked[label] ?? []), ...codes]
+  const terms = buildPlan(open, whole ? [...allSpecializations, whole] : allSpecializations, done, coursesPerTerm, start, { ...options, booked })
+  return withPinned(terms, pins)
+}
+
+/** The plan with each pinned course in its own term (a term the plan left empty gets added, in order). */
+function withPinned(terms: PlannedTerm[], pins: [string, string[]][]): PlannedTerm[] {
+  if (pins.length === 0) return terms
+  const out = terms.map((t) => ({ ...t, courses: [...t.courses] }))
+  for (const [label, codes] of pins) {
+    const courses = codes.map((code): PlannedCourse => ({ code, reason: 'requirement', alsoAdvances: [], cu: cuOf(code), pinned: true }))
+    const here = out.find((t) => t.label === label)
+    if (here) here.courses.push(...courses)
+    else out.push({ label, courses })
+  }
+  return out.sort((a, b) => termOrder(termFromLabel(a.label)!) - termOrder(termFromLabel(b.label)!))
 }
 
 /** `count` consecutive terms from `start`, for a start-term picker. */

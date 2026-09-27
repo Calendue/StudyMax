@@ -12,6 +12,7 @@ import {
   adapterInput,
   commitScenario,
   discardScenario,
+  normalizeCourseCode,
   droppedAt,
   presentScenario,
   runScenario,
@@ -20,7 +21,7 @@ import {
 } from './_scenarios.js'
 import { publish, uiVisible } from './_live.js'
 import { DEMO_AUTH_UID } from './_demoUser.js'
-import type { CallPlanInputs } from '../../src/lib/max/live.js'
+import type { AppAction, CallPlanInputs } from '../../src/lib/max/live.js'
 import type { ScenarioOp } from '../../src/lib/max/types.js'
 import { maxSkills } from '../../src/lib/max/skills.generated.js'
 import { planOptions, type OptionTopic } from '../../src/lib/max/options.js'
@@ -132,6 +133,7 @@ const SKILL_BY_TOOL: Record<string, string> = {
   commit_scenario: 'manage_roadmap',
   update_name: 'correct_name',
   get_plan_options: 'recommend_plan',
+  app_action: 'manage_roadmap',
 }
 
 /** One short, tool-specific fact worth seeing in a log line — never the full payload. */
@@ -189,6 +191,14 @@ async function overviewFromCall(call: ResolvedCall, p: CallPlanInputs): Promise<
     availableSpecializations: computeMatches(program?.specializations ?? [], new Set(s.completed), degree)
       .filter((m) => m.remaining > 0 && !m.spec.unavailable)
       .map((m) => ({ id: m.spec.id, name: m.spec.name, remaining: m.remaining })),
+    // What else run_scenario can switch: minors, majors, degree variants; and what the student placed themselves.
+    availableMinors: programs.filter((x) => x.kind === 'minor').map((x) => x.name),
+    availableMajors: programs.filter((x) => (x.kind === undefined || x.kind === 'major') && x.specializations.length > 0).map((x) => x.name),
+    ...(program?.degrees && program.degrees.length > 1
+      ? { degree: degree?.name ?? null, availableDegrees: program.degrees.map((d) => d.name) }
+      : {}),
+    ...(Object.keys(s.pinned).length > 0 ? { coursesYouPlaced: s.pinned } : {}),
+    internshipYear: s.internship ?? null,
     ...(saved > 0 ? { savedThisCall: saved } : {}),
     uiVisible: uiVisible(call),
     ...(activeScenario
@@ -311,7 +321,7 @@ async function runRunScenario(call: ResolvedCall, args: Record<string, unknown>)
     headline: result.diff.headline,
     warnings: result.validation.issues.filter((i) => i.severity === 'WARNING').map((i) => i.message),
     errors,
-    // A specialization switch is saved only by the student's tap in the app (I2), never commit_scenario.
+    // Always false now: every change saves on a clear spoken yes (src/lib/max/types.ts PROGRAM_OPS).
     requiresAppConfirmation: result.requiresAppConfirmation,
     uiVisible: uiVisible(call),
   }
@@ -341,6 +351,28 @@ async function runCommitScenario(call: ResolvedCall, args: Record<string, unknow
   const { live, ...forMax } = result
   await publish(call.liveToken, { type: 'scenario.committed', scenarioId: live.scenarioId, inputs: live.inputs, terms: live.terms })
   return { ...forMax, uiVisible: uiVisible(call) }
+}
+
+const TABS = new Set(['overview', 'plan', 'awards', 'classes'])
+
+/** Max doing something in the app outside the plan: open a tab, or look a course up in the Class
+ * Tracker so the student can watch a section. Only while the app is open on this call. */
+async function runAppAction(call: ResolvedCall, args: Record<string, unknown>): Promise<ToolResponse> {
+  if (!uiVisible(call)) {
+    return { ok: false, code: 'APP_NOT_OPEN', speakable: "I can only do that while the app's open — open StudyMax and I'll do it from there." }
+  }
+  let action: AppAction
+  if (args.action === 'open_tab' && typeof args.tab === 'string' && TABS.has(args.tab)) {
+    action = { kind: 'open_tab', tab: args.tab as 'overview' | 'plan' | 'awards' | 'classes' }
+  } else if (args.action === 'find_class') {
+    const code = normalizeCourseCode(args.courseCode)
+    if (!/^[A-Z]{2,5}\d{3}$/.test(code)) return { ok: false, code: 'INVALID_COURSE', speakable: "I didn't catch which course — could you say the code again?" }
+    action = { kind: 'find_class', courseCode: code }
+  } else {
+    return { ok: false, code: 'UNKNOWN_ACTION', speakable: 'I can open a tab in the app, or look up a course in the Class Tracker.' }
+  }
+  await publish(call.liveToken, { type: 'app.action', action })
+  return { ok: true, done: action.kind === 'open_tab' ? `opened ${action.tab}` : `showing ${action.courseCode}'s sections in the Class Tracker` }
 }
 
 const TOPICS = new Set<OptionTopic>(['specialization', 'pace', 'summer'])
@@ -405,6 +437,8 @@ async function executeTool(name: string, call: ResolvedCall, args: Record<string
       return runUpdateName(call, args)
     case 'load_skill':
       return runLoadSkill(args)
+    case 'app_action':
+      return runAppAction(call, args)
     default:
       return { ok: false, code: 'UNKNOWN_TOOL', speakable: "I don't have a way to do that yet." }
   }

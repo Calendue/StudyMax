@@ -54,6 +54,25 @@ export function parseCallPlanInputs(raw: unknown): { inputs: CallPlanInputs } | 
   const away = r.away === null || r.away === undefined ? null : intIn(r.away, 2000, 2100)
   if (minorId === undefined || degreeVariant === undefined || (r.away !== null && r.away !== undefined && away === null)) return { rejected: 'extras' }
 
+  // Courses placed in a term by hand ("Winter 2028": [codes]); missing on older app builds.
+  const pinnedRaw = (r.pinned ?? {}) as Record<string, unknown>
+  if (typeof pinnedRaw !== 'object' || Array.isArray(pinnedRaw) || Object.keys(pinnedRaw).length > 24) return { rejected: 'pinned' }
+  const pinned: Record<string, string[]> = {}
+  for (const [label, list] of Object.entries(pinnedRaw)) {
+    const placed = codes(list)
+    if (!/^(Fall|Winter|Spring\/Summer) \d{4}$/.test(label) || !placed) return { rejected: 'pinned' }
+    if (placed.length > 0) pinned[label] = placed
+  }
+  const added = codes(r.added ?? [])
+  if (!added || added.length > 24) return { rejected: 'added' }
+  const internship = r.internship === 3 || r.internship === 4 ? r.internship : null
+  const aysRaw = (r.internshipAYs ?? {}) as Record<string, unknown>
+  const internshipAYs: Partial<Record<'3' | '4', number>> = {}
+  for (const key of ['3', '4'] as const) {
+    const ay = intIn(aysRaw?.[key], 2000, 2100)
+    if (ay !== null) internshipAYs[key] = ay
+  }
+
   return {
     inputs: {
       v: 1,
@@ -66,6 +85,10 @@ export function parseCallPlanInputs(raw: unknown): { inputs: CallPlanInputs } | 
       minorId,
       degreeVariant,
       away,
+      pinned,
+      added,
+      internship,
+      internshipAYs,
       coursesPerTerm,
       springSummer: r.springSummer,
       summerPerTerm,

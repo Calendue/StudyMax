@@ -38,7 +38,7 @@ import { loadCloudSession, saveCloudSession } from './cloudSync.ts'
 import type { CloudInternship, CloudSession } from './lib/cloudSession.ts'
 import { ModelContext } from './model.ts'
 import { useMaxLive } from './maxLive/useMaxLive.ts'
-import type { CallPlanInputs, LiveInputs } from './lib/max/live.ts'
+import type { AppAction, CallPlanInputs, LiveInputs } from './lib/max/live.ts'
 import { planHash } from './lib/max/planningAdapter.ts'
 import { useTheme } from './theme.ts'
 import type { Destination } from './ui/layout.ts'
@@ -190,6 +190,10 @@ interface SavedState {
   courseTerms?: Record<string, Season>
   /** The term ("Fall 2024") each completed course was passed in, where the transcript dates it. Device-only. */
   completedTerms?: Record<string, string>
+  /** Courses the student had Max put in a term, by term label (PlanOptions.pinned). Device-only. */
+  pinned?: Record<string, string[]>
+  /** Courses the student had Max add in no particular term (PlanOptions.added). Device-only. */
+  addedCourses?: string[]
   /** Which variant of the degree the plan is for ('bsc-4', 'bsc-honours', 'bsc-3'). Device-only, like gradYear. */
   degreeVariant?: string
 }
@@ -271,6 +275,8 @@ function useStudyMax() {
   // load the student picked is kept; otherwise it's the program's (see coursesPerTerm below).
   const [chosenPerTerm, setCoursesPerTerm] = useState<number | null>(() => chosenLoad(saved))
   const [summerPerTerm, setSummerPerTerm] = useState(saved.summerPerTerm ?? DEFAULT_SUMMER_COURSES)
+  const [pinned, setPinned] = useState<Record<string, string[]>>(saved.pinned ?? {})
+  const [addedCourses, setAddedCourses] = useState<string[]>(saved.addedCourses ?? [])
 
   const selectedSchool = universityId === 'usask' ? usask : null
   const availablePrograms = useMemo(() => selectedSchool?.programs ?? [], [selectedSchool])
@@ -415,6 +421,8 @@ function useStudyMax() {
     coursesPerTerm,
     coursesPerTermChosen: chosenPerTerm !== null,
     summerPerTerm,
+    pinned,
+    addedCourses,
   }
   const snapshotJson = JSON.stringify(snapshot)
   useEffect(() => {
@@ -894,21 +902,20 @@ function useStudyMax() {
   const booked = useMemo(() => bookedByTerm(currentByTerm, today), [currentByTerm, today])
   // The internship year, as the academic year the plan leaves empty. The tree numbers years the same way.
   const internshipYear = typeof internship === 'number' ? internship : null
-  const internshipAY = useMemo(
-    () =>
-      internshipYear === null
-        ? null
-        : academicYearOfDegreeYear(internshipYear, {
-            completed,
-            inProgress: inProgressCourses,
-            currentTerm: currentTermOf(today),
-            completedTerms,
-            termLoad: coursesPerTerm,
-            // Year 1 of a student who hasn't started is the plan's first term, as on the tree.
-            firstTerm: startTerm,
-          }),
-    [internshipYear, completed, inProgressCourses, today, completedTerms, coursesPerTerm, startTerm],
-  )
+  // Both answers' academic years, so Max can set either one on a call (SET_INTERNSHIP).
+  const internshipAYs = useMemo(() => {
+    const input = {
+      completed,
+      inProgress: inProgressCourses,
+      currentTerm: currentTermOf(today),
+      completedTerms,
+      termLoad: coursesPerTerm,
+      // Year 1 of a student who hasn't started is the plan's first term, as on the tree.
+      firstTerm: startTerm,
+    }
+    return { '3': academicYearOfDegreeYear(3, input), '4': academicYearOfDegreeYear(4, input) }
+  }, [completed, inProgressCourses, today, completedTerms, coursesPerTerm, startTerm])
+  const internshipAY = internshipYear === null ? null : internshipAYs[internshipYear === 3 ? '3' : '4']
 
   // A signed-in student's session is also kept in the database, so another phone can pick it up. (Down
   // here because it carries the internship's academic year, worked out just above.)
@@ -948,9 +955,9 @@ function useStudyMax() {
         inProgressCourses,
         coursesPerTerm,
         startTerm,
-        { springSummer, summerPerTerm, degree: activeDegree, booked, away: internshipAY },
+        { springSummer, summerPerTerm, degree: activeDegree, booked, away: internshipAY, pinned, added: addedCourses },
       ),
-    [targets, planningSpecs, completed, inProgressCourses, coursesPerTerm, startTerm, springSummer, summerPerTerm, activeDegree, booked, internshipAY],
+    [targets, planningSpecs, completed, inProgressCourses, coursesPerTerm, startTerm, springSummer, summerPerTerm, activeDegree, booked, internshipAY, pinned, addedCourses],
   )
   // --- Max live on the Skill Tree (src/maxLive/) ---
   // The plan above as inputs, sent when placing a Max call so Max plans exactly what's on screen.
@@ -968,6 +975,10 @@ function useStudyMax() {
       minorId,
       degreeVariant,
       away: internshipAY,
+      pinned,
+      added: addedCourses,
+      internship: internshipYear === 3 || internshipYear === 4 ? internshipYear : null,
+      internshipAYs,
       coursesPerTerm,
       springSummer,
       summerPerTerm,
@@ -975,14 +986,25 @@ function useStudyMax() {
       today: `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`,
       planHash: planHash(plan),
     }
-  }, [selectedProgram, completed, inProgressCourses, courseTerms, hero, extraTargetIds, concentrationIds, minorId, degreeVariant, internshipAY, coursesPerTerm, springSummer, summerPerTerm, startTerm, today, plan])
+  }, [selectedProgram, completed, inProgressCourses, courseTerms, hero, extraTargetIds, concentrationIds, minorId, degreeVariant, internshipAY, internshipYear, internshipAYs, pinned, addedCourses, coursesPerTerm, springSummer, summerPerTerm, startTerm, today, plan])
 
-  /** A plan the student saved with Max becomes the app's own: its targets, pace, summers and drops. */
+  /** A plan the student saved with Max becomes the app's own: its program, targets, pace, summers,
+   * drops, placed courses, degree and internship year. */
   function adoptMaxPlan(inputs: LiveInputs) {
+    const program = inputs.programId ? (availablePrograms.find((p) => p.id === inputs.programId) ?? selectedProgram) : selectedProgram
+    // A new major keeps everything the student has taken; only what was picked from the old one goes.
+    if (program && program.id !== programId) setProgramId(program.id)
+    if (inputs.minorId !== undefined) setMinorId(inputs.minorId)
+    if (inputs.degreeVariant !== undefined) setDegreeVariant(inputs.degreeVariant ?? DEFAULT_DEGREE_VARIANT)
+    if (inputs.pinned !== undefined) setPinned(inputs.pinned)
+    if (inputs.added !== undefined) setAddedCourses(inputs.added)
+    // Only when Max changed it: a "not sure" goes out as null and would otherwise come back as "no".
+    const internshipNow = internshipYear === 3 || internshipYear === 4 ? internshipYear : null
+    if (inputs.internship !== undefined && inputs.internship !== internshipNow) setInternship(inputs.internship ?? 'no')
     const [first, ...rest] = inputs.targetIds
-    if (first) setHeroId(first)
+    setHeroId(first ?? null)
     setExtraTargetIds(rest)
-    const own = new Set(selectedProgram?.specializations.map((s) => s.id) ?? [])
+    const own = new Set(program?.specializations.map((s) => s.id) ?? [])
     setConcentrationIds(inputs.targetIds.filter((id) => own.has(id)))
     const gone = new Set(inProgressCourses.filter((c) => !inputs.inProgress.includes(c)))
     if (gone.size > 0) {
@@ -995,7 +1017,16 @@ function useStudyMax() {
     setSpringSummer(inputs.springSummer)
     setSummerPerTerm(inputs.summerPerTerm)
   }
-  const maxLive = useMaxLive({ onCommitted: adoptMaxPlan })
+  /** Max doing something in the app on a call: open a tab, or a course's sections in the Class Tracker. */
+  function runMaxAction(action: AppAction) {
+    if (action.kind === 'open_tab') {
+      navigate(action.tab)
+    } else {
+      navigate('classes')
+      void classes.lookUp(action.courseCode)
+    }
+  }
+  const maxLive = useMaxLive({ onCommitted: adoptMaxPlan, onAction: runMaxAction })
 
   // The plan as the roadmap draws it: what's left, plus the courses already under way in their terms.
   const roadmap = useMemo(() => withCurrentCourses(plan, currentByTerm, today), [plan, currentByTerm, today])
@@ -1495,6 +1526,8 @@ function useStudyMax() {
     setCoursesPerTerm(null)
     setStartTerm(null)
     setInternship(null)
+    setPinned({})
+    setAddedCourses([])
     setSummerPerTerm(DEFAULT_SUMMER_COURSES)
     setUniversityId('')
     setProgramId('')

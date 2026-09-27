@@ -23,8 +23,15 @@ const refused = (raw: unknown) => {
 }
 assert.equal(refused([]), 'MISSING_OPS')
 assert.equal(refused(undefined), 'MISSING_OPS')
-assert.equal(refused([{ op: 'ADD_COURSE', courseCode: 'CMPT371' }]), 'UNSUPPORTED_OPERATION', 'not supported this weekend')
-assert.equal(refused([{ op: 'SET_MAJOR', programId: 'math' }]), 'UNSUPPORTED_OPERATION', 'program changes never over voice')
+assert.equal(refused([{ op: 'ENROLL_ME', courseCode: 'CMPT371' }]), 'UNSUPPORTED_OPERATION', 'an unknown op')
+assert.deepEqual(cleanOps([{ op: 'ADD_COURSE', courseCode: 'cmpt 318', term: 'winter 2028' }]), [{ op: 'ADD_COURSE', courseCode: 'CMPT318', term: { season: 'Winter', year: 2028 } }])
+assert.deepEqual(cleanOps([{ op: 'MOVE_COURSE', courseCode: 'CMPT370', toTerm: { season: 'summer', year: 2028 } }]), [{ op: 'MOVE_COURSE', courseCode: 'CMPT370', toTerm: { season: 'Spring/Summer', year: 2028 } }])
+assert.equal(refused([{ op: 'MOVE_COURSE', courseCode: 'CMPT370' }]), 'INVALID_TERM', 'a move needs a term')
+assert.equal(refused([{ op: 'SET_GRAD_TARGET', term: 'soon' }]), 'INVALID_TERM')
+assert.deepEqual(cleanOps([{ op: 'SET_MINOR', programId: 'none' }]), [{ op: 'SET_MINOR', programId: null }])
+assert.equal(refused([{ op: 'SET_MAJOR', programId: '' }]), 'INVALID_PROGRAM')
+assert.deepEqual(cleanOps([{ op: 'SET_INTERNSHIP', year: '3' }]), [{ op: 'SET_INTERNSHIP', year: 3 }])
+assert.equal(refused([{ op: 'SET_INTERNSHIP', year: 2 }]), 'INVALID_INTERNSHIP')
 assert.equal(refused([{ op: 'DROP_COURSE' }]), 'INVALID_COURSE')
 assert.equal(refused([{ op: 'DROP_COURSE', courseCode: 'the hard one' }]), 'INVALID_COURSE')
 assert.equal(refused([{ op: 'RESTORE_VERSION', versionNumber: 0 }]), 'UNKNOWN_VERSION')
@@ -99,6 +106,9 @@ const base: Snapshot = {
   inProgressSeasons: inProgressTerms,
   degreeVariant: null,
   away: null,
+  pinned: {},
+  added: [],
+  internshipAYs: { '3': 2027, '4': 2028 },
   today: new Date(2026, 8, 27),
 }
 const ops = cleanOps([
@@ -121,6 +131,50 @@ const dropTwice = applyPlanOps({ ...base, droppedCourses: ['CMPT370'], inProgres
   { op: 'DROP_COURSE', courseCode: 'CMPT370' },
 ])
 assert.equal('code' in dropTwice && dropTwice.code, 'ALREADY_DROPPED')
+
+// --- the new powers: courses in terms, graduation targets, program changes (a halfway student) ---
+const halfway: Snapshot = {
+  ...base,
+  completed: completedCourses.slice(0, Math.floor(completedCourses.length / 2)),
+  inProgress: [],
+  enrolled: [],
+  inProgressSeasons: {},
+  targetIds: ['software-development'],
+  coursesPerTerm: 4,
+  start: { season: 'Fall', year: 2027 },
+}
+const gradOf = (s: Snapshot) => regenerate(adapterInput(s)).terms.at(-1)?.label ?? null
+const applied = (raw: unknown[]) => {
+  const cleaned = cleanOps(raw)
+  assert.ok(Array.isArray(cleaned), JSON.stringify(raw))
+  return applyPlanOps(halfway, cleaned)
+}
+const added = applied([{ op: 'ADD_COURSE', courseCode: 'CMPT318' }])
+assert.ok(!('code' in added))
+const addedPlan = regenerate(adapterInput(added)).terms
+assert.ok(addedPlan.some((t) => t.courses.some((c) => c.code === 'CMPT318')), 'an added course is planned')
+assert.ok(validate(addedPlan, adapterInput(added)).ok, 'placed after its prerequisites, in a term that runs it')
+const placed = applied([{ op: 'ADD_COURSE', courseCode: 'PHIL140', term: 'Winter 2029' }])
+assert.ok(!('code' in placed))
+assert.ok(regenerate(adapterInput(placed)).terms.find((t) => t.label === 'Winter 2029')?.courses.some((c) => c.code === 'PHIL140' && c.pinned), 'a placed course sits in its term')
+const early = applied([{ op: 'MOVE_COURSE', courseCode: 'STAT242', toTerm: 'Fall 2028' }])
+assert.ok(!('code' in early) && !validate(regenerate(adapterInput(early)).terms, adapterInput(early)).ok, 'a move that breaks the rules is shown, never saved')
+const past = applied([{ op: 'ADD_COURSE', courseCode: 'PHIL140', term: 'Fall 2026' }])
+assert.equal('code' in past && past.code, 'TERM_PAST')
+const faster = applied([{ op: 'SET_GRAD_TARGET', term: 'Winter 2030' }])
+assert.ok(!('code' in faster) && gradOf(faster) === 'Winter 2030', 'a graduation target is met by the lightest load that makes it')
+const impossible = applied([{ op: 'SET_GRAD_TARGET', term: 'Winter 2027' }])
+assert.equal('code' in impossible && impossible.code, 'CANT_MEET_TARGET')
+const minor = applied([{ op: 'SET_MINOR', programId: 'Statistics' }])
+assert.ok(!('code' in minor) && minor.minorProgramId === 'statistics-minor' && minor.targetIds.length > 1, 'a minor adds its lists')
+const noMinor = applyPlanOps(minor as Snapshot, cleanOps([{ op: 'SET_MINOR', programId: null }]) as never)
+assert.ok(!('code' in noMinor) && noMinor.minorProgramId === null && noMinor.targetIds.length === 1, 'and taking it off removes them')
+const major = applied([{ op: 'SET_MAJOR', programId: 'Applied Computing' }])
+assert.ok(!('code' in major) && major.targetProgramId === 'applied-computing' && major.degreeVariant === null)
+const honours = applied([{ op: 'SET_DEGREE', variant: 'honours' }])
+assert.ok(!('code' in honours) && honours.degreeVariant === 'bsc-honours')
+const away = applied([{ op: 'SET_INTERNSHIP', year: 3 }])
+assert.ok(!('code' in away) && away.away === 2027 && away.internship === 3 && gradOf(away) !== gradOf(halfway), 'an internship year pushes the plan on')
 
 // --- the app's plan inputs: parsed strictly, never trusted ---
 const good = {

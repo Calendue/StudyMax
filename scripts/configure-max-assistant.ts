@@ -39,9 +39,10 @@ Phone call. Keep turns to 1-3 sentences. Never list more than 3 things at once; 
 Only state courses, requirements, prerequisites, offerings, or dates that appear above or in a tool result from this call. If you don't know, look it up with get_student_overview or say you're not sure. Never guess a course code.
 
 # Changing the plan
-You can explore a change with run_scenario — it never changes the official plan by itself. The changes you can make: drop a course they're taking, change how many courses they take a term (1-5), turn Spring/Summer terms on or off (and how many courses a summer, 1-3), switch their specialization, or go back to an earlier saved version. For anything else (adding one specific course, changing major, moving a course to a specific term), say you can't do that yet and suggest the app. To recommend something, use get_plan_options — never estimate a graduation term yourself.
+You can explore a change with run_scenario — it never changes the official plan by itself. The changes you can make: add a course (in a term they name, or wherever it fits), move a course to a term, take one back out, drop a course they're taking, change how many courses they take a term (1-5), turn Spring/Summer terms on or off (and how many courses a summer, 1-3), aim for a graduation term, switch their specialization, add/change/drop a minor, change major, switch Four-year/Honours/Three-year, set or clear an internship year (Year 3 or 4), or go back to an earlier saved version. To recommend something, use get_plan_options — never estimate a graduation term yourself.
+With the app open (uiVisible: true), app_action can also open a tab (overview, plan, awards, classes) or open the Class Tracker on a course's sections so they can watch a seat — that happens right away, no save question.
 When the app is open on this call (uiVisible: true in a tool result), every change reshapes the tree on their screen as you speak — say "it's on your screen now" the first time only, and never narrate the visuals.
-A specialization switch can't be saved by voice: never call commit_scenario for it (requiresAppConfirmation: true) — tell them to tap Keep this plan on their screen.
+Every change, program changes included, saves the same way: a clear spoken yes to the save question (or their tap on Keep this plan). Never ask to save a change whose result has feasible: false — say the first error and offer a fix.
 To save a change: first say the headline from run_scenario's result (graduation change first) and any warnings, then ask one yes/no question: "Want me to save that as your plan?" Only call commit_scenario after a clear yes to that exact question, passing the student's own words as confirmationUtterance. If they hedge or ask a question instead of answering, ask once more; if still unclear, don't save it — tell them you've left it unsaved and they can ask you again any time.
 Dropping a course they're currently taking must also be done with the registrar — say so once, right after describing that kind of change.
 
@@ -56,7 +57,7 @@ Opening is handled for you: first call -> introduce yourself and ask what's on t
 For anything else, match the student's request to one of these and call load_skill with that name the moment a trigger fires, before responding, then follow exactly what it returns:
 - summarize_roadmap: "where am I at", "remind me", "what's my plan", or any broad "how am I doing" question.
 - what_if: "what if...", "what happens if...", "could I...".
-- manage_roadmap: imperative changes ("drop CMPT 370", "make it 4 a term", "undo that"), and saving or discarding something already explored.
+- manage_roadmap: imperative changes ("drop CMPT 370", "add CMPT 318", "switch me to Cybersecurity", "add a stats minor", "make it 4 a term", "undo that"), app actions ("show my awards", "check seats in CMPT 370"), and saving or discarding something already explored.
 - recommend_plan: "what should I do", "can I graduate sooner", "fastest way", "lighter load", "should I switch", "use my summers".
 - correct_name: the student corrects their name or asks to be called something else.`
 
@@ -76,7 +77,7 @@ const tools: import('@vapi-ai/server-sdk').Vapi.OpenAiModelToolsItem[] = [
     function: {
       name: 'run_scenario',
       description:
-        "Explores a change to the student's roadmap WITHOUT saving it: drop a course they're taking, set their pace or Spring/Summer terms, switch specialization, or restore an earlier saved version. Pass the scenarioId to build on a change already shown. Returns a spoken headline (graduation change first), warnings, errors, a presentedHash needed to commit, requiresAppConfirmation (a switch — saved only by the student's tap), and uiVisible (the change is on their screen).",
+        "Explores a change to the student's roadmap WITHOUT saving it: add/move/unpin a course, drop a course they're taking, set their pace or Spring/Summer terms, aim for a graduation term, switch specialization, minor, major or degree, set an internship year, or restore an earlier saved version. Several ops can go in one call. Pass the scenarioId to build on a change already shown. Returns a spoken headline (graduation change first), warnings, errors, feasible, a presentedHash needed to commit, and uiVisible (the change is on their screen).",
       parameters: {
         type: 'object',
         properties: {
@@ -103,6 +104,57 @@ const tools: import('@vapi-ai/server-sdk').Vapi.OpenAiModelToolsItem[] = [
                     value: { description: 'maxCoursesPerTerm: 1-5; springSummer: true/false; maxSummerCourses: 1-3', type: ['integer', 'boolean'] },
                   },
                   required: ['op', 'key', 'value'],
+                },
+                {
+                  type: 'object',
+                  properties: {
+                    op: { const: 'ADD_COURSE' },
+                    courseCode: { type: 'string', description: 'e.g. CMPT318' },
+                    term: { type: 'string', description: 'Only if the student named one, e.g. "Winter 2028". Omit to let the planner place it.' },
+                  },
+                  required: ['op', 'courseCode'],
+                },
+                {
+                  type: 'object',
+                  properties: {
+                    op: { const: 'MOVE_COURSE' },
+                    courseCode: { type: 'string' },
+                    toTerm: { type: 'string', description: 'e.g. "Fall 2027" or "Spring/Summer 2028"' },
+                  },
+                  required: ['op', 'courseCode', 'toTerm'],
+                },
+                {
+                  type: 'object',
+                  properties: { op: { const: 'UNPIN_COURSE' }, courseCode: { type: 'string' } },
+                  required: ['op', 'courseCode'],
+                },
+                {
+                  type: 'object',
+                  properties: { op: { const: 'SET_GRAD_TARGET' }, term: { type: 'string', description: 'The term they want to finish by, e.g. "Winter 2029"' } },
+                  required: ['op', 'term'],
+                },
+                {
+                  type: 'object',
+                  properties: {
+                    op: { const: 'SET_MINOR' },
+                    programId: { type: ['string', 'null'], description: "A name from get_student_overview's availableMinors, or null for no minor." },
+                  },
+                  required: ['op', 'programId'],
+                },
+                {
+                  type: 'object',
+                  properties: { op: { const: 'SET_MAJOR' }, programId: { type: 'string', description: "A name from get_student_overview's availableMajors." } },
+                  required: ['op', 'programId'],
+                },
+                {
+                  type: 'object',
+                  properties: { op: { const: 'SET_DEGREE' }, variant: { type: 'string', description: 'Four-year, Honours or Three-year (availableDegrees).' } },
+                  required: ['op', 'variant'],
+                },
+                {
+                  type: 'object',
+                  properties: { op: { const: 'SET_INTERNSHIP' }, year: { type: ['integer', 'null'], description: '3 or 4 (the year of their degree), or null for no internship year.' } },
+                  required: ['op', 'year'],
                 },
                 {
                   type: 'object',
@@ -147,6 +199,24 @@ const tools: import('@vapi-ai/server-sdk').Vapi.OpenAiModelToolsItem[] = [
     },
     server: { url: TOOL_URL, headers: AUTH_HEADERS },
     messages: [{ type: 'request-start', content: 'Let me look at your options.' }],
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'app_action',
+      description:
+        "Does something in the StudyMax app on the student's screen, right away (no save question). Only works while the app is open on this call. open_tab: switch to overview, plan, awards or classes. find_class: open the Class Tracker on a course's sections so they can tap one to watch its seats.",
+      parameters: {
+        type: 'object',
+        properties: {
+          action: { type: 'string', enum: ['open_tab', 'find_class'] },
+          tab: { type: 'string', enum: ['overview', 'plan', 'awards', 'classes'], description: 'For open_tab.' },
+          courseCode: { type: 'string', description: 'For find_class, e.g. CMPT370.' },
+        },
+        required: ['action'],
+      },
+    },
+    server: { url: TOOL_URL, headers: AUTH_HEADERS },
   },
   {
     type: 'function',

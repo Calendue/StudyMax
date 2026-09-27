@@ -276,9 +276,23 @@ export function useClassTracker({ phone, callEnabled }: { phone: string; callEna
     void callAbout(opened)
   }
 
+  /** A course's sections from outside the tracker (Max on a call): loads the terms first if need be. */
+  async function lookUp(code: string) {
+    if (term) return search(code)
+    try {
+      const { terms: list } = await getJson<{ terms: Term[] }>('/api/classes?op=terms')
+      setTerms({ state: 'done', value: list })
+      const first = defaultTerm(list)?.code
+      if (first) await search(code, first)
+    } catch {
+      setTerms({ state: 'error', message: UNREACHABLE })
+    }
+  }
+
   return {
     terms,
     loadTerms,
+    lookUp,
     ensureTerms,
     term,
     chooseTerm,
