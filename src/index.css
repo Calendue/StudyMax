@@ -482,9 +482,14 @@ header,
   border-radius: 10px;
 }
 
+/* A row's icon sits in a neutral well: rose is kept for what's active and what to press. */
 .row-icon--accent {
-  background: var(--selected);
-  color: var(--accent);
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.card .row-icon--accent {
+  background: var(--card-surface-2);
 }
 
 .row-icon--quiet {
@@ -527,6 +532,12 @@ header,
 .chip--quiet {
   background: var(--selected);
   color: var(--ink);
+}
+
+/* Good news that isn't an alarm: an open section in a search. */
+.chip--accent {
+  background: var(--accent-tint);
+  color: var(--accent);
 }
 
 .chip--urgent {
@@ -733,6 +744,37 @@ header,
 .field-label__optional {
   margin-left: var(--s1);
   font-weight: 400;
+  color: var(--ink-2);
+}
+
+.check-option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s3);
+  margin-top: var(--s5);
+  padding: var(--s3) var(--s4);
+  background: var(--bg);
+  border: 1px solid var(--edge);
+  border-radius: var(--r2);
+  cursor: pointer;
+}
+
+.check-option input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: 2px 0 0;
+  accent-color: var(--accent);
+}
+
+.check-option__title {
+  display: block;
+  font-weight: 500;
+}
+
+.check-option__hint {
+  display: block;
+  font-size: var(--fs-caption);
   color: var(--ink-2);
 }
 

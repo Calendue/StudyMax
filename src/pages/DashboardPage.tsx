@@ -112,7 +112,8 @@ function Stats() {
         icon="seat"
         label="Seats watched"
         value={watches.length}
-        sub={open > 0 ? `${open} open now` : watches.length > 0 ? 'Checked about once a minute' : 'None yet'}
+        invite={watches.length === 0 && m.universityId === 'usask' ? 'Watch a class' : undefined}
+        sub={open > 0 ? `${open} open now` : watches.length > 0 ? 'Checked about once a minute' : 'Get told when a seat opens'}
         onClick={m.universityId === 'usask' ? () => m.navigate('classes') : undefined}
       />
     </div>
@@ -124,7 +125,7 @@ function WhatsLeft() {
   const hero = m.hero
   if (hero.remaining === 0) return null
   return (
-    <Card index={5} title="What's left" icon="target" className="dash__left" action={<CardLink onClick={() => m.navigate('plan')}>Plan it</CardLink>}>
+    <Card index={5} title="What's left" icon="target" className="dash__left">
       <Group>
         {hero.unsatisfied.map((g, i) => (
           <Row

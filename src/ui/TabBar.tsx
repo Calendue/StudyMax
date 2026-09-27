@@ -206,7 +206,7 @@ export function TabBar() {
         onClick={() => m.openSheet('account')}
       >
         <span className="tab__icon">{m.account ? <Avatar account={m.account} size={24} /> : <Icon name="settings" size={22} />}</span>
-        {!largeText && <span className="tab__label">{m.account ? 'You' : 'Settings'}</span>}
+        {!largeText && <span className="tab__label">Settings</span>}
       </button>
     </nav>
   )

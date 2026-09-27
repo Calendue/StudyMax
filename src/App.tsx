@@ -25,20 +25,17 @@ import { ModelContext } from './model.ts'
 import { useTheme } from './theme.ts'
 import type { Destination } from './ui/layout.ts'
 import { courseCode, registeredCode, type TargetKind } from './format.ts'
-import { DUR, INSTANT, SETTLE } from './ui/motion.ts'
+import { DUR, INSTANT, SETTLE, prefersReducedMotion } from './ui/motion.ts'
 import { Intro } from './screens/Intro.tsx'
 import { LandingScreen } from './screens/LandingScreen.tsx'
 import { LandingPage } from './components/landing/LandingPage.tsx'
 import { WelcomeScreen } from './screens/WelcomeScreen.tsx'
 import { AccountSheet } from './screens/AccountSheet.tsx'
 import {
-  ConcentrationScreen,
   DegreeScreen,
-  GraduationScreen,
-  MajorScreen,
-  MinorScreen,
-  PhoneScreen,
+  GoalsScreen,
   RegisteredScreen,
+  ReviewScreen,
   StudentScreen,
   UniversityScreen,
 } from './screens/Onboarding.tsx'
@@ -69,10 +66,9 @@ type Lookup =
 type UniversityChoice = '' | 'usask' | 'other'
 
 /**
- * The flow, in order. Onboarding asks one question per screen (student type, university, degree,
- * graduation year, major, minor, concentrations, this term's courses, phone number); existing
- * students then add courses. Results is tabbed; the call is
- * the last step.
+ * The flow, in order. Onboarding is six short steps (where you are, school, degree with major and
+ * graduation year, optional goals, this term's courses, and a review with the phone number);
+ * existing students then add courses. Results is tabbed; the call is the last step.
  */
 export type Screen =
   | 'landing'
@@ -80,12 +76,9 @@ export type Screen =
   | 'student'
   | 'university'
   | 'degree'
-  | 'graduation'
-  | 'major'
-  | 'minor'
-  | 'concentration'
+  | 'goals'
   | 'registered'
-  | 'phone'
+  | 'review'
   | 'courses'
   | 'reading'
   | 'reveal'
@@ -153,6 +146,8 @@ interface SavedState {
   gradYear?: number | null
   /** Catalogue codes of the courses the student is registered in this term. */
   registered?: string[]
+  /** Whether the plan may use Spring/Summer terms. */
+  springSummer?: boolean
 }
 
 
@@ -220,6 +215,7 @@ function useStudyMax() {
   const [concentrationIds, setConcentrationIds] = useState<string[]>(saved.concentrationIds ?? [])
   const [gradYear, setGradYear] = useState<number | null>(saved.gradYear ?? null)
   const [registered, setRegistered] = useState<string[]>(() => registeredFrom(saved.registered))
+  const [springSummer, setSpringSummer] = useState(saved.springSummer ?? false)
 
   const selectedSchool = universityId === 'usask' ? usask : null
   const availablePrograms = useMemo(() => selectedSchool?.programs ?? [], [selectedSchool])
@@ -336,6 +332,7 @@ function useStudyMax() {
     concentrationIds,
     gradYear,
     registered,
+    springSummer,
   }
   const snapshotJson = JSON.stringify(snapshot)
   useEffect(() => {
@@ -451,10 +448,7 @@ function useStudyMax() {
   function handleProgramChange(id: string) {
     setSheet(null)
     haptic.selection()
-    if (id === programId) {
-      requestAdvance()
-      return
-    }
+    if (id === programId) return
     setProgramId(id)
     setCompleted(new Set())
     setUploadInProgress([])
@@ -462,7 +456,6 @@ function useStudyMax() {
     setExtraTargetIds([])
     setConcentrationIds([]) // they belong to the major they were picked from
     setUploadStatus('idle')
-    requestAdvance()
   }
 
   function chooseStudentType(type: StudentType) {
@@ -473,25 +466,21 @@ function useStudyMax() {
     requestAdvance()
   }
 
-  /** The first question's upload: an existing student, their transcript read while onboarding goes on. */
+  /** The first question's upload: an existing student, their transcript read before the next question. */
   function chooseTranscript(file: File) {
     haptic.selection()
     setStudentType('existing')
     void handleTranscriptFile(file, true)
-    // Too big a file is refused on the spot; the notice shows on this question instead of later.
-    if (file.size <= MAX_TRANSCRIPT_BYTES) requestAdvance()
   }
 
   function chooseDegree(value: string) {
     haptic.selection()
     setDegree(value)
-    requestAdvance()
   }
 
   function chooseGradYear(year: number) {
     haptic.selection()
     setGradYear(year)
-    requestAdvance()
   }
 
   // This term's courses are picked from the catalogue search, so a mistyped number can't get in:
@@ -520,7 +509,6 @@ function useStudyMax() {
   function chooseMinor(id: string | null) {
     haptic.selection()
     setMinorId(id)
-    requestAdvance()
   }
 
   function toggleConcentration(id: string) {
@@ -562,13 +550,14 @@ function useStudyMax() {
   // Bumped to abandon an upload in flight (Back on the reading screen): its answer is then ignored.
   const uploadToken = useRef(0)
 
-  // The screen as of the last render, for an upload that finishes after the student has moved on.
-  const screenRef = useRef<Screen>('landing')
+  // Where the reading screen returns to: the courses step, or onboarding's first question when the
+  // transcript was uploaded there (before a university or major is picked).
+  const [readingFrom, setReadingFrom] = useState<'courses' | 'student'>('courses')
 
   /**
-   * Reads a transcript. `early` is the upload offered on onboarding's first question: it runs in the
-   * background while the student answers the rest, so it doesn't navigate unless the student is
-   * already waiting on the reading screen, and it leaves the targets to onboarding to seed.
+   * Reads a transcript. `early` is the upload offered on onboarding's first question: once it's read,
+   * onboarding carries on to the next question instead of the course list, and the targets are left
+   * to onboarding to seed.
    */
   async function handleTranscriptFile(file: File, early = false) {
     if (!selectedProgram && !early) return
@@ -591,7 +580,8 @@ function useStudyMax() {
     setUploadStatus('uploading')
     setUploadError(null)
     setReadPhase('preparing')
-    if (!early) go('reading')
+    setReadingFrom(early ? 'student' : 'courses')
+    go('reading')
     try {
       const pdfBase64 = await fileToBase64(file)
       if (!live()) return
@@ -637,9 +627,8 @@ function useStudyMax() {
       setReadPhase('found')
       setUploadStatus('success')
       haptic.light()
-      if (early && screenRef.current !== 'reading') return
       await wait(1200)
-      if (live()) go('courses', -1)
+      if (live()) go(early ? 'university' : 'courses', early ? 1 : -1)
     } catch (err) {
       if (!live()) return
       setUploadStatus('error')
@@ -649,7 +638,7 @@ function useStudyMax() {
           ? err.message
           : "Couldn't reach the transcript reader. Check your connection, or add your courses by search.",
       )
-      if (!early || screenRef.current === 'reading') go('courses', -1)
+      go(early ? 'student' : 'courses', -1)
     }
   }
 
@@ -704,8 +693,9 @@ function useStudyMax() {
         inProgressCourses,
         coursesPerTerm,
         startTerm,
+        springSummer,
       ),
-    [targets, planningSpecs, completed, inProgressCourses, coursesPerTerm, startTerm],
+    [targets, planningSpecs, completed, inProgressCourses, coursesPerTerm, startTerm, springSummer],
   )
   const [planCopied, setPlanCopied] = useState(false)
   // Clipboard writes are blocked in some browsers and contexts. Rather than a button that appears to
@@ -913,6 +903,7 @@ function useStudyMax() {
     setConcentrationIds(state.concentrationIds ?? [])
     setGradYear(state.gradYear ?? null)
     setRegistered(registeredFrom(state.registered))
+    setSpringSummer(state.springSummer ?? false)
     setUploadStatus('idle')
     seedTargets(seedOf(state))
     setLookup(null)
@@ -991,7 +982,6 @@ function useStudyMax() {
         ? 'welcome'
         : resumeScreen(saved),
   )
-  screenRef.current = screen
   const [direction, setDirection] = useState<1 | -1>(1)
   const [advanceSignal, setAdvanceSignal] = useState(0)
   const [tab, setTabState] = useState<Tab>(() => (hasProgramData ? 'overview' : 'awards'))
@@ -1039,15 +1029,17 @@ function useStudyMax() {
   // far. Continue moves one along it and Back (the button or Android's) one back.
   // A question not answered yet assumes the longer USask path, so the dots and the button don't
   // promise an early finish.
+  // Another university has no catalogue here, so it skips the goals and this term's courses; its
+  // degree step asks only the graduation year.
   const onboardingSteps: Screen[] = [
     'student',
     'university',
-    ...(universityId !== 'other' ? (['degree', 'graduation', 'major', 'minor'] as const) : (['graduation'] as const)),
-    ...(universityId !== 'other' && (!selectedProgram || concentrationOptions.length > 0)
-      ? (['concentration'] as const)
+    'degree',
+    ...(universityId !== 'other' && (!selectedProgram || concentrationOptions.length > 0 || minorOptions.length > 0)
+      ? (['goals'] as const)
       : []),
-    'registered',
-    'phone',
+    ...(universityId !== 'other' ? (['registered'] as const) : []),
+    'review',
   ]
   const flow: Screen[] = [
     ...(isAuthConfigured && !account ? (['welcome'] as const) : []),
@@ -1060,12 +1052,18 @@ function useStudyMax() {
   /** Where Back from the results goes: the courses, or the last question onboarding asked. */
   const resultsBack = flow[flow.length - 1]
 
+  // Set by an Edit link on the review: the edited step's Continue goes straight back to the review.
+  const returnToReview = useRef(false)
+
   function next() {
+    if (returnToReview.current && screen !== 'review' && stepIndex >= 0) {
+      returnToReview.current = false
+      go('review')
+      return
+    }
     if (screen === onboardingSteps[onboardingSteps.length - 1]) completeOnboarding()
     const to = flow[flowIndex + 1]
-    // A transcript uploaded on the first question and still being read: wait for it there.
-    if (to === 'courses' && uploadStatus === 'uploading') go('reading')
-    else if (to) go(to)
+    if (to) go(to)
     else startReveal()
   }
 
@@ -1080,8 +1078,18 @@ function useStudyMax() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [advanceSignal])
 
+  // The pick shows its check for a beat before the next question slides in, so the choice is seen.
+  const advanceTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   function requestAdvance() {
-    setAdvanceSignal((s) => s + 1)
+    clearTimeout(advanceTimer.current)
+    advanceTimer.current = setTimeout(() => setAdvanceSignal((s) => s + 1), prefersReducedMotion() ? 0 : 320)
+  }
+
+  /** An Edit link on the review: back to that step, and its Continue returns to the review. */
+  function editStep(step: Screen) {
+    haptic.selection()
+    returnToReview.current = true
+    go(step, -1)
   }
 
   /** Back out of the flow to the landing page, from its first step. */
@@ -1128,6 +1136,7 @@ function useStudyMax() {
     setGradYear(null)
     setRegistered([])
     setRegisteredQuery('')
+    setSpringSummer(false)
     setUniversityId('')
     setProgramId('')
     setCompleted(new Set())
@@ -1226,7 +1235,7 @@ function useStudyMax() {
         return false
       case 'reading':
         cancelUpload()
-        go('courses', -1)
+        go(readingFrom, -1)
         return true
       case 'reveal':
         return true // it's over in a second; there's nothing to go back to mid-reveal
@@ -1240,6 +1249,14 @@ function useStudyMax() {
       case 'call':
         if (callStatus === 'calling') return true
         go('results', -1)
+        return true
+      case 'courses':
+        // Once there are results, Courses is a destination beside them, not a step of onboarding.
+        if (revealed) {
+          go('results', 1)
+          return true
+        }
+        go(flowIndex > 0 ? flow[flowIndex - 1] : 'student', -1)
         return true
       default:
         // Welcome and the onboarding steps: one step back, and out of the app from the first.
@@ -1307,6 +1324,8 @@ function useStudyMax() {
     setRegisteredQuery,
     registeredResults,
     toggleRegistered,
+    springSummer,
+    setSpringSummer,
     removeRegistered,
     inProgressCourses,
     // courses
@@ -1322,6 +1341,7 @@ function useStudyMax() {
     uploadStatus,
     uploadError,
     uploadInProgress,
+    readingFrom,
     readPhase,
     foundCount,
     handleTranscriptFile,
@@ -1390,6 +1410,8 @@ function useStudyMax() {
     startFromLanding,
     toLanding,
     nextIsReveal,
+    editStep,
+    onboardingSteps,
     canGoBack: flowIndex > 0,
     stepIndex,
     stepCount: onboardingSteps.length,
@@ -1408,12 +1430,9 @@ const SCREENS: Record<Screen, ComponentType> = {
   student: StudentScreen,
   university: UniversityScreen,
   degree: DegreeScreen,
-  major: MajorScreen,
-  minor: MinorScreen,
-  concentration: ConcentrationScreen,
-  graduation: GraduationScreen,
+  goals: GoalsScreen,
   registered: RegisteredScreen,
-  phone: PhoneScreen,
+  review: ReviewScreen,
   courses: CoursesScreen,
   reading: ReadingScreen,
   reveal: RevealScreen,

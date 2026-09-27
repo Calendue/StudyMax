@@ -67,8 +67,8 @@ export function Sidebar() {
         <ul role="list" className="sidebar__group">
           <li>
             <button type="button" className="sidebar__item" onClick={() => m.openSheet('account')}>
-              <span className="sidebar__icon">{m.account ? <Avatar account={m.account} size={22} /> : <Icon name="person" size={20} />}</span>
-              <span className="sidebar__label">{m.account ? 'Profile' : 'Account'}</span>
+              <span className="sidebar__icon">{m.account ? <Avatar account={m.account} size={22} /> : <Icon name="settings" size={20} />}</span>
+              <span className="sidebar__label">Settings</span>
             </button>
           </li>
         </ul>
@@ -78,7 +78,7 @@ export function Sidebar() {
         <li>
           <button type="button" className="sidebar__quiet-item" onClick={() => m.setShowLanding(true)}>
             <Icon name="globe" size={18} />
-            Pitch
+            The pitch
           </button>
         </li>
         <li>
@@ -120,7 +120,7 @@ export function Rail() {
                     <Icon name={d.icon} size={22} />
                     {badge(d.id) && <span className="tab__badge" aria-label="new" />}
                   </span>
-                  <span className="rail__label">{d.short}</span>
+                  <span className="rail__label">{d.label}</span>
                 </button>
               </li>
             )
