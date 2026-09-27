@@ -15,6 +15,7 @@
 //
 // Run: node --experimental-strip-types --experimental-loader ./scripts/_resolve-ts-loader.mjs scripts/check-plan-properties.ts [--verbose]
 import { readFileSync } from 'node:fs'
+import { courseInfo } from '../src/data/prereqs.ts'
 import { buildCase, graduationOrd, matrixCases, parseTerm, planKey, SPECS, termOrd, type MatrixCase } from './_plan-matrix.ts'
 import { isElective, electiveLabel, runsIn } from './_degree-rules.ts'
 import type { CourseOverride } from '../src/lib/overrides.ts'
@@ -72,10 +73,19 @@ for (const c of matrixCases()) {
   if (planKey(buildCase(c, { completed: rot(c.stage.completed), inProgress: rot(c.stage.inProgress) }).plan) !== key) brk('determinism', `${c.key}: rotated inputs differ`)
 
   // baseline
-  const was = baseline[c.key]
+  // The greedy planner gave a full-year course (CMPT 400) one seat, in Fall only; it holds its Winter
+  // seat too now, so each full-year course planned may push graduation one term past the baseline.
+  const was0 = baseline[c.key]
+  const fullYear = b.plan.flatMap((t) => t.courses).filter((x) => courseInfo[x.code]?.offered === 'full-year').length
+  let was = was0
+  if (was0 !== undefined && was0 > 0) {
+    let t: TermStart = { season: ['Winter', 'Spring/Summer', 'Fall'][was0 % 10] as TermStart['season'], year: Math.floor(was0 / 10) }
+    for (let k = 0; k < fullYear; k++) t = nextTerm(t, c.summer)
+    was = termOrd(`${t.season} ${t.year}`)
+  }
   if (was === undefined) brk('baseline', `${c.key}: not in plan-baseline.json`)
-  else if (g > was) brk('baseline', `${c.key}: ${showOrd(g)}, later than the greedy planner's ${showOrd(was)}`)
-  else if (g < was) stats.improved++
+  else if (g > was) brk('baseline', `${c.key}: ${showOrd(g)}, later than the greedy planner's ${showOrd(was0)}${fullYear ? ` (+${fullYear} full-year)` : ''}`)
+  else if (g < was0) stats.improved++
   else stats.same++
 
   // booked never move
