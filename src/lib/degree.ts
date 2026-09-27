@@ -168,6 +168,10 @@ export function auditDegree(degree: Degree, courses: Iterable<string>): DegreeAu
       for (let gi = 0; gi < groups.length; gi++) {
         if (!prep.allOf[gi].has(code) && groupAccepts(groups[gi], code)) candidates.push(gi)
       }
+      // A named requirement before an open choice, a group that lists the course before one whose
+      // rule matches it, then page order: PHIL 232 fills the ethics slot, not breadth.
+      const rank = (gi: number) => (groups[gi].open ? 2 : 0) + (groups[gi].courses.includes(code) ? 0 : 1)
+      candidates.sort((a, b) => rank(a) - rank(b) || a - b)
       prep.candidates.set(code, candidates)
     }
     units.push(makeUnit([code], candidates))
