@@ -18,6 +18,8 @@ export function ReadingScreen() {
   }, [m.readPhase])
 
   const found = m.readPhase === 'found'
+  // Uploaded on onboarding's first question: the rest of the questions come next, not the list.
+  const early = m.readingFrom === 'student'
   const lines: StatusLine[] = [
     { text: 'Preparing your PDF', state: m.readPhase === 'preparing' ? 'active' : 'done' },
     {
@@ -28,7 +30,7 @@ export function ReadingScreen() {
   if (found) {
     lines.push({
       text:
-        `Found ${plural(m.completed.size, 'completed course')}` +
+        `Found ${plural(m.foundCount, 'completed course')}` +
         (m.uploadInProgress.length > 0 ? ` and ${m.uploadInProgress.length} in progress` : ''),
       state: 'done',
     })
@@ -53,7 +55,9 @@ export function ReadingScreen() {
         <Appear index={3}>
           <p className="wait__hint" aria-live="polite">
             {found
-              ? 'Taking you to the list so you can check it.'
+              ? early
+                ? 'Next, a couple of quick questions, then your results.'
+                : 'Taking you to the list so you can check it.'
               : slow
                 ? 'Still reading. Long audits take a little more time.'
                 : 'This usually takes 10 to 30 seconds.'}
@@ -63,7 +67,7 @@ export function ReadingScreen() {
       {!found && (
         <footer className="actionbar actionbar--flat">
           <Button block variant="quiet" onClick={() => m.back()}>
-            Add courses by hand instead
+            {early ? 'Skip the transcript for now' : 'Add courses by hand instead'}
           </Button>
         </footer>
       )}

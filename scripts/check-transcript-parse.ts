@@ -1,6 +1,6 @@
 // Sanity check for transcriptParse. Run: node --experimental-strip-types scripts/check-transcript-parse.ts
 import assert from 'node:assert/strict'
-import { buildTranscriptParsePrompt, parseTranscriptResponse } from '../src/lib/transcriptParse.ts'
+import { buildTranscriptParsePrompt, parseTranscriptProgram, parseTranscriptResponse } from '../src/lib/transcriptParse.ts'
 
 // A small fixture catalogue spanning several subjects — proves extraction isn't narrowed to one
 // program's course list, without needing to import the real 3000+-course catalogue here.
@@ -60,5 +60,13 @@ assert.deepEqual(
 assert.deepEqual(parseTranscriptResponse('not json at all', catalogue), { completed: [], inProgress: [] })
 assert.deepEqual(parseTranscriptResponse('{}', catalogue), { completed: [], inProgress: [] })
 assert.deepEqual(parseTranscriptResponse('', catalogue), { completed: [], inProgress: [] })
+
+// --- stated major/minor: short text or null, never throws ---
+assert.deepEqual(
+  parseTranscriptProgram('{"completed":[],"inProgress":[],"major":" Computer Science ","minor":null}'),
+  { major: 'Computer Science', minor: null },
+)
+assert.deepEqual(parseTranscriptProgram('{"completed":[],"major":{"x":1},"minor":""}'), { major: null, minor: null })
+assert.deepEqual(parseTranscriptProgram('not json'), { major: null, minor: null })
 
 console.log('check-transcript-parse.ts: all assertions passed')

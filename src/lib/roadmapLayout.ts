@@ -1,3 +1,4 @@
+import { courseInfo } from '../data/prereqs.ts'
 import type { PlannedTerm } from './plan.ts'
 
 export type RoadmapNodeState = 'requirement' | 'prerequisite'
@@ -41,7 +42,6 @@ export interface RoadmapLayout {
 export function buildRoadmapLayout(terms: PlannedTerm[]): RoadmapLayout {
   const rows: RoadmapRow[] = []
   const nodes: RoadmapNodeLayout[] = []
-  const neededByCode = new Map<string, string>()
 
   terms.forEach((term, row) => {
     rows.push({ key: term.label, label: term.label, codes: term.courses.map((c) => c.code) })
@@ -56,17 +56,31 @@ export function buildRoadmapLayout(terms: PlannedTerm[]): RoadmapLayout {
         col,
         rowSize: term.courses.length,
       })
-      if (c.neededBy) neededByCode.set(c.code, c.neededBy)
     })
   })
 
-  // `neededBy` always points at a course still being planned (a satisfied prerequisite is never
-  // queued), and `buildPlan` never schedules a course in the same term as its prerequisite, so every
-  // edge runs strictly downward. The filter is only a guard against a future data shape change.
-  const knownCodes = new Set(nodes.map((n) => n.code))
-  const edges: RoadmapEdge[] = [...neededByCode.entries()]
-    .filter(([, to]) => knownCodes.has(to))
-    .map(([from, to]) => ({ from, to }))
+  // Every prerequisite link between two planned courses, not only the ones the planner added as
+  // prerequisites: a required course is often the prerequisite of another required course (CMPT 370
+  // before CMPT 412), and one prerequisite can unlock several courses. An OR-group draws each of its
+  // options that is in the plan. Only links running strictly downward are kept: a course the plan
+  // couldn't sequence (an unreadable rule) never gets an edge pointing back up the page.
+  const rowOf = new Map(nodes.map((n) => [n.code, n.row]))
+  const seen = new Set<string>()
+  const edges: RoadmapEdge[] = []
+  const link = (from: string, to: string) => {
+    const key = `${from}->${to}`
+    const fromRow = rowOf.get(from)
+    const toRow = rowOf.get(to)
+    if (seen.has(key) || fromRow === undefined || toRow === undefined || fromRow >= toRow) return
+    seen.add(key)
+    edges.push({ from, to })
+  }
+  for (const node of nodes) {
+    if (node.neededBy) link(node.code, node.neededBy)
+    for (const options of courseInfo[node.code]?.requires ?? []) {
+      for (const option of options) link(option, node.code)
+    }
+  }
 
   return { rows, nodes, edges }
 }

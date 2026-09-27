@@ -10,7 +10,7 @@ import { Sheet } from '../ui/Sheet.tsx'
 // Arts & Science courses only, grouped by subject: the college this app's programs live in. The rest
 // of USask's catalogue stays reachable through search, not this list.
 const AS_SUBJECT_CODES = new Set(artsAndScienceSubjects.map((s) => s.code))
-const COURSES_BY_SUBJECT = new Map<string, typeof catalogueCourses>()
+export const COURSES_BY_SUBJECT = new Map<string, typeof catalogueCourses>()
 for (const course of catalogueCourses) {
   const subject = course.code.match(/^[A-Z]+/)?.[0] ?? ''
   if (!AS_SUBJECT_CODES.has(subject)) continue
@@ -22,69 +22,15 @@ for (const course of catalogueCourses) {
 export function CoursesScreen() {
   const m = useModel()
   const count = m.takenCourses.length
-  const inProgress = m.uploadInProgress
-
   return (
     <>
       <TopBar onBack={m.back} />
       <ScreenBody>
-        <ScreenTitle
-          lead={`${m.selectedProgram?.name ?? 'Your program'} at USask. ${
-            m.features.ai ? 'Your transcript is the fastest way in.' : 'Try the sample student, or add yours by search.'
-          }`}
-        >
-          Add your courses
-        </ScreenTitle>
-
-        {/* Reading a transcript needs the OpenAI key; without it the card isn't offered at all. */}
-        {m.features.ai && (
-          <Appear index={0}>
-            <label className="upload">
-              <input
-                type="file"
-                accept="application/pdf"
-                className="visually-hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0]
-                  e.target.value = '' // allow re-uploading the same filename later
-                  if (file) void m.handleTranscriptFile(file)
-                }}
-              />
-              <span className="upload__icon">
-                <Icon name="upload" size={26} />
-              </span>
-              <span className="upload__text">
-                <span className="upload__title">Upload your transcript</span>
-                <span className="upload__hint">A DegreeWorks audit or unofficial transcript, as a PDF. StudyMax reads every course on it.</span>
-              </span>
-            </label>
-          </Appear>
-        )}
-
-        {(m.uploadStatus === 'success' || m.uploadStatus === 'sample') && (
-          <Appear index={0} className="notice notice--ok">
-            <Icon name="check" size={20} />
-            <p>
-              {m.uploadStatus === 'sample' ? 'Loaded a sample USask Computer Science student: ' : 'Found '}
-              {count} completed course{count === 1 ? '' : 's'}
-              {inProgress.length > 0 ? ` and ${inProgress.length} in progress` : ''}. Check them below.
-            </p>
-          </Appear>
-        )}
-        {m.uploadStatus === 'error' && m.uploadError && (
-          <Appear index={0} className="notice">
-            <p>{m.uploadError}</p>
-          </Appear>
-        )}
-
+        <ScreenTitle lead={<CoursesLead />}>Add your courses</ScreenTitle>
+        <UploadCard />
+        <UploadNotices />
         <Group>
-          <Row
-            index={1}
-            leading={<RowIcon name="person" />}
-            title="Load a sample student"
-            subtitle="A real USask Computer Science audit, for a quick look"
-            onClick={m.loadSampleStudent}
-          />
+          <SampleRow />
           <Row
             index={2}
             leading={<RowIcon name="search" />}
@@ -100,54 +46,11 @@ export function CoursesScreen() {
             onClick={() => m.openSheet('browse')}
           />
         </Group>
-
-        {count > 0 && (
-          <>
-            <Appear index={4}>
-              <SectionLabel>
-                Completed <span className="section-label__count tnum">{count}</span>
-              </SectionLabel>
-            </Appear>
-            <Group>
-              {m.takenCourses.map((code, i) => (
-                <Row
-                  key={code}
-                  index={4 + i}
-                  title={courseCode(code)}
-                  subtitle={m.courseTitle(code)}
-                  trailing={
-                    <IconButton icon="close" label={`Remove ${courseCode(code)}`} onClick={() => m.toggleCourse(code)} />
-                  }
-                />
-              ))}
-            </Group>
-          </>
-        )}
-
-        {inProgress.length > 0 && (
-          <>
-            <SectionLabel>Taking now</SectionLabel>
-            <Group>
-              {inProgress.map((code, i) => (
-                <Row
-                  key={code}
-                  index={i}
-                  title={courseCode(code)}
-                  subtitle={m.courseTitle(code)}
-                  trailing={<Chip>In progress</Chip>}
-                />
-              ))}
-            </Group>
-            <p className="footnote">Courses in progress don&rsquo;t count yet. They&rsquo;re planned around, not planned again.</p>
-          </>
-        )}
+        <CompletedList />
+        <InProgressList />
       </ScreenBody>
 
-      <ActionBar note={count === 0 ? 'Add at least one course to see what it opens up.' : undefined}>
-        <Button block disabled={count === 0} onClick={m.startReveal}>
-          Reveal what my school hides
-        </Button>
-      </ActionBar>
+      <RevealBar count={count} />
 
       <SearchSheet />
       <BrowseSheet />
@@ -155,26 +58,152 @@ export function CoursesScreen() {
   )
 }
 
-function SearchSheet() {
+export function CoursesLead() {
+  const m = useModel()
+  return (
+    <>
+      {m.selectedProgram?.name ?? 'Your program'} at USask.{' '}
+      {m.features.ai ? 'Your transcript is the fastest way in.' : 'Try the sample student, or add yours by search.'}
+    </>
+  )
+}
+
+/** Reading a transcript needs the OpenAI key; without it the card isn't offered at all. */
+export function UploadCard() {
+  const m = useModel()
+  if (!m.features.ai) return null
+  return (
+    <Appear index={0}>
+      <label className="upload">
+        <input
+          type="file"
+          accept="application/pdf"
+          className="visually-hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            e.target.value = '' // allow re-uploading the same filename later
+            if (file) void m.handleTranscriptFile(file)
+          }}
+        />
+        <span className="upload__icon">
+          <Icon name="upload" size={26} />
+        </span>
+        <span className="upload__text">
+          <span className="upload__title">Upload your transcript</span>
+          <span className="upload__hint">A DegreeWorks audit or unofficial transcript, as a PDF. StudyMax reads every course on it.</span>
+        </span>
+      </label>
+    </Appear>
+  )
+}
+
+export function UploadNotices() {
+  const m = useModel()
+  const count = m.takenCourses.length
+  const inProgress = m.uploadInProgress
+  return (
+    <>
+      {(m.uploadStatus === 'success' || m.uploadStatus === 'sample') && (
+        <Appear index={0} className="notice notice--ok">
+          <Icon name="check" size={20} />
+          <p>
+            {m.uploadStatus === 'sample' ? 'Loaded a sample USask Computer Science student: ' : 'Found '}
+            {count} completed course{count === 1 ? '' : 's'}
+            {inProgress.length > 0 ? ` and ${inProgress.length} in progress` : ''}. Check them below.
+          </p>
+        </Appear>
+      )}
+      {m.uploadStatus === 'error' && m.uploadError && (
+        <Appear index={0} className="notice">
+          <p>{m.uploadError}</p>
+        </Appear>
+      )}
+    </>
+  )
+}
+
+export function SampleRow() {
+  const m = useModel()
+  return (
+    <Row
+      index={1}
+      leading={<RowIcon name="person" />}
+      title="Load a sample student"
+      subtitle="A real USask Computer Science audit, for a quick look"
+      onClick={m.loadSampleStudent}
+    />
+  )
+}
+
+export function CompletedList({ label = true }: { label?: boolean }) {
+  const m = useModel()
+  const count = m.takenCourses.length
+  if (count === 0) return null
+  return (
+    <>
+      {label && (
+        <Appear index={4}>
+          <SectionLabel>
+            Completed <span className="section-label__count tnum">{count}</span>
+          </SectionLabel>
+        </Appear>
+      )}
+      <Group>
+        {m.takenCourses.map((code, i) => (
+          <Row
+            key={code}
+            index={4 + i}
+            title={courseCode(code)}
+            subtitle={m.courseTitle(code)}
+            trailing={<IconButton icon="close" label={`Remove ${courseCode(code)}`} onClick={() => m.toggleCourse(code)} />}
+          />
+        ))}
+      </Group>
+    </>
+  )
+}
+
+export function InProgressList() {
+  const m = useModel()
+  const inProgress = m.uploadInProgress
+  if (inProgress.length === 0) return null
+  return (
+    <>
+      <SectionLabel>Taking now</SectionLabel>
+      <Group>
+        {inProgress.map((code, i) => (
+          <Row key={code} index={i} title={courseCode(code)} subtitle={m.courseTitle(code)} trailing={<Chip>In progress</Chip>} />
+        ))}
+      </Group>
+      <p className="footnote">Courses in progress don&rsquo;t count yet. They&rsquo;re planned around, not planned again.</p>
+    </>
+  )
+}
+
+/** The screen's one hero action: into the reveal, or back to it with the courses updated. */
+export function RevealBar({ count }: { count: number }) {
+  const m = useModel()
+  return (
+    <ActionBar note={count === 0 ? 'Add at least one course to see what it opens up.' : undefined}>
+      <Button block disabled={count === 0} onClick={m.startReveal}>
+        {m.revealed ? 'Update my results' : 'Reveal what my school hides'}
+      </Button>
+    </ActionBar>
+  )
+}
+
+/** The catalogue search: a field and its hits. In a sheet on a phone, inline on the desktop. */
+export function SearchPanel({ autoFocus }: { autoFocus?: boolean }) {
   const m = useModel()
   const query = m.courseQuery.trim()
   return (
-    <Sheet
-      open={m.sheet === 'search'}
-      onClose={() => m.setSheet(null)}
-      title="Search the catalogue"
-      tall
-      footer={
-        <Button block variant="secondary" onClick={() => m.setSheet(null)}>
-          Done{m.completed.size > 0 ? `, ${m.completed.size} added` : ''}
-        </Button>
-      }
-    >
+    <>
       <div className="field field--search">
         <Icon name="search" size={20} />
         <input
           type="search"
           enterKeyHint="done"
+          autoFocus={autoFocus}
           value={m.courseQuery}
           onChange={(e) => m.setCourseQuery(e.target.value)}
           onKeyDown={(e) => {
@@ -213,6 +242,25 @@ function SearchSheet() {
           })}
         </Group>
       )}
+    </>
+  )
+}
+
+function SearchSheet() {
+  const m = useModel()
+  return (
+    <Sheet
+      open={m.sheet === 'search'}
+      onClose={() => m.setSheet(null)}
+      title="Search the catalogue"
+      tall
+      footer={
+        <Button block variant="secondary" onClick={() => m.setSheet(null)}>
+          Done{m.completed.size > 0 ? `, ${m.completed.size} added` : ''}
+        </Button>
+      }
+    >
+      <SearchPanel />
     </Sheet>
   )
 }

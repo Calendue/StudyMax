@@ -20,6 +20,12 @@ export function courseCode(code: string) {
   return code.replace(/([A-Z]+)(\d+)/, '$1 $2')
 }
 
+/** "cmpt 214", "CMPT214" and "cmpt-214" all read as CMPT214: a subject then a three-digit number. */
+export function registeredCode(text: string): string | null {
+  const match = text.toUpperCase().replace(/[^A-Z0-9]/g, '').match(/^([A-Z]{2,5})(\d{3})$/)
+  return match ? `${match[1]}${match[2]}` : null
+}
+
 export function plural(n: number, one: string, many = `${one}s`) {
   return `${n} ${n === 1 ? one : many}`
 }

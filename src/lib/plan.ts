@@ -23,7 +23,10 @@ export interface PlannedTerm {
   courses: PlannedCourse[]
 }
 
-export type Season = 'Fall' | 'Winter'
+export type Season = 'Fall' | 'Winter' | 'Spring/Summer'
+
+// A Spring/Summer term is short (May to August, compressed sessions), so it carries a light load.
+const SPRING_SUMMER_COURSES = 2
 
 export interface TermStart {
   season: Season
@@ -195,9 +198,12 @@ function topologicalOrder(courses: PlannedCourse[], completed: Set<string>): Pla
   return ordered
 }
 
-export function nextTerm({ season, year }: TermStart): TermStart {
-  // USask runs Fall (Sept, year Y) then Winter (Jan, year Y+1).
-  return season === 'Fall' ? { season: 'Winter', year: year + 1 } : { season: 'Fall', year }
+export function nextTerm({ season, year }: TermStart, springSummer = false): TermStart {
+  // USask runs Fall (Sept, year Y) then Winter (Jan, year Y+1), with an optional Spring/Summer
+  // (May, year Y+1) between Winter and the next Fall.
+  if (season === 'Fall') return { season: 'Winter', year: year + 1 }
+  if (season === 'Winter' && springSummer) return { season: 'Spring/Summer', year }
+  return { season: 'Fall', year }
 }
 
 /**
@@ -210,7 +216,7 @@ export function buildPlan(
   completed: Set<string>,
   coursesPerTerm: number,
   start: TermStart,
-  { includePrerequisites = true }: { includePrerequisites?: boolean } = {},
+  { includePrerequisites = true, springSummer = false }: { includePrerequisites?: boolean; springSummer?: boolean } = {},
 ): PlannedTerm[] {
   const perTerm = Math.max(1, Math.floor(coursesPerTerm))
   const picked = selectCourses(target, allSpecializations, completed)
@@ -224,20 +230,21 @@ export function buildPlan(
 
   while (pending.length > 0) {
     const thisTerm: PlannedCourse[] = []
+    const limit = term.season === 'Spring/Summer' ? Math.min(perTerm, SPRING_SUMMER_COURSES) : perTerm
     for (const course of pending) {
-      if (thisTerm.length === perTerm) break
+      if (thisTerm.length === limit) break
       // A prerequisite taken this same term doesn't count — it has to be finished first.
       if (unmetPrerequisites(course.code, satisfied).length > 0) continue
       thisTerm.push(course)
     }
 
     // Everything left is blocked by something not in the plan: place it rather than loop forever.
-    const batch = thisTerm.length > 0 ? thisTerm : pending.slice(0, perTerm)
+    const batch = thisTerm.length > 0 ? thisTerm : pending.slice(0, limit)
 
     terms.push({ label: `${term.season} ${term.year}`, courses: batch })
     for (const course of batch) satisfied.add(course.code)
     pending = pending.filter((c) => !batch.includes(c))
-    term = nextTerm(term)
+    term = nextTerm(term, springSummer)
   }
 
   return terms
@@ -257,10 +264,11 @@ export function buildStudentPlan(
   inProgress: Iterable<string>,
   coursesPerTerm: number,
   start: TermStart,
+  springSummer = false,
 ): PlannedTerm[] {
   const done = new Set([...completed, ...inProgress])
   const open = computeMatches(targets, done).filter((m) => m.remaining > 0)
-  return open.length > 0 ? buildPlan(open, allSpecializations, done, coursesPerTerm, start) : []
+  return open.length > 0 ? buildPlan(open, allSpecializations, done, coursesPerTerm, start, { springSummer }) : []
 }
 
 /** `count` consecutive terms from `start`, for a start-term picker. */

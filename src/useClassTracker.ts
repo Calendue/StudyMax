@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, haptic } from './platform.ts'
-import { applyReading, defaultTerm, watchFrom, type SeatState, type Section, type Term, type Watch } from './lib/classTracker.ts'
+import { applyReading, defaultTerm, MAX_WATCHES, watchFrom, type SeatState, type Section, type Term, type Watch } from './lib/classTracker.ts'
 
 // The class tracker's state: USask terms, one course's sections at a time, and the sections being
 // watched. Watches live on this device and are re-checked about once a minute while the app is open
@@ -8,7 +8,6 @@ import { applyReading, defaultTerm, watchFrom, type SeatState, type Section, typ
 
 const STORAGE_KEY = 'studymax:class-watches'
 const POLL_MS = 60_000
-const MAX_WATCHES = 12
 
 export type Load<T> = { state: 'idle' } | { state: 'loading' } | { state: 'error'; message: string } | { state: 'done'; value: T }
 
@@ -99,7 +98,7 @@ export function useClassTracker() {
   function unwatch(crn: string, inTerm: string) {
     haptic.selection()
     setWatches((list) => list.filter((w) => !(w.crn === crn && w.term === inTerm)))
-    setAlert((a) => (a?.crn === crn ? null : a))
+    setAlert((a) => (a?.crn === crn && a.term === inTerm ? null : a))
   }
 
   const isWatching = (section: Section) => watches.some((w) => w.crn === section.crn && w.term === section.term)
@@ -107,38 +106,52 @@ export function useClassTracker() {
   const watchesRef = useRef(watches)
   watchesRef.current = watches
 
+  // The poll, the tab coming back into view and the Check button can all fire together; one check at
+  // a time is enough, and overlapping ones would race each other's results.
+  const inFlight = useRef(false)
+
   const checkNow = useCallback(async () => {
     const list = watchesRef.current
-    if (list.length === 0) return
+    if (list.length === 0 || inFlight.current) return
+    inFlight.current = true
     setChecking(true)
+    const startedAt = Date.now()
     const byTerm = new Map<string, Watch[]>()
     for (const w of list) byTerm.set(w.term, [...(byTerm.get(w.term) ?? []), w])
     const readings = new Map<string, SeatState>()
-    await Promise.all(
-      [...byTerm].map(async ([t, ws]) => {
-        const courses = [...new Set(ws.map((w) => `${w.subject}${w.courseNumber}`))].join(',')
-        try {
-          const data = await getJson<{ seats: { crn: string; seats: SeatState }[] }>(
-            `/api/classes?op=seats&term=${t}&courses=${encodeURIComponent(courses)}`,
-          )
-          for (const r of data.seats) readings.set(`${t}:${r.crn}`, r.seats)
-        } catch {
-          // keep the last readings; the next tick tries again
-        }
-      }),
-    )
-    setChecking(false)
+    try {
+      await Promise.all(
+        [...byTerm].map(async ([t, ws]) => {
+          const courses = [...new Set(ws.map((w) => `${w.subject}${w.courseNumber}`))].join(',')
+          try {
+            const data = await getJson<{ seats: { crn: string; seats: SeatState }[] }>(
+              `/api/classes?op=seats&term=${t}&courses=${encodeURIComponent(courses)}`,
+            )
+            for (const r of data.seats) readings.set(`${t}:${r.crn}`, r.seats)
+          } catch {
+            // keep the last readings; the next tick tries again
+          }
+        }),
+      )
+    } finally {
+      inFlight.current = false
+      setChecking(false)
+    }
+    // Folded into the watches as they are NOW: one added, removed or (in the demo) opened while the
+    // check was out keeps that newer state instead of being overwritten by a stale reading.
     const now = Date.now()
     let opened: Watch | null = null
-    const next = watchesRef.current.map((w) => {
+    const updated = new Map<string, Watch>()
+    for (const w of watchesRef.current) {
       const live = readings.get(`${w.term}:${w.crn}`)
-      if (!live) return w
+      if (!live || w.checkedAt > startedAt) continue
       const result = applyReading(w, live, now)
       if (result.opened) opened = result.next
-      return result.next
-    })
-    watchesRef.current = next
-    setWatches(next)
+      updated.set(`${w.term}:${w.crn}`, result.next)
+    }
+    setWatches((current) =>
+      current.map((w) => (w.checkedAt > startedAt ? w : (updated.get(`${w.term}:${w.crn}`) ?? w))),
+    )
     if (opened) {
       haptic.medium()
       setAlert(opened)
@@ -170,7 +183,10 @@ export function useClassTracker() {
     const target = watchesRef.current.find((w) => w.crn === crn && w.term === inTerm)
     if (!target) return
     const opened: Watch = { ...target, status: 'open', seats: Math.max(1, target.seats), checkedAt: now, openedAt: now }
-    setWatches((current) => current.map((w) => (w.crn === crn && w.term === inTerm ? opened : w)))
+    // The ref moves with the state, so a check already in flight sees the opening and leaves it be.
+    const next = watchesRef.current.map((w) => (w.crn === crn && w.term === inTerm ? opened : w))
+    watchesRef.current = next
+    setWatches(next)
     haptic.medium()
     setAlert(opened)
   }

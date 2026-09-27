@@ -1,9 +1,10 @@
 // The one place StudyMax talks to OpenAI. The underscore keeps Vercel from serving this file as a
-// route. Every AI route goes through here so two rules hold everywhere:
+// route. Every AI route goes through here so three rules hold everywhere:
 // · The key only ever travels in the Authorization header. It is never logged or echoed.
 // · OpenAI's error text never leaves the server. An auth failure quotes part of the key back and a
 //   rate-limit error names the organization, so a route gets the status code and passes on nothing
 //   else, and the log keeps only the status and OpenAI's error code.
+// · A call never hangs: it is aborted after `timeoutMs`, and a timeout is an error with status 0.
 
 const CHAT_URL = 'https://api.openai.com/v1/chat/completions'
 export const OPENAI_MODEL = 'gpt-5-mini'
@@ -12,7 +13,7 @@ export type InputContent =
   | { type: 'text'; text: string }
   | { type: 'file'; file: { filename: string; file_data: string } }
 
-/** A failed call, carrying only what's safe to act on: the HTTP status (0 when unreachable). */
+/** A failed call, carrying only what's safe to act on: the HTTP status (0 when unreachable or timed out). */
 export class OpenAIError extends Error {
   readonly status: number
   constructor(status: number) {
@@ -50,11 +51,19 @@ export function sendFailure(res: ErrorResponse, err: unknown): void {
  * low, and Chat Completions read the transcript right 6/6 where the Responses API filed an
  * in-progress course as completed once.
  */
-export async function respond(apiKey: string, content: string | InputContent[], maxOutputTokens: number): Promise<string> {
+export async function respond(
+  apiKey: string,
+  content: string | InputContent[],
+  maxOutputTokens: number,
+  timeoutMs = 55_000,
+): Promise<string> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
   let upstream: Response
   try {
     upstream = await fetch(CHAT_URL, {
       method: 'POST',
+      signal: controller.signal,
       headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
         model: OPENAI_MODEL,
@@ -65,8 +74,10 @@ export async function respond(apiKey: string, content: string | InputContent[], 
       }),
     })
   } catch {
-    console.error('openai unreachable')
+    console.error(controller.signal.aborted ? 'openai timed out' : 'openai unreachable')
     throw new OpenAIError(0)
+  } finally {
+    clearTimeout(timer)
   }
 
   if (!upstream.ok) {

@@ -23,7 +23,16 @@ import { Sheet } from '../ui/Sheet.tsx'
  * courses sharing the full width, prerequisite links flowing down between them. Consumes
  * `buildPlan`'s existing output as-is (via `m.plan`) — this owns layout and interaction only.
  */
-export function PlanRoadmap() {
+export interface RoadmapSelection {
+  code: string
+  node: RoadmapNodeLayout
+}
+
+/**
+ * On a phone a tapped course opens a sheet. The desktop's Plan page passes `onSelect` instead and
+ * shows the course in its side panel, so the roadmap is controlled and draws no sheet of its own.
+ */
+export function PlanRoadmap({ selected, onSelect }: { selected?: string | null; onSelect?: (sel: RoadmapSelection | null) => void } = {}) {
   const m = useModel()
 
   // Completed and in-progress courses that count toward what's being planned, so the graph reads
@@ -33,9 +42,9 @@ export function PlanRoadmap() {
     const counted = new Set(m.targets.flatMap((t) => t.spec.requirements.flatMap((g) => g.courses)))
     return {
       completedRelevant: [...counted].filter((code) => m.completed.has(code)).sort(),
-      inProgressRelevant: m.uploadInProgress.filter((code) => counted.has(code) && !m.completed.has(code)).sort(),
+      inProgressRelevant: m.inProgressCourses.filter((code) => counted.has(code) && !m.completed.has(code)).sort(),
     }
-  }, [m.targets, m.completed, m.uploadInProgress])
+  }, [m.targets, m.completed, m.inProgressCourses])
   const doneSummary =
     (completedRelevant.length > 0 ? `${plural(completedRelevant.length, 'course')} already done` : '') +
     (completedRelevant.length > 0 && inProgressRelevant.length > 0 ? ' and ' : '') +
@@ -48,7 +57,14 @@ export function PlanRoadmap() {
   const nodesByCode = useMemo(() => new Map(nodes.map((n) => [n.code, n])), [nodes])
 
   const [doneOpen, setDoneOpen] = useState(false)
-  const [activeCode, setActiveCode] = useState<string | null>(null)
+  const [ownActive, setOwnActive] = useState<string | null>(null)
+  const controlled = onSelect !== undefined
+  const activeCode = controlled ? (selected ?? null) : ownActive
+  const setActiveCode = (code: string | null) => {
+    if (!controlled) return setOwnActive(code)
+    const node = code ? nodesByCode.get(code) : undefined
+    onSelect(code && node ? { code, node } : null)
+  }
   const activeNode = activeCode ? nodesByCode.get(activeCode) : undefined
 
   const connectedCodes = useMemo(() => {
@@ -174,27 +190,33 @@ export function PlanRoadmap() {
         ))}
       </div>
 
-      <Sheet open={activeNode !== undefined} onClose={() => setActiveCode(null)} title={activeCode ? courseCode(activeCode) : ''}>
-        {activeNode && activeCode && (
-          <>
-            <p className="lead">{m.courseTitle(activeCode)}</p>
-            {activeNode.state === 'prerequisite' && (
-              <p className="footnote">
-                <Chip>Prerequisite</Chip> Needed before {courseCode(activeNode.neededBy ?? '')}
-                {activeNode.prerequisiteText ? `, which requires ${activeNode.prerequisiteText}` : ''}
-              </p>
-            )}
-            {activeNode.alsoAdvances.length > 0 && (
-              <p className="footnote">Also counts toward {activeNode.alsoAdvances.join(', ')}</p>
-            )}
-            <a className="btn btn--secondary btn--block" href={catalogueUrl(activeCode)} target="_blank" rel="noreferrer">
-              <Icon name="external" size={20} />
-              Open in catalogue
-            </a>
-          </>
-        )}
-      </Sheet>
+      {!controlled && (
+        <Sheet open={activeNode !== undefined} onClose={() => setActiveCode(null)} title={activeCode ? courseCode(activeCode) : ''}>
+          {activeNode && activeCode && <CourseDetail code={activeCode} node={activeNode} />}
+        </Sheet>
+      )}
     </Appear>
+  )
+}
+
+/** One planned course: its title, why it's there, what else it counts toward, and the catalogue. */
+export function CourseDetail({ code, node }: RoadmapSelection) {
+  const m = useModel()
+  return (
+    <>
+      <p className="lead">{m.courseTitle(code)}</p>
+      {node.state === 'prerequisite' && (
+        <p className="footnote">
+          <Chip>Prerequisite</Chip> Needed before {courseCode(node.neededBy ?? '')}
+          {node.prerequisiteText ? `, which requires ${node.prerequisiteText}` : ''}
+        </p>
+      )}
+      {node.alsoAdvances.length > 0 && <p className="footnote">Also counts toward {node.alsoAdvances.join(', ')}</p>}
+      <a className="btn btn--secondary btn--block course-detail__link" href={catalogueUrl(code)} target="_blank" rel="noreferrer">
+        <Icon name="external" size={20} />
+        Open in catalogue
+      </a>
+    </>
   )
 }
 

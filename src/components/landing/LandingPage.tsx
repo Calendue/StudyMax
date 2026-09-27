@@ -1,5 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { Wordmark } from '../../ui/Brand.tsx'
+import { Icon, type IconName } from '../../ui/Icon.tsx'
+import { ThemeSwitch } from '../../ui/ThemeSwitch.tsx'
 import './landing.css'
 
 interface LandingPageProps {
@@ -9,25 +11,8 @@ interface LandingPageProps {
   onSkip: () => void
 }
 
-interface CoverageRow {
-  program: string
-  status: 'full' | 'partial' | 'scholarships-only'
-  detail: string
-}
-
-const COVERAGE: CoverageRow[] = [
-  { program: 'Computer Science', status: 'full', detail: 'Matching, planning, credentials — everything, end to end.' },
-  { program: 'Applied Mathematics', status: 'partial', detail: 'Produces a plan. Credential detection isn’t built yet.' },
-  { program: 'Physics', status: 'partial', detail: 'Produces a plan. Credential detection isn’t built yet.' },
-  { program: 'Applied Computing', status: 'partial', detail: 'Produces a plan. Credential detection isn’t built yet.' },
-  { program: 'Every other Arts & Science subject', status: 'scholarships-only', detail: 'No requirement data yet — still finds awards and deadlines.' },
-]
-
-const COVERAGE_LABEL: Record<CoverageRow['status'], string> = {
-  full: 'Full support',
-  partial: 'Plan only',
-  'scholarships-only': 'Scholarships only',
-}
+// Each step's line icon, in the app's own stroke set: no numbered labels.
+const STEP_ICONS: IconName[] = ['upload', 'target', 'plan', 'phone']
 
 const STEPS = [
   {
@@ -101,9 +86,12 @@ export function LandingPage({ onGetStarted, onSkip }: LandingPageProps) {
     <div className="landing">
       <div className="landing__topbar">
         <Wordmark height={40} className="landing__wordmark" />
-        <button type="button" className="landing__skip" onClick={onSkip}>
-          Skip to a sample student
-        </button>
+        <div className="landing__topbar-end">
+          <button type="button" className="landing__skip" onClick={onSkip}>
+            Skip to a sample student
+          </button>
+          <ThemeSwitch />
+        </div>
       </div>
 
       <Hero onGetStarted={onGetStarted} />
@@ -123,7 +111,9 @@ export function LandingPage({ onGetStarted, onSkip }: LandingPageProps) {
         <ol className="landing__steps">
           {STEPS.map((step, i) => (
             <li key={step.title} className="landing__step">
-              <span className="landing__step-index">{String(i + 1).padStart(2, '0')}</span>
+              <span className="landing__step-index" aria-hidden="true">
+                <Icon name={STEP_ICONS[i] ?? 'check'} size={20} />
+              </span>
               <div>
                 <h3 className="landing__step-title">{step.title}</h3>
                 <p className="landing__step-body">{step.body}</p>
@@ -131,30 +121,6 @@ export function LandingPage({ onGetStarted, onSkip }: LandingPageProps) {
             </li>
           ))}
         </ol>
-      </section>
-
-      <section className="landing__section" aria-labelledby="coverage-heading">
-        <h2 id="coverage-heading" className="landing__heading">
-          What actually works today
-        </h2>
-        <p className="landing__section-intro">
-          We’d rather tell you the coverage map than let you find its edges live.
-        </p>
-        <div className="landing__ledger" role="table">
-          {COVERAGE.map((row) => (
-            <div className="landing__ledger-row" role="row" key={row.program}>
-              <span className={`landing__status landing__status--${row.status}`} role="cell">
-                {COVERAGE_LABEL[row.status]}
-              </span>
-              <span className="landing__ledger-program" role="cell">
-                {row.program}
-              </span>
-              <span className="landing__ledger-detail" role="cell">
-                {row.detail}
-              </span>
-            </div>
-          ))}
-        </div>
       </section>
 
       <section className="landing__section" aria-labelledby="features-heading">
@@ -203,7 +169,7 @@ export function LandingPage({ onGetStarted, onSkip }: LandingPageProps) {
           <h2 className="landing__heading">See what your school is hiding.</h2>
           <div className="landing__actions">
             <button type="button" className="landing__cta" onClick={onGetStarted}>
-              Upload your transcript
+              Get Started
             </button>
             <button type="button" className="landing__cta landing__cta--ghost" onClick={onSkip}>
               Skip to the app
@@ -230,7 +196,7 @@ function Hero({ onGetStarted }: { onGetStarted: () => void }) {
         </p>
         <div className="landing__actions">
           <button type="button" className="landing__cta" onClick={onGetStarted}>
-            Upload your transcript
+            Get Started
           </button>
         </div>
         <p className="landing__hero-note">Computer Science at the University of Saskatchewan, end to end. Everyone else still gets the scholarships.</p>
@@ -279,8 +245,8 @@ function QAItem({ q, a }: QA) {
     <div className="landing__qa-item">
       <button type="button" className="landing__qa-question" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
         <span>{q}</span>
-        <span className="landing__qa-icon" aria-hidden="true">
-          {open ? '−' : '+'}
+        <span className={`landing__qa-icon${open ? ' landing__qa-icon--open' : ''}`} aria-hidden="true">
+          <Icon name="plus" size={18} />
         </span>
       </button>
       {open && <p className="landing__qa-answer">{a}</p>}

@@ -25,7 +25,9 @@ export function RevealScreen() {
           : 'Looked for certificates and minors you have already started',
         m.plan.length > 0
           ? `Planned the fastest path to ${m.hero.spec.name}`
-          : `You've finished ${m.hero.spec.name}`,
+          : m.targets.length > 0
+            ? `Everything left for ${m.hero.spec.name} is in progress now`
+            : `You've finished ${m.hero.spec.name}`,
         `Ranked ${plural(m.rankedAwards.length, 'award')} by deadline`,
       ]
     : [

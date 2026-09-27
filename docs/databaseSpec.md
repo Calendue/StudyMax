@@ -4,6 +4,15 @@ Implemented in `prisma/schema.prisma`, migrated and seeded on the remote Supabas
 
 Auth is **Firebase** (`src/auth.ts` — one module, native Capacitor sign-in on iOS/Android and the Firebase JS SDK on web, Google/Apple, with a "continue as guest" fallback) — not Clerk. `UserInfo.authUid` holds an `Account.uid`.
 
+## How the app uses it
+
+`api/session.ts` is the only route that touches the database. The app sends the signed-in student's Firebase ID token; the route verifies it against Google's public keys (`api/_firebaseAuth.ts`) and reads or writes by that uid.
+
+- **PUT** (a second and a half after each change while signed in): upserts `UserInfo` (with `phoneNumber` once they've typed one), replaces the student's `StudentCourse` rows with their completed, in-progress and registered codes, and upserts `StudentProfile` once onboarding has reached the results (deleted again on a reset). A profile needs an `Institution`, so only USask students get one today.
+- **GET** (at launch or sign-in, only when the phone has no saved session for that uid): the app fills its state from what's stored.
+- The app is local-first: localStorage is what it runs from, and every DB failure is silent. It only saves after a GET got an answer (or the phone has its own save), so an unreachable DB never overwrites a stored session with an empty one. Two phones used at once are last-writer-wins.
+- `GeneratedPlan` isn't written: the plan is recomputed deterministically from the profile and courses.
+
 ## Tables
 
 ### `UserInfo`
@@ -14,6 +23,7 @@ The account row, one per signed-in student.
 | `userId` | `BigInt` id | |
 | `authUid` | `String` unique | Firebase uid (`Account.uid`) |
 | `firstName`, `lastName`, `email` | `String?` | from the Firebase profile |
+| `phoneNumber` | `String?` | onboarding's phone step, for Max's call. Signed-in students only; a guest's never leaves the device. An empty field in a save leaves the stored one as is |
 | `createdAt`, `updatedAt` | `DateTime` | |
 
 Relations: one `StudentProfile`, many `StudentCourse`, one `GeneratedPlan`.
@@ -43,7 +53,7 @@ Transcript entries — one row per (student, course code, status).
 | `studentCourseId` | `BigInt` id | |
 | `userId` | `BigInt`, FK → `UserInfo` (cascade) | |
 | `courseCode` | `String` | matches the static catalogue, e.g. `"CMPT145"` — no FK, catalogue isn't a DB table |
-| `status` | `String` | `"completed"` \| `"in_progress"` — app-validated |
+| `status` | `String` | `"completed"` \| `"in_progress"` \| `"registered"` — app-validated. `registered` is onboarding's "What courses have you registered for?" list (this term) |
 | `source` | `String`, default `"manual"` | `"manual"` \| `"transcript_upload"` |
 
 `@@unique([userId, courseCode, status])`: the same code can have one `completed` row **and** one `in_progress` row at once (a retake after an earlier pass — see `src/lib/transcriptParse.ts`), just never two rows of the same status. No grades or credit-units-earned are tracked — the real transcript parser (`TranscriptParseResult`) only ever extracts course codes, nothing else.
@@ -75,7 +85,6 @@ Seeded from `scripts/institution-majors.json` (121 rows) by `scripts/seed-majors
 
 - **The course catalogue, programs, specializations, and scholarships/resources** (`src/data/courses.ts`, `prereqs.ts`, `specializations.ts`, `programs/*`, `schools/*`) stay static generated TypeScript files, per CLAUDE.md: "adding a program is a data task, not an engineering task." Matching/planning (`lib/match.ts`, `plan.ts`, `credentials.ts`) runs client-side over these files; the DB only stores per-student data.
 - **Grades and credit-units-earned** — the real transcript parser never extracts them (only course codes, bucketed completed/in-progress).
-- **Phone numbers** (the Bland call feature, `api/call-me.ts`) — `App.tsx` has an explicit comment that the number "is deliberately excluded — it never touches storage," a privacy decision, not a gap.
 - **Google/Apple calendar tokens, Stripe/subscription fields** — these appeared in an earlier draft of this doc as copy-pasted boilerplate from a sibling project (`calendue_demo`); nothing in StudyMax touches calendars or billing.
 - **"Why this fits you" AI scholarship copy** (`lib/scholarshipAi.ts`) — ephemeral client state today, not cached anywhere.
 

@@ -5,9 +5,17 @@ import {
   type WhyYouResourceInput,
 } from '../src/lib/scholarshipAi.js'
 import { openAIKey, respond, sendFailure } from './_openai.js'
+import { allow, clientIp } from './_rateLimit.js'
+
+// The app sends awards three at a time (twenty awards overflow one reply's token budget). A cap on
+// count and length keeps one request from being an open-ended prompt on our key.
+const MAX_RESOURCES = 5
+const MAX_TEXT = 400
+const clip = (value: unknown, max = MAX_TEXT) => (typeof value === 'string' ? value.slice(0, max) : '')
 
 interface VercelRequest {
   method?: string
+  headers?: Record<string, string | string[] | undefined>
   body?: { context: WhyYouContext; resources: WhyYouResourceInput[] }
 }
 
@@ -28,15 +36,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return
   }
 
+  // A results screen sends about seven of these at once, so the per-address budget is roomy.
+  if (!allow(`why:${clientIp(req)}`, 200, 10 * 60_000)) {
+    res.status(429).json({ error: 'too many requests' })
+    return
+  }
+
   const body = req.body
-  if (!body?.resources?.length) {
+  if (!Array.isArray(body?.resources) || body.resources.length === 0 || body.resources.length > MAX_RESOURCES) {
     res.status(400).json({ error: 'resources required' })
     return
   }
 
+  const resources: WhyYouResourceInput[] = body.resources.map((r) => ({
+    id: clip(r?.id, 100),
+    name: clip(r?.name, 200),
+    whatItIs: clip(r?.whatItIs),
+  }))
+  const c = body.context ?? ({} as Partial<WhyYouContext>)
+  const context: WhyYouContext = {
+    school: clip(c.school, 200),
+    program: clip(c.program, 200),
+    closestSpecialization: clip(c.closestSpecialization, 200),
+    coursesRemaining: Number.isInteger(c.coursesRemaining) ? Math.max(0, Math.min(60, c.coursesRemaining)) : 0,
+    topOverlapCourse: c.topOverlapCourse ? clip(c.topOverlapCourse, 20) : undefined,
+    otherCloseSpecializations: Array.isArray(c.otherCloseSpecializations)
+      ? c.otherCloseSpecializations.slice(0, 3).map((o) => ({
+          name: clip(o?.name, 200),
+          remaining: Number.isInteger(o?.remaining) ? Math.max(0, Math.min(60, o.remaining)) : 0,
+        }))
+      : undefined,
+  }
+
   let text: string
   try {
-    text = await respond(apiKey, buildWhyYouPrompt(body.context, body.resources), 2048)
+    // One-sentence copywriting per award.
+    text = await respond(apiKey, buildWhyYouPrompt(context, resources), 2048, 25_000)
   } catch (err) {
     sendFailure(res, err)
     return
@@ -44,7 +79,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const whyYou = parseWhyYouResponse(
     text,
-    body.resources.map((r) => r.id),
+    resources.map((r) => r.id),
   )
 
   res.status(200).json({ whyYou })

@@ -6,6 +6,7 @@
 // in the warm function and a seat check is capped at a handful of courses.
 
 import { BannerError, getTerms, searchCourse } from './_banner.js'
+import { MAX_WATCHES } from '../src/lib/classTracker.js'
 
 interface VercelRequest {
   method?: string
@@ -18,7 +19,25 @@ interface VercelResponse {
   json: (body: unknown) => void
 }
 
-const MAX_SEAT_COURSES = 8
+// As many courses as a student can watch, so no watch is ever left out of a check.
+const MAX_SEAT_COURSES = MAX_WATCHES
+// Each course opens its own Banner session (three or four requests). Banner throttles bursts by
+// answering empty, so only a few run at once.
+const SEAT_CONCURRENCY = 3
+
+/** `fn` over every item, at most `limit` at a time, results in input order. */
+async function mapLimited<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length)
+  let next = 0
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++
+      results[i] = await fn(items[i])
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+  return results
+}
 const COURSE_RE = /^([A-Z]{2,5})\s*(\d{2,3}[A-Z]?)$/
 
 const cache = new Map<string, { value: unknown; expiresAt: number }>()
@@ -75,16 +94,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .map((c) => c.match(COURSE_RE))
         .filter((m): m is RegExpMatchArray => m !== null)
         .slice(0, MAX_SEAT_COURSES)
-      const results = await Promise.all(
-        courses.map(async ([, subject, number]) => {
-          try {
-            return await cached(`seats:${term}:${subject}${number}`, 30_000, () => searchCourse(term, subject, number))
-          } catch {
-            // One course's hiccup never hides the others; the client keeps its last reading.
-            return []
-          }
-        }),
-      )
+      const results = await mapLimited(courses, SEAT_CONCURRENCY, async ([, subject, number]) => {
+        try {
+          return await cached(`seats:${term}:${subject}${number}`, 30_000, () => searchCourse(term, subject, number))
+        } catch {
+          // One course's hiccup never hides the others; the client keeps its last reading.
+          return []
+        }
+      })
       // An empty list is Banner throttling or a hiccup, not a vanished section: those CRNs are simply
       // missing from the answer, and the client keeps what it had.
       const seats = results.flat().map((section) => ({ crn: section.crn, seats: section }))
