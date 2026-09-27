@@ -4,6 +4,7 @@ import { Wordmark } from '../../ui/Brand.tsx'
 import { Button } from '../../ui/primitives.tsx'
 import { ThemeSwitch } from '../../ui/ThemeSwitch.tsx'
 import { CanopyBeat, GuideBeat, HowBeat, MoreBeat, ProblemBeat, RootsBeat, ScatteredBeat, ShowcaseBeat, TeamBeat } from './Beats.tsx'
+import { ClimbOwl } from './ClimbOwl.tsx'
 import { Links, Wood, Zones } from './StoryTree.tsx'
 import { useClimb } from './useClimb.ts'
 import './landing.css'
@@ -76,6 +77,7 @@ export function LandingPage({ onGetStarted, onSkip }: LandingPageProps) {
             <TeamBeat {...props} />
             <CanopyBeat {...props} onGetStarted={onGetStarted} onSkip={onSkip} />
           </div>
+          {g && <ClimbOwl g={g} grown={climb.grown} stageRef={stageRef} scrollerRef={climb.scrollerRef} scrollY={scrollY} reduce={reduce} />}
         </motion.div>
       </div>
     </div>

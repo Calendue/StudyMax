@@ -58,6 +58,14 @@ export interface Wood {
   oy: number
 }
 
+/** A spot Max can sit: the tip of a sprig, or the top of the trunk. */
+export interface Perch {
+  x: number
+  y: number
+  /** It appears once this beat has grown, so he never sits on a twig that isn't there yet. */
+  beat: number
+}
+
 export interface Link {
   key: string
   /** The beat it leaves from (it draws in once that beat has grown) and the one it arrives at. */
@@ -88,6 +96,8 @@ export interface ClimbGeometry {
   crown: Wood[]
   /** Short leafy sprigs off the trunk in the open stretches between cards. */
   sprigs: Wood[]
+  /** Where Max perches as you climb, bottom to top. */
+  perches: Perch[]
   links: Link[]
   /** Sap: a signal rising up the trunk out of the roots, from the soil to the first beat. */
   sap: { d: string; len: number; box: Box }
@@ -297,6 +307,7 @@ export function growClimb(input: ClimbInput): ClimbGeometry {
 
   // ── sprigs: short leafy twigs off the trunk wherever it would otherwise run bare ──
   const sprigs: Wood[] = []
+  const perches: Perch[] = []
   const pitch = compact ? 130 : 170
   let flip = 1
   for (let y = ground - (compact ? 150 : 230); y > top.y + (compact ? 90 : 180); y -= pitch) {
@@ -316,6 +327,7 @@ export function growClimb(input: ClimbInput): ClimbGeometry {
       compact ? [{ f: 0.6, size: 12 }, { f: 0.95, size: 13 }] : [{ f: 0.4, size: 20 }, { f: 0.72, size: 25 }, { f: 0.97, size: 22 }],
       sprigs.length,
     )
+    perches.push({ x: r(end.x), y: r(end.y), beat: beatAt(y) })
     sprigs.push({
       key: `sprig-${Math.round(y)}`,
       beat: beatAt(y),
@@ -406,6 +418,8 @@ export function growClimb(input: ClimbInput): ClimbGeometry {
     branches,
     crown,
     sprigs,
+    // ...and last, the top of the trunk, where the crown opens.
+    perches: [...perches, { x: r(top.x), y: r(top.y), beat: grownAt.length - 1 }],
     links,
     sap,
     cards: [...[...input.twigs, ...input.chain, ...input.blossoms].map((t) => t.box), ...input.masks],

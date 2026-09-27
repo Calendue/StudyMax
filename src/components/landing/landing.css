@@ -196,6 +196,45 @@
   flex-direction: column-reverse;
 }
 
+/* ── Max, perched on the tree and climbing with you (ClimbOwl.tsx) ── */
+.climb__owl {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0;
+  animation: climb-owl-in 500ms var(--settle) 300ms forwards;
+  filter: drop-shadow(0 6px 8px color-mix(in srgb, var(--ink) 18%, transparent));
+}
+
+/* In the air: a quick wingbeat on top of the arc. */
+.climb__owl .climb__owl-flap {
+  animation: climb-owl-flap 180ms ease-in-out infinite alternate;
+}
+
+@keyframes climb-owl-in {
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes climb-owl-flap {
+  from {
+    transform: scale(1.04, 0.96) rotate(-3deg);
+  }
+  to {
+    transform: scale(0.97, 1.03) rotate(3deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .climb__owl {
+    animation: none;
+    opacity: 1;
+  }
+}
+
 /* ── the wood ── */
 .climb__trunk {
   fill: var(--wood);
