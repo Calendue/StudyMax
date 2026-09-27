@@ -891,12 +891,24 @@ function useStudyMax() {
     setCourseTerms((prev) => ({ ...prev, [code]: season }))
   }
 
-  /** Takes a course off "Taking now", whether the transcript listed it or the student added it. */
-  function removeInProgress(code: string) {
+  /**
+   * Takes a course off "Taking now", whether the transcript listed it or the student added it.
+   * Returns an undo that puts it back exactly where it was (list and term).
+   */
+  function removeInProgress(code: string): () => void {
     haptic.selection()
+    const wasUpload = uploadInProgress.includes(code)
+    const wasRegistered = registered.includes(code)
+    const season = courseTerms[code]
     setUploadInProgress((codes) => codes.filter((c) => c !== code))
     setRegistered((codes) => codes.filter((c) => c !== code))
     setCourseTerms((prev) => Object.fromEntries(Object.entries(prev).filter(([c]) => c !== code)))
+    return () => {
+      haptic.selection()
+      if (wasUpload) setUploadInProgress((codes) => (codes.includes(code) ? codes : [...codes, code]))
+      if (wasRegistered) setRegistered((codes) => (codes.includes(code) ? codes : [...codes, code]))
+      if (season) setCourseTerms((prev) => ({ ...prev, [code]: season }))
+    }
   }
 
   // Each course under way with its term as the tree and the plan write it ("Winter 2027").

@@ -307,3 +307,17 @@ export function applyOverrides(
 
   return { completed, inProgress, booked, blocked, retakes: [...new Set(retakes)].sort(cmp), valid, notes }
 }
+
+/** What the "..." menu on an in-progress course offers for its term, before anything was said. */
+export function inProgressActions(term: string, current: string): { kind: OverrideKind; label: string; when: string }[] {
+  return termOrd(term) <= termOrd(current)
+    ? [
+        { kind: 'failed', label: 'Failed', when: term },
+        { kind: 'withdrew', label: 'Withdrew', when: term },
+        { kind: 'not-offered', label: 'Cancelled this term', when: term },
+      ]
+    : [
+        { kind: 'withdrew', label: 'Dropped', when: current },
+        { kind: 'not-offered', label: 'Cancelled', when: term },
+      ]
+}

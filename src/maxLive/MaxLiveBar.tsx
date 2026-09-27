@@ -25,12 +25,15 @@ export function TalkToMax() {
   const m = useModel()
   if (!m.features.max || !m.features.live || m.maxLive.active || m.plan.length === 0) return null
   return (
-    <div className="max-live-entry">
-      <MaxOwl pose="idle" size={44} />
+    <div className="max-nudge max-live-entry">
+      <MaxOwl pose="idle" size={88} className="max-nudge__owl" />
+      <div className="max-nudge__text">
+        <p className="max-nudge__line">Want to talk this plan through?</p>
+        <p className="max-nudge__sub">I&rsquo;ll call you and reshape this tree as we talk.</p>
+      </div>
       <Button variant="secondary" icon="phone" onClick={() => m.go('ping-max')}>
         Talk it through with Max
       </Button>
-      <span className="max-live-entry__note">Max calls you and reshapes this tree as you talk.</span>
     </div>
   )
 }

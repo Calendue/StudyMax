@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { isElective } from '../lib/plan.ts'
+import { searchCourses } from '../lib/courseSearch.ts'
 import { useModel } from '../model.ts'
 import { courseCode } from '../format.ts'
 import { bannerTermCode, formatMeeting, openSeats, PAWS_URL, statusLabel, type Section, type Term, type Watch } from '../lib/classTracker.ts'
@@ -42,6 +43,8 @@ export function ClassFinder() {
   const m = useModel()
   const c = m.classes
   const [query, setQuery] = useState('')
+  // The query last searched: suggestions show while what's typed differs from it.
+  const [searched, setSearched] = useState('')
 
   const { ensureTerms, checkOffered, clearOffered } = c
   useEffect(() => ensureTerms(), [ensureTerms])
@@ -67,8 +70,12 @@ export function ClassFinder() {
 
   function find(code: string) {
     setQuery(courseCode(code))
+    setSearched(courseCode(code))
     void c.search(code, nextTermCode ?? c.term)
   }
+
+  // Matching courses from the catalogue, updated on every key: code ("cmpt 3") or title ("software").
+  const suggestions = useMemo(() => (typed.length > 0 && query !== searched ? searchCourses(typed, 6) : []), [typed, query, searched])
 
   return (
     <>
@@ -119,6 +126,14 @@ export function ClassFinder() {
             className="classes__search"
             onSubmit={(e) => {
               e.preventDefault()
+              // A partial code or a title searches its best match; a whole code searches as typed.
+              if (!FULL_CODE.test(typed) && suggestions[0]) {
+                setQuery(courseCode(suggestions[0].code))
+                setSearched(courseCode(suggestions[0].code))
+                void c.search(suggestions[0].code)
+                return
+              }
+              setSearched(query)
               void c.search(query)
             }}
           >
@@ -133,8 +148,25 @@ export function ClassFinder() {
                 aria-label="Course code"
                 autoComplete="off"
                 autoCapitalize="characters"
+                onKeyDown={(e) => e.key === 'Escape' && setSearched(query)}
               />
             </div>
+            {suggestions.length > 0 && (
+              <Group className="classes__suggest">
+                {suggestions.map((hit) => (
+                  <Row
+                    key={hit.code}
+                    title={courseCode(hit.code)}
+                    subtitle={hit.title}
+                    onClick={() => {
+                      setQuery(courseCode(hit.code))
+                      setSearched(courseCode(hit.code))
+                      void c.search(hit.code)
+                    }}
+                  />
+                ))}
+              </Group>
+            )}
           </form>
 
           <Sections />

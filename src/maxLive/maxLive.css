@@ -218,17 +218,9 @@
 }
 
 /* The idle way in, above the tree. */
-.max-live-entry {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s2) var(--s3);
+/* The Plan's "talk it through" card: the same look as Max's hello (.max-nudge in maxOwl.css). */
+.max-nudge.max-live-entry {
   margin: 0 0 var(--s4);
-}
-
-.max-live-entry__note {
-  font-size: var(--fs-small);
-  opacity: 0.8;
 }
 
 /* A course Max just took out of the plan: it flashes rose where it was, shrinks and fades
