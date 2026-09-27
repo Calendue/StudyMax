@@ -6,6 +6,7 @@ import { Button, Group, Row, RowIcon, SectionLabel } from '../ui/primitives.tsx'
 import { Sheet } from '../ui/Sheet.tsx'
 import { Avatar } from '../ui/chrome.tsx'
 import { ThemeChoice } from '../ui/ThemeSwitch.tsx'
+import { readGuestCall, updateGuestCall } from '../maxLive/guestCall.ts'
 
 /**
  * Account and settings on a phone: who's signed in, the appearance, and the ways out of the results
@@ -16,22 +17,26 @@ export function AccountSheet() {
   const m = useModel()
   const account = m.account
 
-  // Max's own settings — this account's when signed in, the seeded demo student's for a guest
+  // Max's own settings — this account's when signed in; a guest's live in their session instead
   // (docs/BayMax/implementation/06-vapi-voice-integration.md's "Identity simplification" describes
   // the guest fallback). Fetched only while the sheet's open, so a revoke here blocks the next
   // "Ping Max" tap immediately without threading Max's settings through the shared model.
   const [maxConsent, setMaxConsent] = useState<boolean | null>(null)
   const [maxName, setMaxName] = useState<string | null>(null)
+  const [maxGuest, setMaxGuest] = useState(false)
   useEffect(() => {
     if (m.sheet !== 'account' || !m.features.max) return
     let cancelled = false
     authHeader()
       .then((headers) => fetch(api('/api/max/settings'), { headers }))
       .then((r) => (r.ok ? r.json() : null))
-      .then((data: { name?: string | null; consentGranted?: boolean } | null) => {
+      .then((data: { name?: string | null; consentGranted?: boolean; isGuest?: boolean } | null) => {
         if (cancelled) return
-        setMaxConsent(data?.consentGranted ?? null)
-        setMaxName(data?.name ?? null)
+        // A guest's name and consent are this session's (maxLive/guestCall.ts), not the shared account's.
+        const guest = data?.isGuest ? readGuestCall() : null
+        setMaxGuest(data?.isGuest === true)
+        setMaxConsent(data?.isGuest ? Boolean(guest?.phoneE164) && guest?.consent === true : (data?.consentGranted ?? null))
+        setMaxName(data?.isGuest ? (guest?.name ?? null) : (data?.name ?? null))
       })
       .catch(() => !cancelled && setMaxConsent(null))
     return () => {
@@ -40,6 +45,11 @@ export function AccountSheet() {
   }, [m.sheet, m.features.max])
 
   async function revokeMaxConsent() {
+    if (maxGuest) {
+      updateGuestCall({ consent: false })
+      setMaxConsent(false)
+      return
+    }
     const res = await fetch(api('/api/max/settings'), {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeader()) },

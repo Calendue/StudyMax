@@ -23,10 +23,16 @@ const PHONE_RE = /^\+?[0-9()\-.\s]{7,20}$/
 const CONSENT_VERSION = 'v1-2026-09-26'
 const NAME_RE = /^.{1,60}$/
 
-function shape(name: string | null, settings: { phoneVerifiedAt: Date | null; callConsentGranted: boolean; hasMetMax: boolean } | null) {
+function shape(
+  name: string | null,
+  settings: { phoneE164?: string | null; phoneVerifiedAt: Date | null; callConsentGranted: boolean; hasMetMax: boolean } | null,
+) {
   return {
     name,
+    isGuest: false,
     phoneVerified: Boolean(settings?.phoneVerifiedAt),
+    // The last four digits, so the app can say which number Max will call.
+    phoneHint: settings?.phoneE164 ? settings.phoneE164.replace(/\D/g, '').slice(-4) : null,
     consentGranted: settings?.callConsentGranted === true,
     hasMetMax: settings?.hasMetMax === true,
   }
@@ -50,6 +56,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let user = await db().userInfo.findUnique({ where: { userId: resolved.userId } })
   if (!user) {
     res.status(500).json({ error: 'demo student not seeded — run npm run db:seed:demo-student' })
+    return
+  }
+
+  // A guest shares the one demo student with every other guest, so their phone and consent never live
+  // on it — otherwise the next guest's Ping Max would ring the last guest's phone. The app keeps them
+  // for the session and sends the number with the call (api/max/call.ts).
+  if (resolved.isGuest) {
+    if (req.method === 'GET') {
+      const settings = await db().maxSettings.findUnique({ where: { userId: user.userId } })
+      // No name either: "Demo" (or whatever the last guest was called) isn't this guest's.
+      res.status(200).json({ ...shape(null, null), isGuest: true, hasMetMax: settings?.hasMetMax === true })
+      return
+    }
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'GET or POST only' })
+      return
+    }
+    const body = (req.body ?? {}) as { phoneE164?: string; verified?: boolean; consentGranted?: boolean }
+    const phone = body.phoneE164?.trim()
+    if (phone !== undefined && !PHONE_RE.test(phone)) {
+      res.status(400).json({ error: 'invalid phone number' })
+      return
+    }
+    res.status(200).json({
+      ...shape(null, null),
+      isGuest: true,
+      phoneVerified: phone !== undefined && body.verified === true,
+      phoneHint: phone ? phone.replace(/\D/g, '').slice(-4) : null,
+      consentGranted: body.consentGranted === true,
+    })
     return
   }
 

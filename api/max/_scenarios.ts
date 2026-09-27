@@ -14,6 +14,7 @@
 import { createHash } from 'node:crypto'
 import { Prisma, type GeneratedPlan } from '@prisma/client'
 import { db } from '../_db.js'
+import { isSharedGuest } from './_demoUser.js'
 import { planVersionWrites, type PlanSnapshot } from '../_planVersion.js'
 import { programs } from '../../src/data/programs/index.js'
 import { computeCredentials } from '../../src/lib/credentials.js'
@@ -71,6 +72,8 @@ export interface Snapshot {
 export interface CallScope {
   callId: bigint
   planInputs: CallPlanInputs | null
+  /** The demo student every guest shares: its saved versions belong to other guests' calls too. */
+  isGuest?: boolean
 }
 
 /** The planner inputs as a scenario sees them — the same regenerate() the app's plan is checked against. */
@@ -319,13 +322,18 @@ async function loadCurrentSnapshot(
 }
 
 /** Applies validated ops to a snapshot. RESTORE_VERSION must be the only op (checked on append). */
-async function applyOps(planId: bigint, base: Snapshot, ops: ScenarioOp[]): Promise<Snapshot | ToolError> {
+async function applyOps(planId: bigint, base: Snapshot, ops: ScenarioOp[], scope?: CallScope): Promise<Snapshot | ToolError> {
   const restore = ops.find((o) => o.op === 'RESTORE_VERSION')
   if (restore && restore.op === 'RESTORE_VERSION') {
     const version = await db().planVersion.findUnique({
       where: { planId_versionNumber: { planId, versionNumber: restore.versionNumber } },
-      include: { scenario: { select: { resultInputs: true } } },
+      include: { scenario: { select: { resultInputs: true, callId: true } } },
     })
+    // A guest's saved versions share one account with every other guest's: anything not saved on this
+    // call is someone else's plan. Going back past this call means the plan they started it with.
+    if (scope?.isGuest && scope.planInputs && version?.scenario?.callId !== scope.callId) {
+      return snapshotFromCall(scope.planInputs.original ?? scope.planInputs)
+    }
     if (!version) return err('UNKNOWN_VERSION', `I don't have a version ${restore.versionNumber} to go back to.`)
     const saved = (version.scenario?.resultInputs ?? {}) as Partial<ResultInputs>
     // Completed courses stay current — restore rewinds the plan, not course history — but the drops go
@@ -455,7 +463,7 @@ export async function runScenario(
   let applied: Snapshot | null = null
   const firstFramed = Math.max(0, ops.length - MAX_FRAMES)
   for (let i = 0; i < ops.length; i++) {
-    const step = await applyOps(plan.planId, baseSnapshot, [...priorOps, ...ops.slice(0, i + 1)])
+    const step = await applyOps(plan.planId, baseSnapshot, [...priorOps, ...ops.slice(0, i + 1)], opts.scope)
     if ('code' in step) return step
     applied = step
     if (i >= firstFramed) {
@@ -552,8 +560,11 @@ export async function advanceCall(callId: bigint, ri: ResultInputs, terms: Plann
   const call = await db().maxCall.findUnique({ where: { callId }, select: { planInputs: true } })
   const prev = call?.planInputs as CallPlanInputs | null | undefined
   if (!prev) return
+  // Keep what the call started with (only the first save records it), for a guest's "undo".
+  const { original, ...startedWith } = prev
   const next: CallPlanInputs = {
     ...prev,
+    original: original ?? startedWith,
     inProgress: ri.inProgress,
     enrolled: ri.enrolled,
     droppedCourses: ri.droppedCourses,
@@ -707,8 +718,9 @@ export async function commitScenario(
   }
   const live = { scenarioId: String(scenarioId), inputs: liveInputsOf(ri), terms }
 
-  // A saved pace or summer change is the student's preference now (spec 03: SET_PREFERENCE sets both).
-  const savesPreference = ops.some((o) => o.op === 'SET_PREFERENCE')
+  // A saved pace or summer change is the student's preference now (spec 03: SET_PREFERENCE sets both) —
+  // except a guest's: the demo student is every guest's, and its profile would become the next one's.
+  const savesPreference = ops.some((o) => o.op === 'SET_PREFERENCE') && !(await isSharedGuest(userId))
 
   try {
     const [, version] = await db().$transaction([
