@@ -14,14 +14,14 @@ export function Mark({ size = 28, className }: { size?: number; className?: stri
   )
 }
 
-/** The wordmark. Pass a height; the width follows its 501:180 proportions. */
+/** The wordmark, cropped to its letters (a 457:132 box), so the height you pass is the lettering's. */
 export function Wordmark({ height = 28, className, title = 'StudyMax' }: { height?: number; className?: string; title?: string }) {
   return (
     <svg
       className={className}
       height={height}
-      width={(height * 501) / 180}
-      viewBox="0 0 501 180"
+      width={(height * 457) / 132}
+      viewBox="22 26 457 132"
       role="img"
       aria-label={title}
       focusable="false"

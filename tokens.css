@@ -50,12 +50,11 @@
   --inactive: var(--taupe); /* a disabled primary button */
   --scrim: rgb(18 38 43 / 0.34);
 
-  /* The desktop sidebar is deep ink, so Cherry Rose stays for what's active and what to press; its
-     active item is a notch of the page colour. */
-  --sidebar: #12262b;
+  /* The desktop sidebar is the brand colour; its active item is a notch of the page colour. */
+  --sidebar: var(--cherry);
   --on-sidebar: var(--old-lace);
-  --on-sidebar-2: rgb(255 248 235 / 0.74); /* 9.6:1 on ink */
-  --sidebar-hover: rgb(255 248 235 / 0.08);
+  --on-sidebar-2: rgb(255 248 235 / 0.8); /* 5.3:1 on Cherry Rose */
+  --sidebar-hover: rgb(255 248 235 / 0.1);
   --notch-ink: var(--ink);
   --notch-accent: var(--cherry);
 

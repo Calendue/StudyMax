@@ -1506,7 +1506,7 @@
 .welcome__mark {
   display: block;
   color: var(--accent);
-  margin: 0 0 var(--s2) -4px;
+  margin: 0 0 var(--s2);
 }
 
 .welcome__title {

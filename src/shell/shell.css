@@ -1374,7 +1374,6 @@ p.card__empty {
 .wizard__wordmark {
   flex: none;
   color: var(--on-welcome);
-  margin-left: -6px;
 }
 
 .wizard__center {

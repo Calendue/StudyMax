@@ -73,7 +73,7 @@ export function CoursesFocus() {
   const m = useModel()
   return (
     <div className="focus">
-      <TopBar onBack={m.back} right={<Wordmark height={26} className="wordmark" />} />
+      <TopBar onBack={m.back} right={<Wordmark height={29} className="wordmark" />} />
       <main className="focus__body">
         <div className="focus__content">
           <div className="focus__title">

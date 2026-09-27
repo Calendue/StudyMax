@@ -110,7 +110,7 @@ export function LandingPage({ onGetStarted, onSkip }: LandingPageProps) {
   return (
     <div className="landing">
       <div className="landing__topbar">
-        <Wordmark height={40} className="landing__wordmark" />
+        <Wordmark height={42} className="landing__wordmark" />
         <div className="landing__topbar-end">
           <ThemeSwitch />
         </div>

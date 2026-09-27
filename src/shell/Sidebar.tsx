@@ -30,7 +30,7 @@ export function Sidebar() {
     <aside className="sidebar" aria-label="StudyMax">
       <div className="sidebar__brand">
         <Mark size={34} className="sidebar__mark" />
-        <Wordmark height={30} className="sidebar__wordmark" />
+        <Wordmark height={33} className="sidebar__wordmark" />
       </div>
 
       <nav className="sidebar__nav" aria-label="Main">

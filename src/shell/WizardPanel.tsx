@@ -73,7 +73,7 @@ export function WizardPanel() {
   const filled = rows.filter((r) => r.value !== null).length
   return (
     <aside className="wizard__art">
-      <Wordmark height={40} className="wizard__wordmark" />
+      <Wordmark height={42} className="wizard__wordmark" />
       <div className="wizard__center">
         <Sapling grown={filled} total={rows.length} />
         <section className="profile-card" aria-label="Your answers so far">
