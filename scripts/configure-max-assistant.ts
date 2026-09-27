@@ -39,8 +39,10 @@ Phone call. Keep turns to 1-3 sentences. Never list more than 3 things at once; 
 Only state courses, requirements, prerequisites, offerings, or dates that appear above or in a tool result from this call. If you don't know, look it up with get_student_overview or say you're not sure. Never guess a course code.
 
 # Changing the plan
-You can explore any change with run_scenario — it never changes the official plan by itself. Right now you can only drop an in-progress course or restore an earlier version; if asked for anything else (adding a course, changing major, moving a course to a specific term), say you can't do that yet and suggest the app.
-To save a change: first say the headline from run_scenario's result (graduation change first) and any warnings, then ask one yes/no question: "Want me to save that as your plan?" Only call commit_scenario after a clear yes to that exact question, passing the student's own words as confirmationUtterance. If they hedge or ask a question instead of answering, ask once more; if still unclear, tell them it's saved as a draft in the app.
+You can explore a change with run_scenario — it never changes the official plan by itself. The changes you can make: drop a course they're taking, change how many courses they take a term (1-5), turn Spring/Summer terms on or off (and how many courses a summer, 1-3), switch their specialization, or go back to an earlier saved version. For anything else (adding one specific course, changing major, moving a course to a specific term), say you can't do that yet and suggest the app. To recommend something, use get_plan_options — never estimate a graduation term yourself.
+When the app is open on this call (uiVisible: true in a tool result), every change reshapes the tree on their screen as you speak — say "it's on your screen now" the first time only, and never narrate the visuals.
+A specialization switch can't be saved by voice: never call commit_scenario for it (requiresAppConfirmation: true) — tell them to tap Keep this plan on their screen.
+To save a change: first say the headline from run_scenario's result (graduation change first) and any warnings, then ask one yes/no question: "Want me to save that as your plan?" Only call commit_scenario after a clear yes to that exact question, passing the student's own words as confirmationUtterance. If they hedge or ask a question instead of answering, ask once more; if still unclear, don't save it — tell them you've left it unsaved and they can ask you again any time.
 Dropping a course they're currently taking must also be done with the registrar — say so once, right after describing that kind of change.
 
 # Boundaries
@@ -54,7 +56,8 @@ Opening is handled for you: first call -> introduce yourself and ask what's on t
 For anything else, match the student's request to one of these and call load_skill with that name the moment a trigger fires, before responding, then follow exactly what it returns:
 - summarize_roadmap: "where am I at", "remind me", "what's my plan", or any broad "how am I doing" question.
 - what_if: "what if...", "what happens if...", "could I...".
-- manage_roadmap: imperative changes ("drop CMPT 370", "undo that"), and saving or discarding something already explored.
+- manage_roadmap: imperative changes ("drop CMPT 370", "make it 4 a term", "undo that"), and saving or discarding something already explored.
+- recommend_plan: "what should I do", "can I graduate sooner", "fastest way", "lighter load", "should I switch", "use my summers".
 - correct_name: the student corrects their name or asks to be called something else.`
 
 const tools: import('@vapi-ai/server-sdk').Vapi.OpenAiModelToolsItem[] = [
@@ -73,7 +76,7 @@ const tools: import('@vapi-ai/server-sdk').Vapi.OpenAiModelToolsItem[] = [
     function: {
       name: 'run_scenario',
       description:
-        "Explores a hypothetical change to the student's roadmap WITHOUT saving it. Only two kinds of change are supported right now: dropping a course they're currently taking, and restoring an earlier saved version. Returns a spoken headline (graduation change first), warnings, and a presentedHash needed to commit.",
+        "Explores a change to the student's roadmap WITHOUT saving it: drop a course they're taking, set their pace or Spring/Summer terms, switch specialization, or restore an earlier saved version. Pass the scenarioId to build on a change already shown. Returns a spoken headline (graduation change first), warnings, errors, a presentedHash needed to commit, requiresAppConfirmation (a switch — saved only by the student's tap), and uiVisible (the change is on their screen).",
       parameters: {
         type: 'object',
         properties: {
@@ -92,6 +95,27 @@ const tools: import('@vapi-ai/server-sdk').Vapi.OpenAiModelToolsItem[] = [
                   properties: { op: { const: 'RESTORE_VERSION' }, versionNumber: { type: 'integer' } },
                   required: ['op', 'versionNumber'],
                 },
+                {
+                  type: 'object',
+                  properties: {
+                    op: { const: 'SET_PREFERENCE' },
+                    key: { type: 'string', enum: ['maxCoursesPerTerm', 'springSummer', 'maxSummerCourses'] },
+                    value: { description: 'maxCoursesPerTerm: 1-5; springSummer: true/false; maxSummerCourses: 1-3', type: ['integer', 'boolean'] },
+                  },
+                  required: ['op', 'key', 'value'],
+                },
+                {
+                  type: 'object',
+                  properties: {
+                    op: { const: 'SET_SPECIALIZATIONS' },
+                    specializationIds: {
+                      type: 'array',
+                      items: { type: 'string' },
+                      description: "The specialization to switch to: an id or its name from get_student_overview's availableSpecializations.",
+                    },
+                  },
+                  required: ['op', 'specializationIds'],
+                },
               ],
             },
           },
@@ -102,6 +126,27 @@ const tools: import('@vapi-ai/server-sdk').Vapi.OpenAiModelToolsItem[] = [
     },
     server: { url: TOOL_URL, headers: AUTH_HEADERS },
     messages: [{ type: 'request-start', content: 'Let me check that.' }],
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_plan_options',
+      description:
+        "The student's real alternatives on one topic, best first — each scored by building the whole plan it would give, so its graduation is exactly what their tree would show. Returns up to 3 options ({label, graduation, vsNow, coursesLeft, ops}), which one to recommend and why. To show one, pass its ops to run_scenario unchanged.",
+      parameters: {
+        type: 'object',
+        properties: {
+          about: {
+            type: 'string',
+            enum: ['pace', 'summer', 'specialization'],
+            description: 'pace: courses a term; summer: Spring/Summer terms; specialization: a different specialization.',
+          },
+        },
+        required: ['about'],
+      },
+    },
+    server: { url: TOOL_URL, headers: AUTH_HEADERS },
+    messages: [{ type: 'request-start', content: 'Let me look at your options.' }],
   },
   {
     type: 'function',
@@ -135,10 +180,10 @@ const tools: import('@vapi-ai/server-sdk').Vapi.OpenAiModelToolsItem[] = [
     function: {
       name: 'load_skill',
       description:
-        "Loads the full playbook for one of the named skills (summarize_roadmap, what_if, manage_roadmap, correct_name) before you act on it. Call this the moment a trigger matches, before responding — don't try to follow a skill from memory without loading it first.",
+        "Loads the full playbook for one of the named skills (summarize_roadmap, what_if, manage_roadmap, recommend_plan, correct_name) before you act on it. Call this the moment a trigger matches, before responding — don't try to follow a skill from memory without loading it first.",
       parameters: {
         type: 'object',
-        properties: { name: { type: 'string', enum: ['summarize_roadmap', 'what_if', 'manage_roadmap', 'correct_name'] } },
+        properties: { name: { type: 'string', enum: ['summarize_roadmap', 'what_if', 'manage_roadmap', 'recommend_plan', 'correct_name'] } },
         required: ['name'],
       },
     },
@@ -174,7 +219,8 @@ const updated = await client.assistants.update({
   firstMessage: 'Hi, this is Max from StudyMax.', // overridden per call by api/max/call.ts
   firstMessageInterruptionsEnabled: false,
   voicemailMessage: "Hi, this is Max from StudyMax returning your request. Open the app whenever you'd like to talk.",
-  endCallMessage: 'Talk soon. Everything we changed is in the app.',
+  // Not "everything's in the app": the app draws its own plan and doesn't show what Max saves.
+  endCallMessage: 'Talk soon — call me back any time.',
   maxDurationSeconds: 1200,
   server: { url: WEBHOOK_URL, headers: AUTH_HEADERS },
   model: {

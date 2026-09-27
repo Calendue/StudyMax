@@ -10,6 +10,7 @@ import { SkillTree } from '../skilltree/SkillTree.tsx'
 import { PlanViewSwitch } from '../skilltree/PlanViewSwitch.tsx'
 import { usePlanView } from '../skilltree/planView.ts'
 import { WhatIfSheet } from '../screens/WhatIfSheet.tsx'
+import { MaxLiveBar, TalkToMax } from '../maxLive/MaxLiveBar.tsx'
 import { ShareSheet } from '../screens/ShareSheet.tsx'
 
 // The desktop's Plan: Ayo's roadmap across the width, and beside it a panel for the course you pick,
@@ -33,6 +34,8 @@ export function PlanPage() {
                 <PlanLead />
               </p>
             )}
+            <MaxLiveBar />
+            <TalkToMax />
             <PlanTargets />
             <SkillTree dock={docked ? dock : undefined} contained />
           </Card>

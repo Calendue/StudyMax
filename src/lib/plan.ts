@@ -340,6 +340,23 @@ const CATALOGUE_SEASONS: Record<string, Season[]> = {
   'spring-summer': ['Spring/Summer'],
 }
 
+/** Whether a course runs in a season: Banner's offerings first, then the catalogue, else anywhere. */
+export function courseRunsIn(code: string, season: Season, springSummer = false, offerings: Record<string, Season[]> = scrapedOfferings): boolean {
+  // No 300- or 400-level CMPT course ran in a Spring/Summer term in 2025-27 (USask's class search).
+  if (isElective(code)) return season !== 'Spring/Summer' || !/410 or higher|senior cmpt/i.test(electiveLabel(code))
+  const usable = (seasons: Season[]) => seasons.filter((s) => springSummer || s !== 'Spring/Summer')
+  const banner = usable(offerings[code] ?? [])
+  if (banner.length > 0) return banner.includes(season)
+  const catalogue = usable(CATALOGUE_SEASONS[courseInfo[code]?.offered ?? ''] ?? [])
+  // Neither source says: anywhere rather than never.
+  return catalogue.length === 0 || catalogue.includes(season)
+}
+
+/** Whether a course's prerequisite groups are met: `before` passed earlier, `alongside` this same term (corequisites). */
+export function prerequisitesMet(code: string, before: ReadonlySet<string>, alongside: ReadonlySet<string>): boolean {
+  return prerequisiteGroups(code).every((g) => g.options.some((o) => before.has(o) || (g.concurrent && alongside.has(o))))
+}
+
 /** A course in the plan, with what the scheduler needs to know about it. */
 interface Item {
   course: PlannedCourse
@@ -501,16 +518,7 @@ export function buildPlan(
   })
 
   // --- whether a course may go in a term ---
-  const runsIn = (code: string, season: Season) => {
-    // No 300- or 400-level CMPT course ran in a Spring/Summer term in 2025-27 (USask's class search).
-    if (isElective(code)) return season !== 'Spring/Summer' || !/410 or higher|senior cmpt/i.test(electiveLabel(code))
-    const usable = (seasons: Season[]) => seasons.filter((s) => springSummer || s !== 'Spring/Summer')
-    const banner = usable(offerings[code] ?? [])
-    if (banner.length > 0) return banner.includes(season)
-    const catalogue = usable(CATALOGUE_SEASONS[courseInfo[code]?.offered ?? ''] ?? [])
-    // Neither source says: anywhere rather than never.
-    return catalogue.length === 0 || catalogue.includes(season)
-  }
+  const runsIn = (code: string, season: Season) => courseRunsIn(code, season, springSummer, offerings)
   const creditsMet = (code: string) =>
     [...(creditPrereqs[code] ?? []), ...(courseInfo[code]?.creditRequires ?? [])].every((rule) => {
       if (rule.standing === 'honours' && !honours) return false

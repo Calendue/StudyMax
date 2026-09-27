@@ -43,10 +43,20 @@ interface MaxSettingsState {
 
 type Step = 'loading' | 'phone' | 'code' | 'consent' | 'ready' | 'calling' | 'placed' | 'error'
 
-async function fetchSettings(): Promise<MaxSettingsState | null> {
+/** Throws with the server's error code (e.g. NO_PROFILE) rather than pretending there's nothing set up. */
+async function fetchSettings(): Promise<MaxSettingsState> {
   const res = await fetch(api('/api/max/settings'), { headers: await authHeader() })
-  return res.ok ? ((await res.json()) as MaxSettingsState) : null
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string }
+    throw new Error(body.error ?? `HTTP ${res.status}`)
+  }
+  return (await res.json()) as MaxSettingsState
 }
+
+/** A phone-free rehearsal of a live call (scripts/max-rehearse.ts plays Max's side). */
+const REHEARSE = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('rehearse') === '1'
+
+const NO_PROFILE_MESSAGE ='Finish setting up your plan first — then Max has a roadmap to talk through with you.'
 
 export function PingMaxScreen() {
   const m = useModel()
@@ -58,15 +68,26 @@ export function PingMaxScreen() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  useEffect(() => {
-    let cancelled = false
+  /** Loads the Max setup and lands on the right step; `live()` false drops a result the screen no longer wants. */
+  function loadSettings(live: () => boolean = () => true) {
+    setError(null)
+    setStep('loading')
     fetchSettings()
       .then((data) => {
-        if (cancelled) return
+        if (!live()) return
         setSettings(data)
-        setStep(!data?.phoneVerified ? 'phone' : !data.consentGranted ? 'consent' : 'ready')
+        setStep(!data.phoneVerified ? 'phone' : !data.consentGranted ? 'consent' : 'ready')
       })
-      .catch(() => !cancelled && setStep('error'))
+      .catch((e: Error) => {
+        if (!live()) return
+        setError(e.message === 'NO_PROFILE' ? NO_PROFILE_MESSAGE : "Max isn't available right now — try again in a moment.")
+        setStep('error')
+      })
+  }
+
+  useEffect(() => {
+    let cancelled = false
+    loadSettings(() => !cancelled)
     return () => {
       cancelled = true
     }
@@ -98,7 +119,11 @@ export function PingMaxScreen() {
       setSession(s)
       setStep('code')
     } catch {
-      setError("Couldn't send a code to that number — check it and try again.")
+      setError(
+        OTP_GATE_ENABLED
+          ? "Couldn't send a code to that number — check it and try again."
+          : "Couldn't save that number — check it and try again.",
+      )
     } finally {
       setBusy(false)
     }
@@ -126,9 +151,13 @@ export function PingMaxScreen() {
         headers: { 'content-type': 'application/json', ...(await authHeader()) },
         body: JSON.stringify({ consentGranted: true }),
       })
+      if (!res.ok) throw new Error('consent not saved')
       const data = (await res.json()) as MaxSettingsState
       setSettings(data)
-      setStep('ready')
+      setStep(data.consentGranted ? 'ready' : 'consent')
+    } catch {
+      setError("Couldn't save that — try again in a moment.")
+      setStep('error')
     } finally {
       setBusy(false)
     }
@@ -138,11 +167,19 @@ export function PingMaxScreen() {
     setStep('calling')
     setError(null)
     try {
-      const res = await fetch(api('/api/max/call'), { method: 'POST', headers: await authHeader() })
-      const data = (await res.json().catch(() => ({}))) as { error?: string }
+      const res = await fetch(api('/api/max/call'), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...(await authHeader()) },
+        // The plan on screen, so Max plans from exactly this; ?rehearse=1 asks for a phone-free dry run
+        // (only honoured where the server has MAX_DRY_RUN=1).
+        body: JSON.stringify({ planInputs: m.maxPlanInputs, dryRun: REHEARSE }),
+      })
+      const data = (await res.json().catch(() => ({}))) as { error?: string; callId?: string; liveToken?: string }
       if (!res.ok) {
         setError(
-          data.error === 'ALREADY_ON_A_CALL'
+          data.error === 'NO_PROFILE'
+            ? NO_PROFILE_MESSAGE
+            : data.error === 'ALREADY_ON_A_CALL'
             ? 'Max is already on a call with you.'
             : data.error === 'PHONE_NOT_VERIFIED'
               ? 'Your phone needs verifying first.'
@@ -154,6 +191,16 @@ export function PingMaxScreen() {
         return
       }
       setStep('placed')
+      if (m.features.live && data.callId && data.liveToken) {
+        // Follow the call live, and take them to the tree Max is about to reshape.
+        m.maxLive.start(data.callId, data.liveToken)
+        try {
+          localStorage.setItem('studymax.planView', 'tree')
+        } catch {
+          // storage blocked: the Plan tab opens on whichever view it remembers
+        }
+        setTimeout(() => m.navigate('plan'), 1200)
+      }
     } catch {
       setError("Max couldn't place the call.")
       setStep('error')
@@ -292,11 +339,18 @@ export function PingMaxScreen() {
             Ping Max
           </Button>
         )}
-        {step === 'error' && (
+        {step === 'error' && error === NO_PROFILE_MESSAGE && (
+          <Button block variant="secondary" onClick={() => m.go('results', -1)}>
+            Back to your results
+          </Button>
+        )}
+        {step === 'error' && error !== NO_PROFILE_MESSAGE && (
           <Button
             block
             icon="phone"
-            onClick={() => setStep(!settings?.phoneVerified ? 'phone' : !settings.consentGranted ? 'consent' : 'ready')}
+            onClick={() =>
+              settings ? setStep(!settings.phoneVerified ? 'phone' : !settings.consentGranted ? 'consent' : 'ready') : loadSettings()
+            }
           >
             Try again
           </Button>

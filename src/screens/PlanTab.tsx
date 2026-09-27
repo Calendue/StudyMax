@@ -13,6 +13,7 @@ import { PlanRoadmap } from './PlanRoadmap.tsx'
 import { SkillTree } from '../skilltree/SkillTree.tsx'
 import { PlanViewSwitch } from '../skilltree/PlanViewSwitch.tsx'
 import { usePlanView } from '../skilltree/planView.ts'
+import { MaxLiveBar, TalkToMax } from '../maxLive/MaxLiveBar.tsx'
 
 // The plan's pieces, shared by the phone's Plan tab and the desktop's Plan page.
 
@@ -298,6 +299,7 @@ export function PlanTab() {
     return (
       <>
         <PlanViewSwitch view={view} onChange={setView} sticky />
+        <MaxLiveBar compact />
         <SkillTree bleed stickyTop={56} />
         <div className="plan-after">
           {m.plan.length > 0 && (
@@ -305,6 +307,7 @@ export function PlanTab() {
               <PlanLead />
             </p>
           )}
+          <TalkToMax />
           <PlanTargets />
           <PlanControls />
           {m.plan.length > 0 && <PlanCopy />}

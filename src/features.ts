@@ -9,16 +9,20 @@ export interface Features {
   call: boolean
   /** Ping Max — the voice planning agent's outbound call (Vapi). */
   max: boolean
+  /** Max live on the Skill Tree during the call (Supabase Realtime, with a polling fallback). */
+  live: boolean
 }
 
-const OFF: Features = { ai: false, call: false, max: false }
+const OFF: Features = { ai: false, call: false, max: false, live: false }
+
+const parse = (data: Record<string, unknown> | null): Features =>
+  data ? { ai: data.ai === true, call: data.call === true, max: data.max === true, live: data.live === true } : OFF
 const CACHE_KEY = 'studymax:features'
 
 /** The last answer this device saw, so a relaunch doesn't flicker features in; off on first launch. */
 export function cachedFeatures(): Features {
   try {
-    const parsed = JSON.parse(localStorage.getItem(CACHE_KEY) ?? 'null')
-    return parsed ? { ai: parsed.ai === true, call: parsed.call === true, max: parsed.max === true } : OFF
+    return parse(JSON.parse(localStorage.getItem(CACHE_KEY) ?? 'null'))
   } catch {
     return OFF
   }
@@ -32,8 +36,7 @@ export function cachedFeatures(): Features {
 export async function fetchFeatures(): Promise<Features | null> {
   try {
     const res = await fetch(api('/api/features'), { cache: 'no-store' })
-    const data = res.ok ? await res.json().catch(() => OFF) : OFF
-    const features: Features = { ai: data.ai === true, call: data.call === true, max: data.max === true }
+    const features = parse(res.ok ? await res.json().catch(() => null) : null)
     try {
       localStorage.setItem(CACHE_KEY, JSON.stringify(features))
     } catch {
