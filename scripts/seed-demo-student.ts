@@ -120,6 +120,14 @@ const plan = await prisma.generatedPlan.upsert({
   create: { userId: user.userId, ...planFields },
 })
 
+// Guests share this student, so it never keeps a phone number or consent: a guest's number lives in
+// their app session and comes with each call (api/max/call.ts). Clears any left from before that.
+await prisma.maxSettings.updateMany({
+  where: { userId: user.userId },
+  // hasMetMax too: each demo starts with Max's first-call introduction, not "welcome back".
+  data: { phoneE164: null, phoneVerifiedAt: null, callConsentGranted: false, callConsentAt: null, hasMetMax: false },
+})
+
 // Back to v1: versions a test call committed would otherwise collide with the next commit's number,
 // and their scenarios point at a baseline that no longer exists.
 await prisma.planVersion.deleteMany({ where: { planId: plan.planId, versionNumber: { gt: 1 } } })

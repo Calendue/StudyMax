@@ -649,6 +649,29 @@ export function buildStudentPlan(
   return buildStudentPlanResult(targets, allSpecializations, completed, inProgress, coursesPerTerm, start, options).terms
 }
 
+/**
+ * Whether a course runs in a season, from the same Catalog the planner schedules with (Banner, then
+ * the catalogue). A course neither source dates runs in Fall or Winter, never silently anywhere (the
+ * planner flags it "offering unconfirmed"). Max's live replanning checks moves with this.
+ */
+export function courseRunsIn(code: string, season: Season, springSummer = false, offerings?: Record<string, Season[]>, catalog: Catalog = defaultCatalog()): boolean {
+  if (season === 'Spring/Summer' && !springSummer) return false
+  // No 300- or 400-level CMPT course ran in a Spring/Summer term in 2025-27 (USask's class search).
+  if (isElective(code)) return season !== 'Spring/Summer' || !/410 or higher|senior cmpt/i.test(electiveLabel(code))
+  const listed = offerings?.[code]
+  const seasons = listed && listed.length > 0 ? listed : (catalog[code]?.seasons ?? [])
+  if (seasons.length === 0) return season !== 'Spring/Summer'
+  return seasons.includes(season)
+}
+
+/** Whether a course's prerequisite groups are met: `before` passed earlier (or credit that stands in), `alongside` this same term. */
+export function prerequisitesMet(code: string, before: ReadonlySet<string>, alongside: ReadonlySet<string>, catalog: Catalog = defaultCatalog()): boolean {
+  const c = catalog[code]
+  if (!c) return true
+  const credited = (o: string) => before.has(o) || (catalog[o]?.antirequisites ?? []).some((a) => before.has(a))
+  return c.requires.every((g) => g.some(credited)) && c.concurrent.every((g) => g.some((o) => credited(o) || alongside.has(o)))
+}
+
 /** `count` consecutive terms from `start`, for a start-term picker. */
 export function termsFrom(start: TermStart, count: number): TermStart[] {
   const terms = [start]

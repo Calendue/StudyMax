@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
 import { electiveLabel, isElective } from '../lib/plan.ts'
+import { useElectivePicks } from '../lib/electivePicks.ts'
 import { createPortal } from 'react-dom'
 import { useReducedMotion } from 'motion/react'
 import { useModel } from '../model.ts'
@@ -666,9 +667,12 @@ function NodeCard({
   selected: boolean
   onSelect: () => void
 }) {
+  const m = useModel()
+  const pick = useElectivePicks()[node.code]
   const status = node.status
   const classes = ['tree-node', `tree-node--${status}`]
-  if (node.elective) classes.push('tree-node--elective')
+  if (node.elective && !pick) classes.push('tree-node--elective')
+  if (pick) classes.push('tree-node--picked')
   if (selected) classes.push('is-selected')
   if (on === false) classes.push('is-dim')
   if (on === true) classes.push('is-on')
@@ -677,8 +681,8 @@ function NodeCard({
   const where = node.termKnown ? node.term : `${node.term}, placed by course level`
   const registered = status === 'inProgress' && !node.current
   const label = [
-    courseCode(node.code),
-    title,
+    pick ? `${courseCode(pick)}, your pick for ${electiveLabel(node.code)}` : courseCode(node.code),
+    pick ? m.courseTitle(pick) : title,
     node.termKnown ? node.term : `Year ${node.year}, ${laneSeason(node.lane)} side, placed by course level`,
     registered ? 'registered' : status === 'inProgress' ? 'in progress' : status === 'next' ? 'best next course' : status,
     isElective(node.code) ? 'your choice of course' : node.elective ? `elective, ${node.elective.need} of ${node.elective.of} choices` : '',
@@ -697,7 +701,9 @@ function NodeCard({
           : 'Needs its prerequisites first'
       : registered
         ? `Registered · ${node.term.replace(' ', '\u00a0')}`
-        : isElective(node.code)
+        : pick
+          ? m.courseTitle(pick)
+          : isElective(node.code)
           ? 'Your choice'
           : node.elective
             ? `Elective · ${node.elective.need} of ${node.elective.of}`
@@ -717,14 +723,16 @@ function NodeCard({
           '--i': index % 12,
         } as CSSProperties
       }
-      title={`${courseCode(node.code)}${title ? ` · ${title}` : ''} · ${where}`}
+      title={`${courseCode(pick ?? node.code)}${pick ? ` · ${m.courseTitle(pick)}` : title ? ` · ${title}` : ''} · ${where}`}
       aria-label={label}
       aria-pressed={selected}
       onClick={onSelect}
     >
       <span className="tree-node__head">
         {/* An unnamed slot's name is its label ("Breadth: Humanities or Social Science"): it wraps. */}
-        {isElective(node.code) ? (
+        {pick ? (
+          <span className="tree-node__code">{courseCode(pick)}</span>
+        ) : isElective(node.code) ? (
           <span className="tree-node__code tree-node__code--slot">{electiveLabel(node.code)}</span>
         ) : (
           <span className="tree-node__code">{courseCode(node.code)}</span>
@@ -743,7 +751,7 @@ function NodeCard({
           </svg>
         )}
       </span>
-      {sub && <span className={`tree-node__sub${status === 'locked' || node.elective ? ' tree-node__sub--one' : ''}`}>{sub}</span>}
+      {sub && <span className={`tree-node__sub${status === 'locked' || (node.elective && !pick) ? ' tree-node__sub--one' : ''}`}>{sub}</span>}
       {!filled && node.creds.length > 0 && (
         <span className="tree-node__dots" aria-hidden>
           {node.creds.map((c) => (

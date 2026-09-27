@@ -5,6 +5,7 @@
 import type { Prisma } from '@prisma/client'
 import { db, hasDatabase } from '../_db.js'
 import { publish } from './_live.js'
+import { isSharedGuest } from './_demoUser.js'
 
 interface VercelRequest {
   method?: string
@@ -109,7 +110,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Flip hasMetMax after a call they actually picked up — drives the returning-caller greeting.
     // ConversationSummary generation is deferred (docs/BayMax/implementation/07): a single demo call
     // doesn't need cross-call memory yet.
-    if (!isVoicemail && answered) {
+    // Never on the demo student every guest shares: the next guest would be greeted as a returning caller.
+    if (!isVoicemail && answered && !(await isSharedGuest(row.userId))) {
       await db()
         .maxSettings.update({ where: { userId: row.userId }, data: { hasMetMax: true } })
         .catch(() => {})

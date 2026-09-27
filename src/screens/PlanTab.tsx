@@ -244,7 +244,7 @@ export function PlanCopy() {
     <>
       <div className="hero-action">
         <Button block icon={m.planCopied ? 'check' : 'copy'} onClick={() => void m.copyPlan()}>
-          {m.planCopied ? 'Copied' : 'Copy plan for my advisor'}
+          {m.planCopied ? 'Copied' : 'Copy plan'}
         </Button>
         <Button block variant="secondary" icon="share" onClick={() => m.openSheet('share')}>
           Share my plan as an image

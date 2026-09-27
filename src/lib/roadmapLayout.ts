@@ -21,6 +21,8 @@ export interface RoadmapRow {
   key: string
   label: string
   codes: string[]
+  /** The internship year's row: no courses, one card saying why the plan skips a year. */
+  internship?: boolean
 }
 
 export interface RoadmapEdge {
@@ -39,11 +41,19 @@ export interface RoadmapLayout {
  * spread across the row in the order the plan already computed. Pure and React-free — `buildPlan`
  * already did the hard part (topological order, term batching); this only assigns positions.
  */
-export function buildRoadmapLayout(terms: PlannedTerm[]): RoadmapLayout {
+export function buildRoadmapLayout(terms: PlannedTerm[], away: number | null = null): RoadmapLayout {
   const rows: RoadmapRow[] = []
   const nodes: RoadmapNodeLayout[] = []
 
-  terms.forEach((term, row) => {
+  // The internship year gets its own row where the plan jumps over it, so the gap reads as a choice.
+  const before = away === null ? -1 : terms.findIndex((t) => (academicYear(t.label) ?? -Infinity) > away)
+  const spansIt = away !== null && before > 0 && (academicYear(terms[before - 1].label) ?? Infinity) < away
+
+  terms.forEach((term, i) => {
+    if (spansIt && i === before) {
+      rows.push({ key: 'internship', label: `Internship · ${away}–${String(away + 1).slice(2)}`, codes: [], internship: true })
+    }
+    const row = rows.length
     rows.push({ key: term.label, label: term.label, codes: term.courses.map((c) => c.code) })
     term.courses.forEach((c, col) => {
       nodes.push({
@@ -83,6 +93,14 @@ export function buildRoadmapLayout(terms: PlannedTerm[]): RoadmapLayout {
   }
 
   return { rows, nodes, edges }
+}
+
+/** The academic year a term label ("Winter 2028") falls in, by its Fall's calendar year. */
+function academicYear(label: string): number | null {
+  const match = /^(Fall|Winter|Spring\/Summer) (\d{4})$/.exec(label)
+  if (!match) return null
+  const year = Number(match[2])
+  return match[1] === 'Fall' ? year : year - 1
 }
 
 /**

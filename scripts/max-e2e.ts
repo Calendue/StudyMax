@@ -98,7 +98,12 @@ assert.equal(s.body.scenario.status, 'committed')
 assert.ok(!s.body.baseline.inputs.inProgress.includes('CMPT340'), 'call inputs advanced past the saved drop')
 assert.equal(s.body.baseline.inputs.coursesPerTerm, 4)
 const prof = await db().studentProfile.findFirst({ where: { user: { authUid: 'baymax-demo-student' } } })
-assert.equal(prof.maxCoursesPerTerm, 4, 'a saved pace is the student preference now')
+assert.equal(prof.maxCoursesPerTerm, 5, "a guest's saved pace never becomes the shared demo student's (the next guest's) preference")
+// A guest asking to be called something else: this call only, never the shared account's name.
+const named = await tool('update_name', { name: 'Jordan' })
+assert.equal(named.ok, true); assert.equal(named.name, 'Jordan')
+const demoUser = await db().userInfo.findUnique({ where: { authUid: 'baymax-demo-student' } })
+assert.equal(demoUser.firstName, 'Demo', "a guest's name is never saved where the next guest would be greeted by it")
 // 7. Specialization switch: voice save refused, app Keep works
 const specs = await tool('get_plan_options', { about: 'specialization' })
 console.log('spec options:', specs.options.map((o: any) => `${o.label}→${o.graduation}(${o.vsNow})`).join(' | '), '| rec', specs.recommended?.label ?? 'none')
@@ -124,6 +129,15 @@ assert.equal(y.r.code, 200)
 const ov2 = await tool('get_student_overview', {})
 assert.equal(ov2.savedThisCall, 2)
 console.log('overview after: grad', ov2.roadmap.projectedGraduation, '| specs', ov2.program.specializations, '| savedThisCall', ov2.savedThisCall)
+// 7b. "Undo" in a guest call reaches only this guest's own plans: a version from before this call is
+// someone else's, so going back past this call returns the plan they started it with.
+const undo = await tool('run_scenario', { ops: [{ op: 'RESTORE_VERSION', versionNumber: 1 }] })
+s = await snapshot()
+console.log('guest undo to v1:', undo.headline, '| targets', s.body.scenario.frames.at(-1).inputs.targetIds, '| pace', s.body.scenario.frames.at(-1).inputs.coursesPerTerm)
+assert.deepEqual(s.body.scenario.frames.at(-1).inputs.targetIds, ['software-development'], 'back to the specialization this guest started with')
+assert.equal(s.body.scenario.frames.at(-1).inputs.coursesPerTerm, 5, 'and their starting pace')
+assert.ok(s.body.scenario.frames.at(-1).inputs.inProgress.includes('CMPT340'), 'and the course they dropped this call')
+await tool('discard_scenario', { scenarioId: undo.scenarioId })
 // 8. Bad token
 y = res(); await liveHandler({ method: 'GET', query: { token: 'nope-nope-nope-nope-nope' } }, y.o); assert.equal(y.r.code, 404)
 // 9. End of call

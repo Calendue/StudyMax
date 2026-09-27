@@ -31,6 +31,8 @@ export interface CallPlanInputs {
   /** Server-kept after a save in the call: what they're enrolled in, and what the saved plan dropped. */
   enrolled?: string[]
   droppedCourses?: string[]
+  /** Server-kept: the inputs the call started with, so a guest's "undo" returns to their own plan. */
+  original?: Omit<CallPlanInputs, 'original'>
 }
 
 /** A call's inputs as a scenario changes them: what the tree needs to redraw a frame. */
