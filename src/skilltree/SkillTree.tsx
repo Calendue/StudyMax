@@ -641,7 +641,7 @@ function NodeCard({
         ? `Needs ${courseCode(needs)} first`
         : 'Needs its prerequisites first'
       : registered
-        ? `Registered · ${node.term}`
+        ? `Registered · ${node.term.replace(' ', '\u00a0')}`
         : isElective(node.code)
           ? 'Your choice'
           : node.elective
@@ -688,7 +688,7 @@ function NodeCard({
           </svg>
         )}
       </span>
-      {sub && <span className={`tree-node__sub${status === 'locked' || node.elective || registered ? ' tree-node__sub--one' : ''}`}>{sub}</span>}
+      {sub && <span className={`tree-node__sub${status === 'locked' || node.elective ? ' tree-node__sub--one' : ''}`}>{sub}</span>}
       {!filled && node.creds.length > 0 && (
         <span className="tree-node__dots" aria-hidden>
           {node.creds.map((c) => (
