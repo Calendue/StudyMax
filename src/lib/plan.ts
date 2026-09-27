@@ -6,7 +6,12 @@ import { offerings as scrapedOfferings } from '../data/offerings.js'
 import { computeCourseOverlap, computeMatches, type SpecializationMatch } from './match.js'
 import { cuOf, degreeTarget, FREE_ELECTIVE, levelOf, planDegree, SENIOR_ELECTIVE, type DegreeSlot } from './planDegree.js'
 import type { CourseOverride } from './overrides.js'
-import type { Catalog, Diagnostic, BindingKind } from './planner/types.js'
+import type { Catalog, Diagnostic, BindingKind, CoreResult } from './planner/types.js'
+import { clampLoad, clampSummer } from './planner/loads.js'
+import { defaultCatalog } from './catalog.js'
+import { buildModel, spaced, type ModelCourse } from './planner/model.js'
+import { scheduleCore } from './planner/schedule.js'
+import { applyOverrides } from './overrides.js'
 export { FW_LOADS, SUMMER_LOADS, MAX_FW_LOAD, MAX_SUMMER_LOAD, clampLoad, clampSummer, summerLoadOf } from './planner/loads.js'
 
 // Sources for the load rules below: "Normally students register in a maximum of 30 credit units
@@ -202,7 +207,7 @@ export function optionRanker(
         unmetPrerequisites(a, likely).length - unmetPrerequisites(b, likely).length ||
         levelOf(a) - levelOf(b) ||
         position.get(a)! - position.get(b)! ||
-        a.localeCompare(b),
+        (a < b ? -1 : a > b ? 1 : 0),
     )
   }
 }
@@ -355,49 +360,37 @@ function termFromLabel(label: string): TermStart | null {
   return match ? { season: match[1] as Season, year: Number(match[2]) } : null
 }
 
-/** The catalogue's `offered` as seasons (a full-year course starts in Fall). */
-const CATALOGUE_SEASONS: Record<string, Season[]> = {
-  fall: ['Fall'],
-  winter: ['Winter'],
-  either: ['Fall', 'Winter'],
-  'full-year': ['Fall'],
-  'spring-summer': ['Spring/Summer'],
+/** What one plan run produced, before it's shaped for the UI. */
+interface PlanRun {
+  terms: PlannedTerm[]
+  graduation: string | null
+  optimality: 'proven' | 'best-found'
+  binding: string
+  bindingKind: BindingKind
+  diagnostics: Diagnostic[]
 }
-
-/** A course in the plan, with what the scheduler needs to know about it. */
-interface Item {
-  course: PlannedCourse
-  named: boolean
-  cu: number
-  level: number
-  seniorCmpt: boolean
-  /** Advising year, pulled ahead of what depends on it. */
-  due: number
-  /** Longest chain of planned courses waiting on this one. */
-  chain: number
-  order: number
-}
-
-// Past this many terms with nothing placeable, the scheduler stops honouring, in turn, the term
-// offerings, then the level and credit gates, then the prerequisites: a course the catalogue can't
-// sequence is still shown, in a capped term, never dropped.
-const RELAX_AFTER = [6, 8, 10]
-const MAX_TERMS = 80
 
 /**
  * Spreads the courses across terms, `coursesPerTerm` at a time (`summerPerTerm` in a Spring/Summer
- * term), under the college's 15-credit-unit ceiling and at most three senior CMPT courses a term.
- * A course goes in a term that runs it, after its prerequisites (a corequisite may share the term),
- * once its credit-unit prerequisites are met, and at the 300 level only after 30 credit units (400:
- * 60). Within a term, what's overdue for its advising year goes first, then the longest prerequisite
- * chain, so a plan reads like the department's template and never leaves a seat empty that
- * something could fill.
+ * term), under the college's 15-credit-unit ceiling and at most three senior CMPT courses a term:
+ * the earliest graduation the hard rules allow (src/lib/planner/schedule.ts), found exactly.
  *
  * `booked` holds courses the student is already taking, by term label ("Winter 2027"). They take up
  * room in their term, so the plan only adds what's left of the term's limits there, and they only
  * count as passed once their term is over.
  */
 export function buildPlan(
+  target: SpecializationMatch | SpecializationMatch[],
+  allSpecializations: Specialization[],
+  completed: Set<string>,
+  coursesPerTerm: number,
+  start: TermStart,
+  options: PlanOptions & { includePrerequisites?: boolean; blocked?: Record<string, readonly string[]> } = {},
+): PlannedTerm[] {
+  return runPlan(target, allSpecializations, completed, coursesPerTerm, start, options).terms
+}
+
+function runPlan(
   target: SpecializationMatch | SpecializationMatch[],
   allSpecializations: Specialization[],
   completed: Set<string>,
@@ -413,10 +406,13 @@ export function buildPlan(
     maxCu = DEFAULT_MAX_CU,
     maxSeniorCmpt = DEFAULT_MAX_SENIOR_CMPT,
     away = null,
-  }: PlanOptions & { includePrerequisites?: boolean } = {},
-): PlannedTerm[] {
-  const perTerm = Math.max(1, Math.floor(coursesPerTerm))
-  const perSummer = Math.max(1, Math.floor(summerPerTerm))
+    catalog = defaultCatalog(),
+    nodeBudget,
+    blocked = {},
+  }: PlanOptions & { includePrerequisites?: boolean; blocked?: Record<string, readonly string[]> } = {},
+): PlanRun {
+  const perTerm = clampLoad(coursesPerTerm)
+  const perSummer = springSummer ? clampSummer(summerPerTerm ?? DEFAULT_SUMMER_COURSES) : 0
   const targets = Array.isArray(target) ? target : [target]
   const program = degree ? planDegree(degree) : null
   const honours = program?.honours ?? false
@@ -433,286 +429,169 @@ export function buildPlan(
     ? program.slots(new Set([...completed, ...named.map((c) => c.code)]))
     : picked.filter((c) => isElective(c.code)).map((c) => ({ label: electiveLabel(c.code), level: 1, seniorCmpt: false, free: false }))
 
-  const bookedTerms = Object.entries(booked).flatMap(([label, codes]) => {
-    const t = termFromLabel(label)
-    return t ? [{ order: termOrder(t), codes, done: false }] : []
-  })
   // A booked course isn't passed until its term ends, whatever `completed` assumes.
-  const bookedCodes = new Set(bookedTerms.flatMap((b) => b.codes))
+  const bookedCodes = new Set(Object.values(booked).flat())
   const passed = new Set([...completed].filter((code) => !bookedCodes.has(code)))
-  // Credit units toward the level gates and the plan year. Without a degree the plan holds only a
-  // target's courses, so each Fall/Winter term is assumed full of the student's other courses.
-  let gateCu = [...passed].reduce((n, c) => n + cuOf(c), 0)
-  const planYear = () => Math.floor(gateCu / 30) + 1
+  let gateCu = 0
+  for (const c of passed) gateCu += cuOf(c)
 
-  // --- the items: named courses, then the degree's slots, then free electives ---
+  // Advising year: a prerequisite is due a year before what needs it (a corequisite, the same year).
   const dependants = new Map<string, { code: string; concurrent: boolean }[]>()
   for (const c of named) {
     for (const g of prerequisiteGroups(c.code)) {
-      if (g.options.some((o) => passed.has(o) && !bookedCodes.has(o))) continue
+      if (g.options.some((o) => passed.has(o))) continue
       for (const o of g.options) {
-        if (!namedCodes.has(o) && !bookedCodes.has(o)) continue
+        if (!namedCodes.has(o)) continue
         dependants.set(o, [...(dependants.get(o) ?? []), { code: c.code, concurrent: g.concurrent }])
       }
     }
   }
   const tagYear = (code: string) => program?.yearOf(code) ?? Math.min(4, Math.max(1, levelOf(code)))
-  const chainMemo = new Map<string, number>()
-  const chain = (code: string, depth = 0): number => {
-    if (chainMemo.has(code)) return chainMemo.get(code)!
-    if (depth > 40) return 0
-    const next = (dependants.get(code) ?? []).filter((d) => namedCodes.has(d.code))
-    const n = next.length === 0 ? 0 : 1 + Math.max(...next.map((d) => chain(d.code, depth + 1)))
-    chainMemo.set(code, n)
-    return n
-  }
-  // A prerequisite is due a year before what needs it (a corequisite, the same year), so the chain
-  // to STAT 242 in Year 2 starts with MATH 116 in Year 1.
   const dueMemo = new Map<string, number>()
   const due = (code: string, depth = 0): number => {
     if (dueMemo.has(code)) return dueMemo.get(code)!
     let year = tagYear(code)
     if (depth <= 40) {
-      for (const d of dependants.get(code) ?? []) {
-        if (namedCodes.has(d.code)) year = Math.min(year, due(d.code, depth + 1) - (d.concurrent ? 0 : 1))
-      }
+      for (const d of dependants.get(code) ?? []) year = Math.min(year, due(d.code, depth + 1) - (d.concurrent ? 0 : 1))
     }
     year = Math.max(1, year)
     dueMemo.set(code, year)
     return year
   }
 
-  const items: Item[] = named.map((course, i) => ({
-    course: {
-      ...course,
-      cu: cuOf(course.code),
-      year: program?.yearOf(course.code) ?? due(course.code),
-      ...(course.group ? {} : program?.groupOf(course.code) ? { group: program.groupOf(course.code) } : {}),
-    },
+  const courses: PlannedCourse[] = named.map((course) => ({
+    ...course,
+    cu: cuOf(course.code),
+    year: program?.yearOf(course.code) ?? due(course.code),
+    ...(course.group ? {} : program?.groupOf(course.code) ? { group: program.groupOf(course.code) } : {}),
+  }))
+  const model: ModelCourse[] = named.map((course, i) => ({
+    id: course.code,
     named: true,
     cu: cuOf(course.code),
     level: levelOf(course.code),
     seniorCmpt: subjectOf(course.code) === 'CMPT' && levelOf(course.code) >= 3,
-    due: due(course.code),
-    chain: chain(course.code),
-    order: i,
+    year: courses[i].year ?? due(course.code),
+    group: i,
+    loose: false,
   }))
 
   // Free electives are due round-robin from Year 2 (Year 1 is the advising sheet's) to the year
-  // before the last, and take turns with the degree's own open slots, so they aren't left to fill
-  // whatever the last year has room for.
-  const plannedCu = items.reduce((n, i) => n + i.cu, 0) + slots.length * 3
-  const firstYear = planYear()
+  // before the last, and take turns with the degree's own open slots.
+  const plannedCu = model.reduce((n, i) => n + i.cu, 0) + slots.length * 3
+  const firstYear = Math.floor(gateCu / 30) + 1
   const lastYear = Math.max(firstYear, Math.floor((gateCu + plannedCu - 1) / 30) + 1)
   const freeYears: number[] = []
   const fromYear = Math.max(firstYear, Math.min(2, lastYear))
   for (let y = fromYear; y <= Math.max(fromYear, lastYear - 1); y++) freeYears.push(y)
   let freeIndex = 0
   let slotIndex = 0
+  const isLoose = (label: string) => [FREE_ELECTIVE, SENIOR_ELECTIVE].includes(label) || /^breadth/i.test(label)
   slots.forEach((slot, i) => {
     const year = slot.free ? freeYears[freeIndex % freeYears.length] : (slot.year ?? firstYear)
     const turn = slot.free ? 2 * freeIndex++ + 1 : 2 * slotIndex++
-    items.push({
-      course: elective(i, slot.label, year),
+    const course = elective(i, slot.label, year)
+    courses.push(course)
+    model.push({
+      id: course.code,
       named: false,
       cu: 3,
       level: slot.level,
       seniorCmpt: slot.seniorCmpt,
-      due: year,
-      chain: 0,
-      order: named.length + turn,
+      year,
+      group: named.length + turn,
+      loose: isLoose(slot.label),
+      // No 300- or 400-level CMPT course ran in a Spring/Summer term in 2025-27 (USask's class search).
+      summerOk: !/410 or higher|senior cmpt/i.test(slot.label),
     })
   })
 
-  // --- whether a course may go in a term ---
-  const runsIn = (code: string, season: Season) => {
-    // No 300- or 400-level CMPT course ran in a Spring/Summer term in 2025-27 (USask's class search).
-    if (isElective(code)) return season !== 'Spring/Summer' || !/410 or higher|senior cmpt/i.test(electiveLabel(code))
-    const usable = (seasons: Season[]) => seasons.filter((s) => springSummer || s !== 'Spring/Summer')
-    const banner = usable(offerings[code] ?? [])
-    if (banner.length > 0) return banner.includes(season)
-    const catalogue = usable(CATALOGUE_SEASONS[courseInfo[code]?.offered ?? ''] ?? [])
-    // Neither source says: anywhere rather than never.
-    return catalogue.length === 0 || catalogue.includes(season)
-  }
-  const creditsMet = (code: string) =>
-    [...(creditPrereqs[code] ?? []), ...(courseInfo[code]?.creditRequires ?? [])].every((rule) => {
-      if (rule.standing === 'honours' && !honours) return false
-      let cu = 0
-      for (const c of passed) {
-        if (rule.subjects && !rule.subjects.includes(subjectOf(c))) continue
-        if (rule.level && levelOf(c) * 100 !== rule.level) continue
-        cu += cuOf(c)
-      }
-      return cu >= rule.cu
+  const built = buildModel({
+    courses: model,
+    catalog,
+    start,
+    load: perTerm,
+    summer: perSummer,
+    away,
+    passed,
+    credited: (code) => barred(code, passed),
+    booked,
+    blocked,
+    honours,
+    maxCu,
+    maxSeniorCmpt,
+    ignoreMissing: !includePrerequisites,
+    namedCreditOnly: true,
+    ...(degree ? {} : { assumedCuPerTerm: 3 * perTerm }),
+    ...(nodeBudget !== undefined ? { nodeBudget } : {}),
+    cuOf,
+    levelOf,
+  })
+  const result = scheduleCore(built.core)
+  const byCode = new Map(courses.map((c) => [c.code, c]))
+  const diagnostics = [...built.diagnostics]
+  const placed = new Map<number, PlannedCourse[]>()
+  if (result.at) {
+    built.core.items.forEach((item, i) => {
+      const t = result.at![i]
+      placed.set(t, [...(placed.get(t) ?? []), byCode.get(item.id)!])
     })
-
-  // Slack: the latest Fall/Winter term each named course can go in without the plan running past
-  // the terms its courses fill, worked back from what needs it and the seasons each runs in. A
-  // course with none left goes first: AI's MATH 116 → STAT 241 → STAT 242 → CMPT 317 → CMPT 423 →
-  // CMPT 489 runs in one term each, so MATH 116 can't wait for Year 2 the way the sheet's Year-1
-  // writing, Indigenous learning and science can't wait for Year 3.
-  const fwIndex = (t: TermStart) => t.year * 2 + (t.season === 'Fall' ? 1 : 0)
-  const base = fwIndex(start.season === 'Spring/Summer' ? { season: 'Fall', year: start.year } : start)
-  const seasonAt = (i: number): Season => ((base + i) % 2 === 1 ? 'Fall' : 'Winter')
-  const bookedAhead = bookedTerms.filter((b) => b.order >= termOrder(start)).reduce((n, b) => n + b.codes.length, 0)
-  const horizon = Math.max(1, Math.ceil((items.length + bookedAhead) / perTerm))
-  const latestMemo = new Map<string, number>()
-  const latest = (code: string, depth = 0): number => {
-    if (latestMemo.has(code)) return latestMemo.get(code)!
-    let bound = horizon - 1
-    if (depth <= 40) {
-      for (const d of dependants.get(code) ?? []) {
-        if (namedCodes.has(d.code)) bound = Math.min(bound, latest(d.code, depth + 1) - (d.concurrent ? 0 : 1))
-      }
-    }
-    while (bound >= 0 && !runsIn(code, seasonAt(bound))) bound--
-    latestMemo.set(code, bound)
-    return bound
+  } else if (built.core.items.length > 0) {
+    for (const item of built.core.items) diagnostics.push({ level: 'error', code: 'HORIZON', course: item.id, message: `${isElective(item.id) ? electiveLabel(item.id) : spaced(item.id)} can't be scheduled within ${built.labels.length} terms.` })
   }
-  const critical = (item: Item, at: number) => item.named && latest(item.course.code) <= at
-  const isLooseSlot = (item: Item) =>
-    !item.named && ([FREE_ELECTIVE, SENIOR_ELECTIVE].includes(electiveLabel(item.course.code)) || /^breadth/i.test(electiveLabel(item.course.code)))
+  const terms: PlannedTerm[] = [...placed.keys()].sort((a, b) => a - b).map((t) => ({ label: built.labels[t], courses: placed.get(t)! }))
 
-  const terms: PlannedTerm[] = []
-  let pending = [...items]
-  let term = start
-  let idle = 0
+  // Graduation: the last term holding a planned or booked course.
+  const bookedLast = Object.entries(booked).filter(([, v]) => v.length > 0).map(([l]) => termFromLabel(l)).filter((t): t is TermStart => t !== null).sort((a, b) => termOrder(a) - termOrder(b)).at(-1)
+  const plannedLast = terms.at(-1) ? termFromLabel(terms.at(-1)!.label) : null
+  const last = [bookedLast, plannedLast].filter((t): t is TermStart => Boolean(t)).sort((a, b) => termOrder(a) - termOrder(b)).at(-1)
+  const graduation = last ? `${last.season} ${last.year}` : null
 
-  for (let guard = 0; pending.length > 0 && guard < MAX_TERMS; guard++) {
-    // Courses booked in earlier terms (including ones this plan skips) are finished by now.
-    for (const b of bookedTerms) {
-      if (b.done || b.order >= termOrder(term)) continue
-      b.done = true
-      for (const code of b.codes) {
-        if (passed.has(code)) continue
-        passed.add(code)
-        gateCu += cuOf(code)
+  // An unused seat before the last term, and why.
+  if (result.at && terms.length > 0) {
+    const G = result.graduation
+    for (let t = 0; t < G; t++) {
+      const term = built.core.terms[t]
+      const used = placed.get(t)?.length ?? 0
+      if (term.cap > used && term.season !== 'Spring/Summer') {
+        diagnostics.push({ level: 'info', code: 'EMPTY_SEAT', term: term.label, message: `${term.label} has ${term.cap - used} open seat${term.cap - used > 1 ? 's' : ''}: nothing left can be taken yet then.` })
       }
     }
-    if (away !== null && academicYearOf(term) === away) {
-      // On the internship: what this year would have held moves on to the terms after it. Not idle
-      // time, so the load rules don't start relaxing.
-      term = nextTerm(term, springSummer)
-      continue
-    }
-    const label = `${term.season} ${term.year}`
-    const summer = term.season === 'Spring/Summer'
-    const here = booked[label] ?? []
-    const hereCu = here.reduce((n, c) => n + cuOf(c), 0)
-    const limit = (summer ? perSummer : perTerm) - here.length
-    const cuCap = (summer ? 3 * perSummer : maxCu) - hereCu
-    const seniorCap = maxSeniorCmpt - here.filter((c) => subjectOf(c) === 'CMPT' && levelOf(c) >= 3).length
-    const relax = RELAX_AFTER.filter((n) => idle >= n).length
-    const year = planYear()
-
-    const chosen: Item[] = []
-    let termCu = 0
-    let senior = 0
-    const fits = (item: Item, seniorLimit: number) => {
-      if (chosen.includes(item)) return false
-      // One course bigger than the ceiling still goes in a term of its own.
-      if (termCu + item.cu > cuCap && (chosen.length > 0 || here.length > 0)) return false
-      if (item.seniorCmpt && senior >= seniorLimit && relax < 3) return false
-      if (!item.named) {
-        if (relax >= 2) return true
-        if (!runsIn(item.course.code, term.season)) return false
-        // An unnamed senior CMPT slot waits for the plan's 200-level CMPT courses, which every
-        // 300-level CMPT course needs.
-        if (item.seniorCmpt && pending.some((p) => p.named && p.level === 2 && subjectOf(p.course.code) === 'CMPT')) return false
-        return item.level < 3 || gateCu >= (item.level >= 4 ? 60 : 30)
-      }
-      const code = item.course.code
-      if (relax < 1 && !runsIn(code, term.season)) return false
-      if (relax < 2) {
-        if (item.level === 3 && gateCu < 30) return false
-        if (item.level >= 4 && gateCu < 60) return false
-        if (!creditsMet(code)) return false
-      }
-      if (relax < 3) {
-        const alongside = new Set([...passed, ...chosen.map((c) => c.course.code)])
-        for (const g of prerequisiteGroups(code)) {
-          if (!g.options.some((o) => credited(passed, o) || (g.concurrent && alongside.has(o)))) return false
-        }
-      }
-      return true
-    }
-    if (limit > 0) {
-      const at = fwIndex(term) - base
-      const ordered = [...pending].sort(
-        (a, b) =>
-          Number(critical(b, at)) - Number(critical(a, at)) ||
-          Number(a.due > year) - Number(b.due > year) ||
-          // The advising sheet's own year before chain length: Year 1's writing, Indigenous learning and
-          // science keep their seats ahead of a Year-2 chain's prerequisite (MATH 116 for STAT 242).
-          (a.course.year ?? a.due) - (b.course.year ?? b.due) ||
-          // A Year-2 requirement's slot (the third science, business) before a free elective of the same
-          // year; breadth takes turns with free electives (the sheet's Year 2 is 'business, breadth or science').
-          Number(isLooseSlot(a)) - Number(isLooseSlot(b)) ||
-          b.chain - a.chain ||
-          a.due - b.due ||
-          Number(!a.named) - Number(!b.named) ||
-          (a.named && b.named ? a.level - b.level : 0) ||
-          a.order - b.order,
-      )
-      // A course that runs in only one of Fall and Winter loses a whole year if it waits.
-      const scarce = (i: Item) => {
-        if (!i.named) return false
-        const seasons = (['Fall', 'Winter'] as Season[]).filter((season) => runsIn(i.course.code, season))
-        return seasons.length === 1
-      }
-      // Senior CMPT courses are paced over what's left of the plan: at most three a term, their share
-      // placed first (they can't catch up later, three a term being the most), then everything else.
-      const seniorLeft = pending.filter((i) => i.seniorCmpt).length
-      const termsLeft = Math.max(1, Math.ceil(pending.length / perTerm))
-      const share = Math.min(seniorCap, Math.max(1, Math.ceil(seniorLeft / termsLeft)))
-      const passes: [Item[], number][] = [
-        [ordered.filter((i) => i.seniorCmpt), share],
-        [ordered.filter((i) => i.seniorCmpt && scarce(i)), seniorCap],
-        [ordered, share],
-        [ordered, seniorCap],
-      ]
-      for (const [candidates, seniorLimit] of passes) {
-        // Repeated passes: a corequisite placed this term can unlock a course earlier in the order.
-        for (let grew = true; grew && chosen.length < limit; ) {
-          grew = false
-          for (const item of candidates) {
-            if (chosen.length >= limit) break
-            if (!fits(item, seniorLimit)) continue
-            chosen.push(item)
-            termCu += item.cu
-            if (item.seniorCmpt) senior++
-            grew = true
-          }
-        }
-      }
-    }
-
-    if (!degree && !summer) gateCu += Math.max(0, 3 * perTerm - hereCu - chosen.reduce((n, i) => n + i.cu, 0))
-    if (chosen.length === 0) {
-      idle++
-      term = nextTerm(term, springSummer)
-      continue
-    }
-    idle = 0
-    terms.push({ label, courses: chosen.map((i) => i.course) })
-    for (const item of chosen) {
-      passed.add(item.course.code)
-      gateCu += item.cu
-    }
-    pending = pending.filter((i) => !chosen.includes(i))
-    term = nextTerm(term, springSummer)
   }
 
-  // Never an uncapped catch-all term: anything left (only after MAX_TERMS) goes on at the cap.
-  while (pending.length > 0) {
-    const cap = term.season === 'Spring/Summer' ? perSummer : perTerm
-    terms.push({ label: `${term.season} ${term.year}`, courses: pending.slice(0, cap).map((i) => i.course) })
-    pending = pending.slice(cap)
-    term = nextTerm(term, springSummer)
+  let bindingKind: BindingKind = result.binding.kind
+  let binding = ''
+  if (bookedLast && plannedLast && termOrder(bookedLast) > termOrder(plannedLast)) {
+    bindingKind = 'booked'
+    binding = `Graduation set by your registration in ${graduation}`
+  } else if (result.at && terms.length > 0) binding = bindingText(result.binding, perTerm, built.core.items.length)
+  return {
+    terms,
+    graduation,
+    optimality: result.optimality === 'proven' ? 'proven' : 'best-found',
+    binding,
+    bindingKind,
+    diagnostics,
   }
+}
 
-  return terms
+/** "Graduation set by MATH 116 → STAT 241 → …", "set by 4 Winter-only courses", "set by your load of 3 a term". */
+export function bindingText(b: CoreResult['binding'], load: number, count: number): string {
+  const name = (id: string) => (isElective(id) ? electiveLabel(id) : spaced(id))
+  switch (b.kind) {
+    case 'chain':
+      return b.chain && b.chain.length > 1 ? `Graduation set by ${b.chain.map(name).join(' → ')}` : `Graduation set by ${b.chain?.[0] ? name(b.chain[0]) : 'a prerequisite chain'}`
+    case 'gate':
+      return `Graduation set by the credit you need before ${b.chain?.[0] ? name(b.chain[0]) : 'senior courses'}`
+    case 'capacity':
+      return `Graduation set by your load of ${load} a term (${count} courses left)`
+    case 'season':
+      return `Graduation set by ${b.detail}`
+    case 'senior':
+      return `Graduation set by ${b.detail} at three a term`
+    default:
+      return ''
+  }
 }
 
 /**
@@ -732,14 +611,7 @@ export function buildStudentPlan(
   start: TermStart,
   options: PlanOptions = {},
 ): PlannedTerm[] {
-  const { degree } = options
-  const done = new Set([...completed, ...inProgress])
-  // With the degree mapped, the plan is the whole degree: the targets and the degree's own slots
-  // together, so every pick has to fit the degree too, and its open slots become unnamed electives.
-  const whole = degree ? degreeTarget(degree) : null
-  const open = computeMatches(whole ? [...targets, whole] : targets, done).filter((m) => m.remaining > 0)
-  if (!degree && open.length === 0) return []
-  return buildPlan(open, whole ? [...allSpecializations, whole] : allSpecializations, done, coursesPerTerm, start, options)
+  return buildStudentPlanResult(targets, allSpecializations, completed, inProgress, coursesPerTerm, start, options).terms
 }
 
 /** `count` consecutive terms from `start`, for a start-term picker. */
@@ -767,9 +639,19 @@ export function nextFall(today: Date): TermStart {
   return upcoming.season === 'Fall' ? upcoming : { season: 'Fall', year: upcoming.year }
 }
 
+/** The term before `t` (the one being sat when a student plans from `t`). */
+function previousTerm({ season, year }: TermStart): TermStart {
+  return season === 'Winter' ? { season: 'Fall', year: year - 1 } : season === 'Fall' ? { season: 'Winter', year } : { season: 'Winter', year }
+}
+
 /**
  * The plan with its explanation (graduation, optimality, binding constraint, diagnostics).
- * STUB (Stage A contract): the Engine track replaces this body; buildStudentPlan stays its adapter.
+ *
+ * Overrides (failed / withdrew / not-offered / later) are applied first (src/lib/overrides.ts);
+ * in-progress courses are assumed finished by `start` (or by the end of their own term, when
+ * `booked` says which): never planned again, and they unlock their dependants. Targets are
+ * re-matched against that, so a slot an in-progress course already fills drops out, and a target it
+ * finishes outright yields no terms.
  */
 export function buildStudentPlanResult(
   targets: Specialization[],
@@ -780,7 +662,28 @@ export function buildStudentPlanResult(
   start: TermStart,
   options: PlanOptions = {},
 ): PlanResult {
-  const terms = buildStudentPlan(targets, allSpecializations, completed, inProgress, coursesPerTerm, start, options)
-  const last = terms.filter((t) => t.courses.length > 0).at(-1)?.label ?? null
-  return { terms, graduation: last, optimality: 'best-found', binding: '', bindingKind: 'none', diagnostics: [] }
+  const catalog = options.catalog ?? defaultCatalog()
+  const current = options.currentTerm ?? previousTerm(start)
+  const applied = applyOverrides(
+    { completed, inProgress: [...inProgress], booked: options.booked ?? {} },
+    options.overrides ?? [],
+    catalog,
+    `${current.season} ${current.year}`,
+  )
+  const { degree } = options
+  const done = new Set([...applied.completed, ...applied.inProgress])
+  // With the degree mapped, the plan is the whole degree: the targets and the degree's own slots
+  // together, so every pick has to fit the degree too, and its open slots become unnamed electives.
+  const whole = degree ? degreeTarget(degree) : null
+  const open = computeMatches(whole ? [...targets, whole] : targets, done).filter((m) => m.remaining > 0)
+  if (!degree && open.length === 0) {
+    return { terms: [], graduation: null, optimality: 'proven', binding: '', bindingKind: 'none', diagnostics: [...applied.notes] }
+  }
+  const run = runPlan(open, whole ? [...allSpecializations, whole] : allSpecializations, done, coursesPerTerm, start, {
+    ...options,
+    catalog,
+    booked: applied.booked,
+    blocked: applied.blocked,
+  })
+  return { ...run, diagnostics: [...applied.notes, ...run.diagnostics] }
 }
