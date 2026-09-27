@@ -206,7 +206,7 @@ export function PingMaxScreen() {
           dryRun: REHEARSE,
           // A guest's number for this call: the server never uses one stored on the shared demo account.
           ...(settings?.isGuest
-            ? { phoneE164: readGuestCall()?.phoneE164, consent: readGuestCall()?.consent === true, name: readGuestCall()?.name }
+            ? { phoneE164: readGuestCall()?.phoneE164, consent: readGuestCall()?.consent === true, name: readGuestCall()?.name, deviceId: guestDeviceId() }
             : {}),
         }),
       })
@@ -414,3 +414,18 @@ export function PingMaxScreen() {
     </>
   )
 }
+
+/** This device's own id for Max, kept in storage: a guest's calls live on it, never on a phone number's account. */
+function guestDeviceId(): string | undefined {
+  try {
+    let id = localStorage.getItem('studymax.deviceId')
+    if (!id) {
+      id = crypto.randomUUID().replace(/-/g, '')
+      localStorage.setItem('studymax.deviceId', id)
+    }
+    return id
+  } catch {
+    return undefined
+  }
+}
+
