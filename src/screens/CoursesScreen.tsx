@@ -240,7 +240,7 @@ export function RevealBar({ count }: { count: number }) {
   return (
     <ActionBar note={count === 0 ? 'Add at least one course to see what it opens up.' : undefined}>
       <Button block disabled={count === 0} onClick={m.startReveal}>
-        {m.revealed ? 'Update my results' : 'Reveal what my school hides'}
+        {m.revealed ? 'Update my results' : 'Reveal my path'}
       </Button>
     </ActionBar>
   )

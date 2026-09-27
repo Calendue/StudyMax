@@ -64,6 +64,7 @@ export function StatCard({
   sub,
   index,
   onClick,
+  invite,
 }: {
   icon: IconName
   label: string
@@ -72,6 +73,8 @@ export function StatCard({
   sub: ReactNode
   index: number
   onClick?: () => void
+  /** Shown instead of an empty figure: an invitation to do the thing the figure counts. */
+  invite?: string
 }) {
   const body = (
     <>
@@ -80,10 +83,17 @@ export function StatCard({
       </span>
       <span className="stat__text">
         <span className="stat__label">{label}</span>
-        <span className="stat__value">
-          {value === null ? '–' : <CountUp value={value} duration={0.9} delay={0.15 + index * 0.06} />}
-          {unit && <span className="stat__unit">{unit}</span>}
-        </span>
+        {invite ? (
+          <span className="stat__invite">
+            {invite}
+            <Icon name="arrow" size={16} />
+          </span>
+        ) : (
+          <span className="stat__value">
+            {value === null ? '–' : <CountUp value={value} duration={0.9} delay={0.15 + index * 0.06} />}
+            {unit && <span className="stat__unit">{unit}</span>}
+          </span>
+        )}
         <span className="stat__sub">{sub}</span>
       </span>
     </>

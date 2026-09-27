@@ -86,23 +86,363 @@
 
 /* ─────────────────────────────────────────────────────────── onboarding */
 
-.steps {
+.onb__count {
+  padding-right: var(--s1);
+  font-size: var(--fs-caption);
+  font-weight: 500;
+  color: var(--ink-2);
+}
+
+/* The one progress indicator: a slim bar (under the top bar on a phone, above the question on a
+   wide screen), with the step count as text. */
+.onb-progress {
+  display: grid;
+  gap: var(--s2);
+}
+
+.onb-progress__text {
+  font: 600 var(--fs-caption) / 1.3 var(--font-brand);
+  color: var(--ink-2);
+}
+
+.onb-progress__hint {
+  font-weight: 500;
+}
+
+.onb-progress__track {
+  display: block;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--track);
+  overflow: hidden;
+}
+
+.onb-progress__fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent-fill);
+  transform-origin: left center;
+}
+
+.onb-progress--compact {
+  flex: none;
+  padding: 0 calc(var(--s4) + var(--sar)) var(--s2) calc(var(--s4) + var(--sal));
+}
+
+.onb-progress--compact .onb-progress__track {
+  height: 3px;
+}
+
+/* A large selectable card: icon, title, one line of help. Tone, not boxes: a tonal surface whose
+   edge only appears on hover and, in the accent, when it's picked. */
+.choices {
+  display: grid;
+  gap: var(--s3);
+}
+
+.choice {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s4);
+  width: 100%;
+  min-height: 84px;
+  padding: var(--s4) calc(var(--s6) + var(--s2)) var(--s4) var(--s4);
+  text-align: left;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1.5px solid transparent;
+  border-radius: var(--r3);
+  transition:
+    border-color var(--d-fast) var(--settle),
+    background-color var(--d-fast) var(--settle),
+    transform var(--d-fast) var(--settle);
+}
+
+.choice:active {
+  transform: scale(0.985);
+}
+
+.choice__icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r2);
+  background: var(--bg);
+  color: var(--ink-2);
+  transition:
+    color var(--d-fast) var(--settle),
+    background-color var(--d-fast) var(--settle);
+}
+
+.choice__body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding-top: 2px;
+}
+
+.choice__title {
+  font: 600 var(--fs-title) / 1.3 var(--font-brand);
+  letter-spacing: -0.01em;
+}
+
+.choice__help {
+  font-size: var(--fs-caption);
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+
+.choice__check {
+  position: absolute;
+  top: var(--s4);
+  right: var(--s4);
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1.5px solid var(--edge);
+  color: transparent;
+  transition:
+    background-color var(--d-fast) var(--settle),
+    border-color var(--d-fast) var(--settle),
+    color var(--d-fast) var(--settle);
+}
+
+.choice--on {
+  background: var(--accent-tint);
+  border-color: var(--accent);
+}
+
+.choice--on .choice__icon {
+  color: var(--accent);
+}
+
+.choice--on .choice__check {
+  background: var(--accent-fill);
+  border-color: var(--accent-fill);
+  color: var(--on-accent);
+}
+
+/* A compact option for short answers. A rounded rectangle like every control, never a pill. */
+.opt-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.opt-chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 0 var(--s2);
+  min-height: 44px;
+  padding: 0 var(--s4);
+  border-radius: var(--r2);
+  background: var(--surface);
+  border: 1.5px solid transparent;
+  font-size: var(--fs-label);
+  font-weight: 500;
+  color: var(--ink);
+  transition:
+    border-color var(--d-fast) var(--settle),
+    background-color var(--d-fast) var(--settle);
 }
 
-.steps__dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
+.opt-chip svg {
+  flex: none;
+  color: var(--accent);
+}
+
+.opt-chip--on {
+  background: var(--accent-tint);
+  border-color: var(--accent);
+}
+
+.onb-picked {
+  margin-bottom: var(--s3);
+}
+
+.onb-picked .opt-chip svg {
+  color: var(--ink-2);
+}
+
+.plan-badge {
+  flex: none;
+  padding: 2px var(--s2);
+  border-radius: 6px;
+  background: var(--surface-2);
+  font-size: var(--fs-section);
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.plan-badge--full {
+  background: var(--accent-tint);
+  color: var(--accent);
+}
+
+.onb-field {
+  margin-top: var(--s5);
+}
+
+.onb-field:first-of-type {
+  margin-top: 0;
+}
+
+.onb-field__label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s3);
+  margin-bottom: var(--s3);
+  font: 600 var(--fs-label) / 1.3 var(--font-brand);
+}
+
+.onb-field__hint {
+  font: 400 var(--fs-caption) / 1.3 var(--font-text);
+  color: var(--ink-2);
+}
+
+.onb-field__note {
+  margin-top: var(--s3);
+  font-size: var(--fs-caption);
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+
+.onb-results {
+  margin-bottom: var(--s3);
+}
+
+.field__icon {
+  flex: none;
+  color: var(--ink-2);
+}
+
+/* An on/off answer as a card with a switch. */
+.toggle-card {
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  width: 100%;
+  margin-top: var(--s5);
+  padding: var(--s4);
+  text-align: left;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1.5px solid transparent;
+  border-radius: var(--r3);
+  transition: border-color var(--d-fast) var(--settle);
+}
+
+.toggle-card__body {
+  flex: 1;
+  display: grid;
+  gap: 2px;
+}
+
+.toggle-card__title {
+  font-weight: 600;
+}
+
+.toggle-card__help {
+  font-size: var(--fs-caption);
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+
+.toggle-card__switch {
+  flex: none;
+  position: relative;
+  width: 44px;
+  height: 26px;
+  border-radius: 13px;
   background: var(--track);
-  transition: background-color var(--d-med) var(--settle);
+  transition: background-color var(--d-fast) var(--settle);
 }
 
-.steps__dot--on {
-  background: var(--accent);
+.toggle-card__switch span {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--bg);
+  box-shadow: var(--shadow-knob);
+  transition: transform var(--d-med) var(--spring);
+}
+
+.toggle-card--on .toggle-card__switch {
+  background: var(--accent-fill);
+}
+
+.toggle-card--on .toggle-card__switch span {
+  transform: translateX(18px);
+}
+
+/* The review: every answer on one surface, each with a way back to its step. */
+.review {
+  padding: var(--s1) var(--s4);
+  background: var(--surface);
+  border-radius: var(--r3);
+}
+
+.review__row {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s3);
+  min-height: 52px;
+  padding: var(--s2) 0;
+}
+
+.review__row + .review__row {
+  border-top: 1px solid var(--divider);
+}
+
+.review__label {
+  font-size: var(--fs-caption);
+  color: var(--ink-2);
+}
+
+.review__value {
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.review__value--empty {
+  font-weight: 400;
+  color: var(--ink-2);
+}
+
+.review__edit {
+  min-height: 44px;
+  padding: 0 var(--s2);
+  margin-right: calc(var(--s2) * -1);
+  border-radius: var(--r1);
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  color: var(--accent);
+}
+
+@media (hover: hover) {
+  .choice:hover:not(.choice--on),
+  .opt-chip:hover:not(.opt-chip--on),
+  .toggle-card:hover {
+    border-color: var(--edge);
+  }
+
+  .review__edit:hover {
+    background: var(--accent-tint);
+  }
 }
 
 .demo-link {
@@ -225,6 +565,61 @@
 .wait__title {
   font: 600 1.5rem/1.25 var(--font-brand);
   letter-spacing: -0.02em;
+}
+
+.reveal {
+  gap: var(--s5);
+}
+
+.reveal__eyebrow {
+  font: 600 var(--fs-label) / 1.3 var(--font-brand);
+  color: var(--ink-2);
+}
+
+.reveal__figure {
+  display: flex;
+  align-items: baseline;
+  font: 700 var(--fs-figure) / 1 var(--font-brand);
+  letter-spacing: -0.03em;
+}
+
+.reveal__pct {
+  font-size: 0.5em;
+  margin-left: 2px;
+}
+
+.reveal__unit {
+  margin-top: var(--s1);
+  font-size: var(--fs-caption);
+  color: var(--ink-2);
+}
+
+/* Space held for the payoff, so nothing moves when the credential's name lands. */
+.reveal__payoff {
+  min-height: 88px;
+  display: grid;
+  place-items: center;
+}
+
+.reveal__lead {
+  display: block;
+  font-size: var(--fs-label);
+  color: var(--ink-2);
+}
+
+.reveal__target {
+  max-width: 20ch;
+  margin-top: var(--s1);
+  font: 700 var(--fs-display) / 1.2 var(--font-brand);
+  letter-spacing: -0.02em;
+  color: var(--accent);
+}
+
+.reveal .status-lines {
+  max-width: 360px;
+  min-height: 168px; /* all four lines, reserved, so the ring never shifts as they arrive */
+  align-content: start;
+  font-size: var(--fs-caption);
 }
 
 .wait__hint {
@@ -431,6 +826,34 @@
 
 .chip--add:active {
   background: var(--surface);
+}
+
+/* One of a set (a term, a filter): quiet until it's the one picked, then the accent's tint and edge. */
+.chip--choice {
+  min-height: 36px;
+  padding: 6px var(--s3);
+  font-size: 0.875rem;
+  background: var(--surface);
+  color: var(--ink-2);
+  transition:
+    background-color var(--d-fast) var(--settle),
+    color var(--d-fast) var(--settle);
+}
+
+.card .chip--choice {
+  background: var(--card-surface);
+}
+
+.chip--choice[aria-checked='true'] {
+  background: var(--accent-tint);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
+@media (hover: hover) {
+  .chip--choice:hover:not([aria-checked='true']) {
+    color: var(--ink);
+  }
 }
 
 .per-term {
@@ -1085,7 +1508,7 @@
 .welcome__mark {
   display: block;
   color: var(--accent);
-  margin: 0 0 var(--s2) -4px;
+  margin: 0 0 var(--s2);
 }
 
 .welcome__title {

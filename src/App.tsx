@@ -27,19 +27,17 @@ import { ModelContext } from './model.ts'
 import { useTheme } from './theme.ts'
 import type { Destination } from './ui/layout.ts'
 import { courseCode, registeredCode, type TargetKind } from './format.ts'
-import { DUR, INSTANT, SETTLE } from './ui/motion.ts'
+import { DUR, INSTANT, SETTLE, prefersReducedMotion } from './ui/motion.ts'
 import { Intro } from './screens/Intro.tsx'
 import { LandingScreen } from './screens/LandingScreen.tsx'
 import { LandingPage } from './components/landing/LandingPage.tsx'
 import { WelcomeScreen } from './screens/WelcomeScreen.tsx'
 import { AccountSheet } from './screens/AccountSheet.tsx'
 import {
-  ConcentrationScreen,
-  GraduationScreen,
-  MajorScreen,
-  MinorScreen,
-  PhoneScreen,
+  DegreeScreen,
+  GoalsScreen,
   RegisteredScreen,
+  ReviewScreen,
   StudentScreen,
   UniversityScreen,
 } from './screens/Onboarding.tsx'
@@ -70,22 +68,21 @@ type Lookup =
 type UniversityChoice = '' | 'usask' | 'other'
 
 /**
- * The flow, in order. Onboarding asks one question per screen (student type, university,
- * graduation year, major, minor, concentrations, this term's courses, phone number); existing
- * students then add courses. A transcript upload skips what the transcript already answers. Results is tabbed; the call is
- * the last step.
+ * The flow, in order. Onboarding is six short steps (where you are, school, degree with major and
+ * graduation year, optional goals, this term's courses, and a review with the phone number);
+ * existing students then add courses. A transcript uploaded on the first question skips what it
+ * already answers (goals, this term's courses, the course list). Results is tabbed; the call is the
+ * last step.
  */
 export type Screen =
   | 'landing'
   | 'welcome'
   | 'student'
   | 'university'
-  | 'graduation'
-  | 'major'
-  | 'minor'
-  | 'concentration'
+  | 'degree'
+  | 'goals'
   | 'registered'
-  | 'phone'
+  | 'review'
   | 'courses'
   | 'reading'
   | 'reveal'
@@ -499,10 +496,7 @@ function useStudyMax() {
   function handleProgramChange(id: string) {
     setSheet(null)
     haptic.selection()
-    if (id === programId) {
-      requestAdvance()
-      return
-    }
+    if (id === programId) return
     setProgramId(id)
     // A transcript's courses are the student's whatever their major; only hand-picked ones reset.
     if (!fromTranscript) {
@@ -513,7 +507,6 @@ function useStudyMax() {
     setHeroId(null)
     setExtraTargetIds([])
     setConcentrationIds([]) // they belong to the major they were picked from
-    requestAdvance()
   }
 
   function chooseStudentType(type: StudentType) {
@@ -535,7 +528,6 @@ function useStudyMax() {
   function chooseGradYear(year: number) {
     haptic.selection()
     setGradYear(year)
-    requestAdvance()
   }
 
   // This term's courses are picked from the catalogue search, so a mistyped number can't get in:
@@ -564,7 +556,6 @@ function useStudyMax() {
   function chooseMinor(id: string | null) {
     haptic.selection()
     setMinorId(id)
-    requestAdvance()
   }
 
   function toggleConcentration(id: string) {
@@ -1159,24 +1150,21 @@ function useStudyMax() {
   // far. Continue moves one along it and Back (the button or Android's) one back.
   // A question not answered yet assumes the longer USask path, so the dots and the button don't
   // promise an early finish.
+  // Another university has no catalogue here, so it skips the goals and this term's courses; its
+  // degree step asks only the graduation year. A transcript read on the first question answers the
+  // goals and this term's courses (and usually the major, which the degree step then shows filled in),
+  // so that path is just the school, the degree step and the review.
   const onboardingSteps: Screen[] = fromTranscript
-    ? [
-        'student',
-        'university',
-        'graduation',
-        'phone',
-        // Only if the transcript didn't name a major StudyMax knows.
-        ...(uploadStatus === 'success' && !selectedProgram ? (['major'] as const) : []),
-      ]
+    ? ['student', 'university', 'degree', 'review']
     : [
     'student',
     'university',
-    ...(universityId !== 'other' ? (['graduation', 'major', 'minor'] as const) : (['graduation'] as const)),
-    ...(universityId !== 'other' && (!selectedProgram || concentrationOptions.length > 0)
-      ? (['concentration'] as const)
+    'degree',
+    ...(universityId !== 'other' && (!selectedProgram || concentrationOptions.length > 0 || minorOptions.length > 0)
+      ? (['goals'] as const)
       : []),
-    'registered',
-    'phone',
+    ...(universityId !== 'other' ? (['registered'] as const) : []),
+    'review',
   ]
   const flow: Screen[] = [
     ...(isAuthConfigured && !account ? (['welcome'] as const) : []),
@@ -1189,9 +1177,17 @@ function useStudyMax() {
   /** Where Back from the results goes: the courses, or the last question onboarding asked. */
   const resultsBack = flow[flow.length - 1]
 
+  // Set by an Edit link on the review: the edited step's Continue goes straight back to the review.
+  const returnToReview = useRef(false)
+  const EDITABLE_STEPS: Screen[] = ['student', 'university', 'degree', 'goals', 'registered']
+
   function next() {
-    // The major step drops out of the transcript path's list once it's answered, hence the explicit check.
-    if (fromTranscript && (screen === 'major' || flowIndex === flow.length - 1)) {
+    if (returnToReview.current && screen !== 'review' && EDITABLE_STEPS.includes(screen)) {
+      returnToReview.current = false
+      go('review')
+      return
+    }
+    if (fromTranscript && flowIndex === flow.length - 1) {
       finishTranscriptPath()
       return
     }
@@ -1212,8 +1208,18 @@ function useStudyMax() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [advanceSignal])
 
+  // The pick shows its check for a beat before the next question slides in, so the choice is seen.
+  const advanceTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   function requestAdvance() {
-    setAdvanceSignal((s) => s + 1)
+    clearTimeout(advanceTimer.current)
+    advanceTimer.current = setTimeout(() => setAdvanceSignal((s) => s + 1), prefersReducedMotion() ? 0 : 320)
+  }
+
+  /** An Edit link on the review: back to that step, and its Continue returns to the review. */
+  function editStep(step: Screen) {
+    haptic.selection()
+    returnToReview.current = true
+    go(step, -1)
   }
 
   /** Back out of the flow to the landing page, from its first step. */
@@ -1240,8 +1246,10 @@ function useStudyMax() {
 
   /** End of the transcript path (the read already succeeded): straight to the dashboard. */
   function finishTranscriptPath() {
-    if (!selectedProgram) {
-      go('major')
+    // The transcript named no major StudyMax knows, and it was never picked: the degree step asks it.
+    if (universityId === 'usask' && !selectedProgram) {
+      returnToReview.current = true
+      go('degree', -1)
       return
     }
     completeOnboarding()
@@ -1385,6 +1393,14 @@ function useStudyMax() {
       case 'call':
         if (callStatus === 'calling') return true
         go('results', -1)
+        return true
+      case 'courses':
+        // Once there are results, Courses is a destination beside them, not a step of onboarding.
+        if (revealed) {
+          go('results', 1)
+          return true
+        }
+        go(flowIndex > 0 ? flow[flowIndex - 1] : 'student', -1)
         return true
       default:
         // Welcome and the onboarding steps: one step back, and out of the app from the first.
@@ -1541,6 +1557,8 @@ function useStudyMax() {
     startFromLanding,
     toLanding,
     nextIsReveal,
+    editStep,
+    onboardingSteps,
     canGoBack: flowIndex > 0,
     stepIndex,
     stepCount: onboardingSteps.length,
@@ -1558,12 +1576,10 @@ const SCREENS: Record<Screen, ComponentType> = {
   welcome: WelcomeScreen,
   student: StudentScreen,
   university: UniversityScreen,
-  major: MajorScreen,
-  minor: MinorScreen,
-  concentration: ConcentrationScreen,
-  graduation: GraduationScreen,
+  degree: DegreeScreen,
+  goals: GoalsScreen,
   registered: RegisteredScreen,
-  phone: PhoneScreen,
+  review: ReviewScreen,
   courses: CoursesScreen,
   reading: ReadingScreen,
   reveal: RevealScreen,

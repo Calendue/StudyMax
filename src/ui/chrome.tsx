@@ -54,7 +54,7 @@ export function TopBar({
           </button>
         )}
         {brand && (
-          <Wordmark height={28} className="wordmark" />
+          <Wordmark height={31} className="wordmark" />
         )}
       </div>
       <div className="topbar__side topbar__side--end">

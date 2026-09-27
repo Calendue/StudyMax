@@ -55,14 +55,17 @@ function WelcomeCard() {
           <Button icon="plan" onClick={() => m.navigate('plan')}>
             See your term-by-term plan
           </Button>
-          {!done && (
-            <Button variant="secondary" icon="compare" onClick={() => m.openSheet('whatif')}>
-              What if…
+          {/* The side doors travel together, so they wrap as a pair instead of stranding one. */}
+          <span className="welcome-card__more">
+            {!done && (
+              <Button variant="secondary" icon="compare" onClick={() => m.openSheet('whatif')}>
+                What if…
+              </Button>
+            )}
+            <Button variant="secondary" icon="share" onClick={() => m.openSheet('share')}>
+              Share
             </Button>
-          )}
-          <Button variant="secondary" icon="share" onClick={() => m.openSheet('share')}>
-            Share
-          </Button>
+          </span>
         </div>
       </div>
       <Ring
@@ -122,7 +125,8 @@ function Stats() {
         icon="seat"
         label="Seats watched"
         value={watches.length}
-        sub={open > 0 ? `${open} open now` : watches.length > 0 ? 'Checked about once a minute' : 'None yet'}
+        invite={watches.length === 0 && m.universityId === 'usask' ? 'Watch a class' : undefined}
+        sub={open > 0 ? `${open} open now` : watches.length > 0 ? 'Checked about once a minute' : 'Get told when a seat opens'}
         onClick={m.universityId === 'usask' ? () => m.navigate('classes') : undefined}
       />
     </div>
@@ -134,7 +138,7 @@ function WhatsLeft() {
   const hero = m.hero
   if (hero.remaining === 0) return null
   return (
-    <Card index={5} title="What's left" icon="target" className="dash__left" action={<CardLink onClick={() => m.navigate('plan')}>Plan it</CardLink>}>
+    <Card index={5} title="What's left" icon="target" className="dash__left">
       <Group>
         {hero.unsatisfied.map((g, i) => (
           <Row

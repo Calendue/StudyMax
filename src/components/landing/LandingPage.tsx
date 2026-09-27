@@ -35,19 +35,20 @@ const STEPS = [
 
 interface Feature {
   tag: string
+  icon: IconName
   title: string
   body: string
 }
 
 const FEATURES: Feature[] = [
-  { tag: 'upload', title: 'Transcript parsing', body: 'PDF in; completed and in-progress courses out.' },
-  { tag: 'match', title: 'Credential matching', body: 'The credential you’re closest to, ranked by how little is left.' },
-  { tag: 'plan', title: 'Term-by-term plan', body: 'A real sequence with prerequisites expanded, not a checklist.' },
-  { tag: 'track', title: 'Class Tracker', body: 'Watch full USask sections for an open seat, live from the university’s own class search.' },
-  { tag: 'detect',title: 'Certificates & minors detector', body: 'Finds credentials you’re already partway through.' },
-  { tag: 'fund', title: 'Scholarships by deadline', body: 'Awards ranked by how soon they close, with a note on why each fits you.' },
-  { tag: 'call', title: 'The phone call', body: 'One call about the soonest deadline. It says its piece and hangs up.' },
-  { tag: 'demo', title: 'Sample data, no transcript needed', body: '“Load a sample student” runs the full reveal on a canned USask CS record.' },
+  { tag: 'upload', icon: 'upload', title: 'Transcript parsing', body: 'PDF in; completed and in-progress courses out.' },
+  { tag: 'match', icon: 'target', title: 'Credential matching', body: 'The credential you’re closest to, ranked by how little is left.' },
+  { tag: 'plan', icon: 'plan', title: 'Term-by-term plan', body: 'A real sequence with prerequisites expanded, not a checklist.' },
+  { tag: 'track', icon: 'seat', title: 'Class Tracker', body: 'Watch full USask sections for an open seat, live from the university’s own class search.' },
+  { tag: 'detect', icon: 'layers', title: 'Certificates & minors detector', body: 'Finds credentials you’re already partway through.' },
+  { tag: 'fund', icon: 'award', title: 'Scholarships by deadline', body: 'Awards ranked by how soon they close, with a note on why each fits you.' },
+  { tag: 'call', icon: 'phone', title: 'The phone call', body: 'One call about the soonest deadline. It says its piece and hangs up.' },
+  { tag: 'demo', icon: 'person', title: 'Sample data, no transcript needed', body: '“Load a sample student” runs the full reveal on a canned USask CS record.' },
 ]
 
 interface QA {
@@ -86,16 +87,13 @@ export function LandingPage({ onGetStarted, onSkip }: LandingPageProps) {
   return (
     <div className="landing">
       <div className="landing__topbar">
-        <Wordmark height={40} className="landing__wordmark" />
+        <Wordmark height={42} className="landing__wordmark" />
         <div className="landing__topbar-end">
-          <button type="button" className="landing__skip" onClick={onSkip}>
-            Skip to a sample student
-          </button>
           <ThemeSwitch />
         </div>
       </div>
 
-      <Hero onGetStarted={onGetStarted} />
+      <Hero onGetStarted={onGetStarted} onSkip={onSkip} />
 
       <section className="landing__band landing__band--rose">
         <p className="landing__lede">
@@ -144,7 +142,7 @@ export function LandingPage({ onGetStarted, onSkip }: LandingPageProps) {
         </div>
       </section>
 
-      <section className="landing__section" aria-labelledby="how-heading">
+      <section className="landing__section landing__section--wide" aria-labelledby="how-heading">
         <h2 id="how-heading" className="landing__heading">
           How it works
         </h2>
@@ -163,30 +161,26 @@ export function LandingPage({ onGetStarted, onSkip }: LandingPageProps) {
         </ol>
       </section>
 
-      <section className="landing__section" aria-labelledby="features-heading">
+      <section className="landing__section landing__section--wide" aria-labelledby="features-heading">
         <h2 id="features-heading" className="landing__heading">
           Everything in the reveal
         </h2>
-        <div className="landing__ledger landing__ledger--features" role="table">
+        <ul className="landing__features">
           {FEATURES.map((f) => (
-            <div className="landing__ledger-row" role="row" key={f.tag}>
-              <span className="landing__tag" role="cell">
-                {f.tag}
+            <li className="landing__feature" key={f.tag}>
+              <span className="landing__step-index" aria-hidden="true">
+                <Icon name={f.icon} size={20} />
               </span>
-              <span className="landing__ledger-program" role="cell">
-                {f.title}
-              </span>
-              <span className="landing__ledger-detail" role="cell">
-                {f.body}
-              </span>
-            </div>
+              <h3 className="landing__step-title">{f.title}</h3>
+              <p className="landing__step-body">{f.body}</p>
+            </li>
           ))}
-        </div>
+        </ul>
       </section>
 
       <section className="landing__section" aria-labelledby="qa-heading">
         <h2 id="qa-heading" className="landing__heading">
-          Questions we’d ask ourselves
+          Questions, answered
         </h2>
         <p className="landing__section-intro">The ones we expect, answered up front.</p>
         <div className="landing__qa-list">
@@ -201,10 +195,10 @@ export function LandingPage({ onGetStarted, onSkip }: LandingPageProps) {
           <h2 className="landing__heading">See what your school is hiding.</h2>
           <div className="landing__actions">
             <button type="button" className="landing__cta" onClick={onGetStarted}>
-              Get Started
+              Get started
             </button>
             <button type="button" className="landing__cta landing__cta--ghost" onClick={onSkip}>
-              Skip to the app
+              Skip to a sample student
             </button>
           </div>
         </div>
@@ -217,7 +211,7 @@ export function LandingPage({ onGetStarted, onSkip }: LandingPageProps) {
   )
 }
 
-function Hero({ onGetStarted }: { onGetStarted: () => void }) {
+function Hero({ onGetStarted, onSkip }: { onGetStarted: () => void; onSkip: () => void }) {
   return (
     <section className="landing__hero">
       <div className="landing__hero-copy">
@@ -228,7 +222,10 @@ function Hero({ onGetStarted }: { onGetStarted: () => void }) {
         </p>
         <div className="landing__actions">
           <button type="button" className="landing__cta" onClick={onGetStarted}>
-            Get Started
+            Get started
+          </button>
+          <button type="button" className="landing__cta landing__cta--ghost" onClick={onSkip}>
+            Skip to a sample student
           </button>
         </div>
         <p className="landing__hero-note">End to end for Computer Science at USask. Everyone else still gets the scholarships.</p>
