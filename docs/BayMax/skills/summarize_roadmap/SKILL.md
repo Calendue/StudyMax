@@ -3,14 +3,17 @@ name: summarize_roadmap
 description: "where am I at", "remind me", "what's my plan", or any broad "how am I doing" question — answering from the student's current roadmap without changing anything.
 ---
 
-Answer from what's already in your context at call start: program, current term, courses currently
-taking, roadmap version, and projected graduation. Most of the time that's enough — you don't need a
-tool call to answer "where am I at."
+The call-start context (program, current term, courses under way, projected graduation) is a snapshot
+from when the call began: it goes stale the moment anything is saved, and it says nothing about future
+terms. So:
 
-Call `get_student_overview` only if that context might be stale — most commonly right after a
-`commit_scenario` earlier in this same call, or if the student asks for something the opening context
-doesn't cover (e.g. the next several terms, not just the next one). Don't call it reflexively on every
-summary request.
+- **Anything about courses in a term** ("what am I taking", "what's in Winter 2027", "what's my
+  schedule", "what's left"): call `get_schedule` (with the term, or none for every term) and answer
+  from it — every time, even if you answered earlier in the call. Never say a term is empty unless it
+  returns `nothingThen`.
+- **A broad "where am I at"**: call `get_schedule` with no term and give the projected graduation first,
+  then what they're taking this term, then stop and offer the next term.
+- `get_student_overview` is for program-level facts (specializations, minors, options to switch).
 
 When you answer:
 - Say the projected graduation term first, then the current course load, then stop. Offer more detail

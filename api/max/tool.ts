@@ -28,10 +28,10 @@ import type { AppAction, CallPlanInputs } from '../../src/lib/max/live.js'
 import type { ScenarioOp } from '../../src/lib/max/types.js'
 import { maxSkills } from '../../src/lib/max/skills.generated.js'
 import { planOptions, type OptionTopic } from '../../src/lib/max/options.js'
-import { programName, regenerate, speakableCourse, specializationName, underWayByTerm } from '../../src/lib/max/planningAdapter.js'
+import { programName, regenerate, scheduleByTerm, speakableCourse, specializationName, underWayByTerm } from '../../src/lib/max/planningAdapter.js'
 import { computeMatches } from '../../src/lib/match.js'
 import { programs } from '../../src/data/programs/index.js'
-import { currentTermOf, upcomingTerm, type TermStart } from '../../src/lib/plan.js'
+import { currentTermOf, termFromLabel, termOrder, upcomingTerm, type TermStart } from '../../src/lib/plan.js'
 import { getTerms, searchCourse } from '../_banner.js'
 import { bannerTermCode, formatMeeting, openSeats, statusLabel } from '../../src/lib/classTracker.js'
 
@@ -140,6 +140,7 @@ const SKILL_BY_TOOL: Record<string, string> = {
   get_plan_options: 'recommend_plan',
   app_action: 'manage_roadmap',
   check_seats: 'check_seats',
+  get_schedule: 'summarize_roadmap',
 }
 
 /** One short, tool-specific fact worth seeing in a log line — never the full payload. */
@@ -535,8 +536,52 @@ async function runCheckSeats(call: ResolvedCall, args: Record<string, unknown>):
   }
 }
 
+/**
+ * What they're taking and have planned, term by term — from the saved plan as it is right now (the
+ * call's inputs, advanced on every save, or the account's saved plan), so it's never the call-start
+ * picture. One term when asked about one, else every term in order.
+ */
+async function runGetSchedule(call: ResolvedCall, args: Record<string, unknown>): Promise<ToolResponse> {
+  const current = await loadCurrentSnapshot(call.userId, scopeOf(call))
+  if (!current) return { ok: false, code: 'NO_PLAN', speakable: "I don't have a roadmap on file for you yet." }
+  const { snapshot, baselineTerms } = current
+  const schedule = scheduleByTerm(adapterInput(snapshot), baselineTerms)
+  const graduation = baselineTerms.at(-1)?.label ?? null
+  const open = await db().scenario.findFirst({
+    where: { userId: call.userId, callId: call.callId, status: { in: ['computed', 'presented'] } },
+    select: { scenarioId: true },
+  })
+  const extras = {
+    currentTerm: labelOfTerm(currentTermOf(snapshot.today)),
+    projectedGraduation: graduation,
+    ...(snapshot.droppedCourses.length > 0 ? { droppedInSavedPlan: snapshot.droppedCourses } : {}),
+    // The schedule is the saved plan; a change shown but not saved yet isn't in it.
+    ...(open ? { unsavedChangeOpen: true } : {}),
+  }
+  if (args.term === undefined || args.term === null || args.term === '' || /\b(all|whole|every|full)\b/i.test(String(args.term))) {
+    return { schedule, ...extras }
+  }
+  const term = seatTerm(args.term, snapshot.today)
+  if (!term) return { ok: false, code: 'INVALID_TERM', speakable: "I didn't catch which term — could you say it like Winter 2027?" }
+  const label = labelOfTerm(term)
+  const entry = schedule.find((e) => e.term === label)
+  const first = schedule[0]?.term
+  const why = entry
+    ? null
+    : graduation && termOrder(term) > termOrder(termFromLabel(graduation)!)
+      ? `That's after you finish (${graduation}).`
+      : first && termOrder(term) < termOrder(termFromLabel(first)!)
+        ? 'That term is before anything in your plan.'
+        : 'Nothing is planned in that term — the plan skips it.'
+  return { term: label, takingNow: entry?.takingNow ?? [], planned: entry?.planned ?? [], ...(why ? { nothingThen: why } : {}), ...extras }
+}
+
+const labelOfTerm = (t: TermStart) => `${t.season} ${t.year}`
+
 async function executeTool(name: string, call: ResolvedCall, args: Record<string, unknown>): Promise<ToolResponse> {
   switch (name) {
+    case 'get_schedule':
+      return runGetSchedule(call, args)
     case 'check_seats':
       return runCheckSeats(call, args)
     case 'get_student_overview':

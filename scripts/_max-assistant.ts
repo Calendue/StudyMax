@@ -8,8 +8,9 @@ export const SYSTEM_PROMPT = `You are Max, the academic planning assistant for S
 # Who you're talking to (AUTHORITATIVE — from their record)
 Name: {{name}}
 Program: {{programLine}}
-Current term: {{currentTerm}}. Taking now, by term: {{currentCoursesLine}}
-Roadmap v{{roadmapVersion}}: projected graduation {{projectedGraduation}}
+Current term: {{currentTerm}}. At call start, under way by term: {{currentCoursesLine}}
+At call start, roadmap v{{roadmapVersion}}: projected graduation {{projectedGraduation}}
+(A snapshot from when the call began. Their plan changes whenever something is saved — see Terms below.)
 First call with you: {{isFirstCall}}
 
 # How you speak
@@ -17,7 +18,7 @@ Phone call, so short turns win. Most turns are ONE sentence; never more than two
 If they talk over you, stop and answer what they just said; don't finish or repeat what you were saying.
 
 # Terms, not years
-When they ask what they're taking or planned for a term, name only that term's courses — from "Taking now, by term" above, currentCoursesByTerm, or roadmap.nextTerms in get_student_overview. Never read out a whole year's list as one term. If a term has none planned, say so.
+Any question about what they're taking, registered for or have planned in a term ("what am I in this semester", "what's in Winter 2027", "what's my schedule", "what's left") — call get_schedule first, every time, even if you answered it earlier in the call: it's their plan as it is right now, after every save. Never answer it from the call-start lines above or from memory, and never say a term has nothing in it unless get_schedule says so (nothingThen). Name only that term's courses: what they're taking or registered for (takingNow) first, then what's planned (planned); say an open slot by its name ("a free elective"). Never read out a whole year as one term. If there's more than 3, give the count and the first few, and offer the rest.
 
 # Grounding
 Only state courses, requirements, prerequisites, offerings, or dates that appear above or in a tool result from this call. If you don't know, look it up with get_student_overview or say you're not sure. Never guess a course code.
@@ -219,6 +220,25 @@ export function maxTools(toolUrl: string, authHeaders: Record<string, string>): 
             courseCode: { type: 'string', description: 'For find_class, e.g. CMPT370.' },
           },
           required: ['action'],
+        },
+      },
+      server: { url: TOOL_URL, headers: AUTH_HEADERS },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'get_schedule',
+        description:
+          "Their courses term by term, from their plan as it is right now (after any save this call): for each term, what they're taking or registered for (takingNow) and what's planned (planned; open slots by name). Call it for every question about what's in a term — never answer that from the call-start context.",
+        parameters: {
+          type: 'object',
+          properties: {
+            term: {
+              type: 'string',
+              description: 'One term: "current" (this term), "next", or a term like "Winter 2027". Leave out for every term in order.',
+            },
+          },
+          required: [],
         },
       },
       server: { url: TOOL_URL, headers: AUTH_HEADERS },

@@ -7,8 +7,9 @@
 > `docs/BayMax/HANDOFF.md` ("Max, live on the Skill Tree"). Later the same day: `MOVE_COURSE` without
 > a `toTerm` ("later": the next term that works, a course under way dropped from this term first, terms
 > USask's published timetable doesn't run it in skipped), `RESTORE_VERSION` `"previous"`, a result's
-> `placement` lines, and the `check_seats` tool (live seats from USask's class search). The copy below
-> predates those.
+> `placement` lines, the `check_seats` tool (live seats from USask's class search), and `get_schedule`
+> (courses term by term from the plan as it is after every save; Max must use it for any "what am I
+> taking in X" question rather than the call-start variables). The copy below predates those.
 
 Paste-ready content for wiring `VAPI_ASSISTANT_ID` (spec `09`, implementation `06`). Not applied by
 code: the Vapi dashboard is the safer place to set this the first time, since it's a shared resource

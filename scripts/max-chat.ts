@@ -87,6 +87,7 @@ async function runsInPublished(label: string, subject: string, number: string): 
 }
 
 type Call = { name: string; args: any; result: any }
+const allCalls: Call[] = []
 const messages: any[] = [{ role: 'system', content: system }, { role: 'assistant', content: firstMessage }]
 console.log(`MAX: ${firstMessage}`)
 
@@ -112,6 +113,7 @@ async function turn(said: string): Promise<{ text: string; calls: Call[] }> {
       const args = JSON.parse(tcall.function.arguments || '{}')
       const result = await runTool(tcall.function.name, args)
       calls.push({ name: tcall.function.name, args, result })
+      allCalls.push({ name: tcall.function.name, args, result })
       const shown = JSON.stringify(result)
       console.log(`  → ${tcall.function.name}(${JSON.stringify(args)}) = ${shown.length > 220 ? shown.slice(0, 220) + '…' : shown}`)
       messages.push({ role: 'tool', tool_call_id: tcall.id, content: JSON.stringify(result) })
@@ -139,9 +141,26 @@ async function step(said: string, save: 'yes' | 'no' | null) {
 }
 
 const results: [string, boolean, string][] = []
+
 const check = (name: string, ok: boolean, detail = '') => {
   results.push([name, ok, detail])
   console.log(`  ${ok ? 'PASS' : 'FAIL'} ${name}${detail ? ` — ${detail}` : ''}`)
+}
+/** A term question: answered from a get_schedule result fetched since the last save (this turn or an
+ * earlier one — the plan hasn't changed since), naming what's actually in that term. */
+async function termQuestion(tag: string, said: string, label: string, notUnder?: string) {
+  const r = await step(said, null)
+  const lastSave = allCalls.findLastIndex((c) => c.name === 'commit_scenario' && c.result.ok === true)
+  const lastLook = allCalls.findLastIndex((c) => c.name === 'get_schedule')
+  const call = lastLook > lastSave ? allCalls[lastLook] : undefined
+  check(`${tag}: answered from the schedule as it is now`, Boolean(call), call ? JSON.stringify(call.args) : 'no get_schedule since the last save')
+  const res = call?.result
+  const entry = res?.schedule ? res.schedule.find((e: any) => e.term === label) : res?.term === label ? res : null
+  check(`${tag}: for ${label}`, Boolean(entry), JSON.stringify(res ?? null).slice(0, 200))
+  const items: string[] = [...(entry?.takingNow ?? []), ...(entry?.planned ?? [])]
+  const named = items.filter((i) => r.text.toLowerCase().includes(i.toLowerCase().split(/[:(]/)[0].trim()))
+  check(`${tag}: names what's there`, items.length > 0 && named.length > 0 && !/nothing (planned|scheduled)|no courses|don't have any courses/i.test(r.text), r.text)
+  if (notUnder) check(`${tag}: follows the save (${notUnder} no longer under way)`, !(entry?.takingNow ?? []).includes(notUnder))
 }
 const ops = (calls: Call[]) => calls.filter((c) => c.name === 'run_scenario').flatMap((c) => c.args.ops ?? [])
 const REFUSAL = /can(no|')t (be )?mov|not able to move|unable to move|you('d| would) (need|have) to drop/i
@@ -157,6 +176,8 @@ try {
   check('1 summary: looked up the roadmap', s1.calls.some((c) => c.name === 'get_student_overview' || (c.name === 'load_skill' && c.args.name === 'summarize_roadmap')))
   check('1 summary: names the graduation term', s1.text.includes(start.terms.at(-1).label.split(' ')[1]), start.terms.at(-1).label)
 
+  await termQuestion('1b term', 'What am I taking in Winter 2027?', 'Winter 2027')
+
   // 2
   const s2 = await step('What if I dropped CMPT 370?', null)
   check('2 what-if: explored a drop of CMPT 370', ops(s2.calls).some((o: any) => o.op === 'DROP_COURSE' && /CMPT\s*370/i.test(o.courseCode)))
@@ -167,6 +188,7 @@ try {
   const afterDrop = await baseline()
   check('3 drop it: saved', s3.calls.some((c) => c.name === 'commit_scenario' && c.result.ok === true))
   check('3 drop it: CMPT 370 dropped in the saved plan', !afterDrop.inputs.inProgress.includes('CMPT370'))
+  await termQuestion('3b term', 'So what am I taking this semester now?', 'Fall 2026', 'CMPT 370')
 
   // 4
   const s4 = await step("Actually, don't drop it. Leave it as it was.", 'yes')
@@ -190,6 +212,7 @@ try {
   const afterSpec = await baseline()
   check('6 specialize: switched', ops(s6.calls).some((o: any) => o.op === 'SET_SPECIALIZATIONS'))
   check('6 specialize: saved, plan leads with Cybersecurity', afterSpec.inputs.targetIds[0] === 'cybersecurity', afterSpec.inputs.targetIds.join(','))
+  await termQuestion('6b term', "What's planned for me in Winter 2028 now?", 'Winter 2028')
 
   // 7
   for (const [said, when] of [['Is there a seat open in CMPT 370 this semester?', 'Fall 2026'], ['What about next term?', 'Winter 2027']] as const) {
