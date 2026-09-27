@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useModel } from '../model.ts'
-import { MAX_COURSES_PER_TERM } from '../lib/cloudSession.ts'
+import { FW_LOADS, summerLoadOf } from '../lib/planner/loads.ts'
 import { KIND_LABEL, courseCode, plural } from '../format.ts'
 import { compareTargets, delta, outlook, rankAlternatives, termShift, type WhatIf, type WhatIfInputs } from '../lib/whatIf.ts'
 import { Icon } from '../ui/Icon.tsx'
@@ -13,7 +13,7 @@ import { Sheet } from '../ui/Sheet.tsx'
 //   sheet 'whatif'      the list to pick from, quickest finish first
 //   sheet 'whatif:<id>' the comparison with that one
 
-const PACES = Array.from({ length: MAX_COURSES_PER_TERM }, (_, i) => i + 1)
+const PACES: readonly number[] = FW_LOADS
 
 export function WhatIfSheet() {
   const m = useModel()
@@ -35,10 +35,28 @@ export function WhatIfSheet() {
   )
   const other = choices.find((x) => x.spec.id === otherId) ?? null
 
-  const { planningSpecs, completed, inProgressCourses, startTerm, springSummer, summerPerTerm, booked, internshipAY, hero } = m
+  const { planningSpecs, completed, inProgressCourses, startTerm, springSummer, summerPerTerm, booked, internshipAY, hero, overrides, currentTermLabel } = m
+  // The same inputs as the real plan: Spring/Summer 0 is off, and the student's overrides apply.
+  const summerLoad = summerLoadOf(springSummer, summerPerTerm)
+  const currentTerm = useMemo(() => {
+    const [season, year] = [currentTermLabel.slice(0, currentTermLabel.lastIndexOf(' ')), Number(currentTermLabel.slice(currentTermLabel.lastIndexOf(' ') + 1))]
+    return { season: season as 'Fall' | 'Winter' | 'Spring/Summer', year }
+  }, [currentTermLabel])
   const input: WhatIfInputs = useMemo(
-    () => ({ planningSpecs, completed, inProgress: inProgressCourses, coursesPerTerm: perTerm, start: startTerm, springSummer, summerPerTerm, booked, away: internshipAY }),
-    [planningSpecs, completed, inProgressCourses, perTerm, startTerm, springSummer, summerPerTerm, booked, internshipAY],
+    () => ({
+      planningSpecs,
+      completed,
+      inProgress: inProgressCourses,
+      coursesPerTerm: perTerm,
+      start: startTerm,
+      springSummer: summerLoad > 0,
+      summerPerTerm: summerLoad,
+      booked,
+      away: internshipAY,
+      overrides,
+      currentTerm,
+    }),
+    [planningSpecs, completed, inProgressCourses, perTerm, startTerm, summerLoad, booked, internshipAY, overrides, currentTerm],
   )
   // Only worked out while the sheet is open: it plans every alternative.
   const ranked = useMemo(() => (open && !other ? { hero: outlook(hero, input), list: rankAlternatives(choices, input) } : null), [open, other, hero, choices, input])
