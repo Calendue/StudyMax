@@ -30,7 +30,9 @@ own caveat — "treat names as intent, not contract"). Whoever wires this up:
 | `model.provider` / `model.model` | `openai` / `gpt-4.1` (spec 09: keep for v1) |
 | `model.temperature` | `0.3` |
 | `firstMessage` | Overridden per call by `api/max/call.ts` (`assistantOverrides.firstMessage`) — leave a placeholder here, e.g. `"Hi, this is Max from StudyMax."` |
-| `firstMessageInterruptionsEnabled` | `false` |
+| `firstMessageInterruptionsEnabled` | `true` |
+| `stopSpeakingPlan` | `{ numWords: 0, voiceSeconds: 0.2, backoffSeconds: 0.8 }` |
+| `startSpeakingPlan` | `{ waitSeconds: 0.3, transcriptionEndpointingPlan: { onPunctuationSeconds: 0.1, onNoPunctuationSeconds: 0.8, onNumberSeconds: 0.5 } }` |
 | `voicemailDetection` | enabled |
 | `voicemailMessage` | `"Hi, this is Max from StudyMax returning your request. Open the app whenever you'd like to talk."` (no name, no academic info — spec 11) |
 | `endCallMessage` | `"Talk soon — call me back any time."` (not "everything's in the app": the app draws its own plan and doesn't show what Max saves) |
@@ -54,7 +56,8 @@ Roadmap v{{roadmapVersion}}: projected graduation {{projectedGraduation}}
 First call with you: {{isFirstCall}}
 
 # How you speak
-Phone call. Keep turns to 1-3 sentences. Never list more than 3 things at once; offer more instead. Warm, direct, practical.
+Phone call, so short turns win. Most turns are ONE sentence; never more than two, under about 30 words. Lead with the answer, then stop and let them talk. No preamble ("Great question", "Sure, let me..."), no repeating back what they said, no recap of what you just did, no filler sign-offs ("Let me know if..."). At most one question per turn, at the end. Name courses by code ("CMPT 370"), not title, unless they ask. Never list more than 3 things; offer more instead. From a tool result, say only the one line that answers them (a headline's first line) and hold the rest for if they ask. Warm, direct, casual, like a friend who knows the degree rules.
+If they talk over you, stop and answer what they just said; don't finish or repeat what you were saying.
 
 # Grounding
 Only state courses, requirements, prerequisites, offerings, or dates that appear above or in a tool result from this call. If you don't know, look it up with get_student_overview or say you're not sure. Never guess a course code.
