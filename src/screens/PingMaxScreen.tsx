@@ -36,10 +36,39 @@ function toE164(input: string): string {
 }
 
 interface MaxSettingsState {
+  /** No account: the shared demo student. The number and consent are this session's, never stored. */
+  isGuest?: boolean
   phoneVerified: boolean
+  /** The last four digits of the number Max will call. */
+  phoneHint?: string | null
   consentGranted: boolean
   hasMetMax: boolean
 }
+
+// A guest's number and consent for this browser tab only — sent with each call, never saved to the
+// demo student every guest shares (which made Ping Max ring the last guest's phone).
+const GUEST_KEY = 'studymax.maxGuestCall'
+interface GuestCall {
+  phoneE164: string
+  consent: boolean
+}
+function readGuestCall(): GuestCall | null {
+  try {
+    const g = JSON.parse(sessionStorage.getItem(GUEST_KEY) ?? 'null') as GuestCall | null
+    return g && typeof g.phoneE164 === 'string' ? g : null
+  } catch {
+    return null
+  }
+}
+function writeGuestCall(g: GuestCall | null) {
+  try {
+    if (g) sessionStorage.setItem(GUEST_KEY, JSON.stringify(g))
+    else sessionStorage.removeItem(GUEST_KEY)
+  } catch {
+    // storage blocked: they'll just confirm the number again next time
+  }
+}
+const lastFour = (phone: string) => phone.replace(/\D/g, '').slice(-4)
 
 type Step = 'loading' | 'phone' | 'code' | 'consent' | 'ready' | 'calling' | 'placed' | 'error'
 
@@ -62,7 +91,8 @@ export function PingMaxScreen() {
   const m = useModel()
   const [settings, setSettings] = useState<MaxSettingsState | null>(null)
   const [step, setStep] = useState<Step>('loading')
-  const [phoneInput, setPhoneInput] = useState('')
+  // The number they gave in onboarding, as a starting point they can change.
+  const [phoneInput, setPhoneInput] = useState(() => readGuestCall()?.phoneE164 ?? m.phone ?? '')
   const [codeInput, setCodeInput] = useState('')
   const [session, setSession] = useState<PhoneVerificationSession | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -73,8 +103,13 @@ export function PingMaxScreen() {
     setError(null)
     setStep('loading')
     fetchSettings()
-      .then((data) => {
+      .then((raw) => {
         if (!live()) return
+        // A guest's number and consent come from this session, not the server.
+        const guest = raw.isGuest ? readGuestCall() : null
+        const data = raw.isGuest
+          ? { ...raw, phoneVerified: Boolean(guest), phoneHint: guest ? lastFour(guest.phoneE164) : null, consentGranted: guest?.consent === true }
+          : raw
         setSettings(data)
         setStep(!data.phoneVerified ? 'phone' : !data.consentGranted ? 'consent' : 'ready')
       })
@@ -103,6 +138,11 @@ export function PingMaxScreen() {
     })
     if (!res.ok) throw new Error('save failed')
     const data = (await res.json()) as MaxSettingsState
+    if (data.isGuest) {
+      // A new number asks for consent again: it's consent to call *this* number.
+      writeGuestCall({ phoneE164, consent: false })
+      data.consentGranted = false
+    }
     setSettings(data)
     setStep(data.consentGranted ? 'ready' : 'consent')
   }
@@ -153,6 +193,12 @@ export function PingMaxScreen() {
       })
       if (!res.ok) throw new Error('consent not saved')
       const data = (await res.json()) as MaxSettingsState
+      if (data.isGuest) {
+        const guest = readGuestCall()
+        if (!guest) throw new Error('no number for this session')
+        writeGuestCall({ ...guest, consent: true })
+        Object.assign(data, { phoneVerified: true, phoneHint: lastFour(guest.phoneE164), consentGranted: true })
+      }
       setSettings(data)
       setStep(data.consentGranted ? 'ready' : 'consent')
     } catch {
@@ -172,7 +218,12 @@ export function PingMaxScreen() {
         headers: { 'content-type': 'application/json', ...(await authHeader()) },
         // The plan on screen, so Max plans from exactly this; ?rehearse=1 asks for a phone-free dry run
         // (only honoured where the server has MAX_DRY_RUN=1).
-        body: JSON.stringify({ planInputs: m.maxPlanInputs, dryRun: REHEARSE }),
+        body: JSON.stringify({
+          planInputs: m.maxPlanInputs,
+          dryRun: REHEARSE,
+          // A guest's number for this call: the server never uses one stored on the shared demo account.
+          ...(settings?.isGuest ? { phoneE164: readGuestCall()?.phoneE164, consent: readGuestCall()?.consent === true } : {}),
+        }),
       })
       const data = (await res.json().catch(() => ({}))) as { error?: string; callId?: string; liveToken?: string }
       if (!res.ok) {
@@ -311,7 +362,21 @@ export function PingMaxScreen() {
 
         {step === 'ready' && (
           <Group>
-            <Row leading={<Icon name="phone" />} title="Ready when you are" subtitle="Max will call the number you verified." />
+            <Row
+              leading={<Icon name="phone" />}
+              title="Ready when you are"
+              subtitle={settings?.phoneHint ? `Max will call the number ending ${settings.phoneHint}.` : 'Max will call the number you verified.'}
+            />
+            {settings?.isGuest && (
+              <Row
+                title="Use a different number"
+                onClick={() => {
+                  setPhoneInput('')
+                  setError(null)
+                  setStep('phone')
+                }}
+              />
+            )}
           </Group>
         )}
 

@@ -44,7 +44,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return
   }
 
-  const body = (req.body ?? {}) as { planInputs?: unknown; dryRun?: unknown }
+  const body = (req.body ?? {}) as { planInputs?: unknown; dryRun?: unknown; phoneE164?: unknown; consent?: unknown }
   // A rehearsal without a phone (scripts/max-rehearse.ts): only where MAX_DRY_RUN=1 is set — never Production.
   const dryRun = body.dryRun === true && process.env.MAX_DRY_RUN === '1'
 
@@ -72,19 +72,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const settings = await db().maxSettings.findUnique({ where: { userId: user.userId } })
-  // A dry run dials nobody, so it needs no verified number or consent to call it.
+  // Who Max rings. A signed-in student: the number verified on their own account. A guest: the number
+  // they confirmed in this session, sent with the call — never one stored on the shared demo student,
+  // which would ring whichever guest saved a number last.
+  let dial: string | null = null
   if (!dryRun) {
-    if (!settings?.phoneVerifiedAt) {
-      res.status(403).json({ error: 'PHONE_NOT_VERIFIED' })
-      return
-    }
-    if (!settings.callConsentGranted) {
-      res.status(403).json({ error: 'CONSENT_REQUIRED' })
-      return
-    }
-    if (!settings.phoneE164 || !PHONE_RE.test(settings.phoneE164)) {
-      res.status(400).json({ error: 'invalid stored phone number' })
-      return
+    if (resolved.isGuest) {
+      const phone = typeof body.phoneE164 === 'string' ? body.phoneE164.trim() : ''
+      if (!phone) {
+        res.status(403).json({ error: 'PHONE_NOT_VERIFIED' })
+        return
+      }
+      if (!PHONE_RE.test(phone)) {
+        res.status(400).json({ error: 'invalid phone number' })
+        return
+      }
+      if (body.consent !== true) {
+        res.status(403).json({ error: 'CONSENT_REQUIRED' })
+        return
+      }
+      dial = phone
+    } else {
+      if (!settings?.phoneVerifiedAt) {
+        res.status(403).json({ error: 'PHONE_NOT_VERIFIED' })
+        return
+      }
+      if (!settings.callConsentGranted) {
+        res.status(403).json({ error: 'CONSENT_REQUIRED' })
+        return
+      }
+      if (!settings.phoneE164 || !PHONE_RE.test(settings.phoneE164)) {
+        res.status(400).json({ error: 'invalid stored phone number' })
+        return
+      }
+      dial = settings.phoneE164
     }
   }
 
@@ -174,7 +195,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const vapiCall = await client.calls.create({
       assistantId: assistantId!,
       phoneNumberId: phoneNumberId!,
-      customer: { number: settings!.phoneE164! },
+      customer: { number: dial! },
       assistantOverrides: {
         variableValues: {
           name: firstName,
