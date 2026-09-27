@@ -6,6 +6,7 @@ import { DUR, INSTANT, SETTLE } from '../ui/motion.ts'
 import type { LayoutMode } from '../ui/layout.ts'
 import { TopBar } from '../ui/chrome.tsx'
 import { CallScreen } from '../screens/CallScreen.tsx'
+import { PingMaxScreen } from '../screens/PingMaxScreen.tsx'
 import { DashboardPage } from '../pages/DashboardPage.tsx'
 import { PlanPage } from '../pages/PlanPage.tsx'
 import { AwardsPage } from '../pages/AwardsPage.tsx'
@@ -24,6 +25,15 @@ function CallPage() {
   )
 }
 
+/** Same idea as CallPage, for Max's call (docs/BayMax/implementation/06-vapi-voice-integration.md). */
+function PingMaxPage() {
+  return (
+    <div className="shell-focus">
+      <PingMaxScreen />
+    </div>
+  )
+}
+
 const PAGES: Record<string, ComponentType> = {
   overview: DashboardPage,
   plan: PlanPage,
@@ -31,6 +41,7 @@ const PAGES: Record<string, ComponentType> = {
   classes: ClassesPage,
   courses: CoursesPage,
   call: CallPage,
+  'ping-max': PingMaxPage,
 }
 
 /**
@@ -41,7 +52,7 @@ const PAGES: Record<string, ComponentType> = {
 export function AppShell({ mode }: { mode: Exclude<LayoutMode, 'tabs'> }) {
   const m = useModel()
   const reduce = useReducedMotion()
-  const page = m.screen === 'courses' ? 'courses' : m.screen === 'call' ? 'call' : m.tab
+  const page = m.screen === 'courses' ? 'courses' : m.screen === 'call' ? 'call' : m.screen === 'ping-max' ? 'ping-max' : m.tab
   const Page = PAGES[page] ?? DashboardPage
   return (
     <div className={`shell shell--${mode}`}>

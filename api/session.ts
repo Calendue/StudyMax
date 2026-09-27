@@ -6,10 +6,14 @@
 // phone number when the student gave one), StudentCourse (replaced wholesale with the session's
 // completed, in-progress and registered codes) and
 // StudentProfile (present once onboarding has reached the results, removed on a reset).
+import { Prisma } from '@prisma/client'
 import { cleanCloudSession, USASK_INSTITUTION, type CloudSession } from '../src/lib/cloudSession.js'
+import { regenerate, validate } from '../src/lib/max/planningAdapter.js'
+import { upcomingTerm } from '../src/lib/plan.js'
 import { db, hasDatabase } from './_db.js'
 import { verifiedUser, type VerifiedUser } from './_firebaseAuth.js'
 import { allow } from './_rateLimit.js'
+import { firstPlanVersionData, planVersionWrites, type PlanSnapshot } from './_planVersion.js'
 
 interface VercelRequest {
   method?: string
@@ -123,13 +127,70 @@ async function save(user: VerifiedUser, session: CloudSession) {
     ...session.inProgress.map((courseCode) => ({ userId, courseCode, status: 'in_progress' })),
     ...session.registered.map((courseCode) => ({ userId, courseCode, status: 'registered' })),
   ]
+
+  // A real GeneratedPlan for this account, kept current on every save — the single write path
+  // (api/_planVersion.ts) so Max (docs/BayMax) can read a signed-in student's actual plan instead
+  // of only the seeded demo student's. Skipped when the program has no real specialization data
+  // (an "awards only" subject) — regenerate() throws for those, same as the app's own hasProgramData
+  // check elsewhere.
+  let planSnapshot: PlanSnapshot | null = null
+  if (profile) {
+    try {
+      const start = upcomingTerm(new Date())
+      const { terms } = regenerate({
+        completed: new Set(session.completed),
+        inProgress: new Set([...session.inProgress, ...session.registered]),
+        targetProgramId: session.programId,
+        targetSpecializationIds: session.concentrationIds,
+        coursesPerTerm: 4,
+        start,
+      })
+      planSnapshot = {
+        targetProgramId: session.programId,
+        minorProgramId: session.minorId,
+        targetSpecializationIds: session.concentrationIds,
+        coursesPerTerm: 4,
+        startSeason: start.season,
+        startYear: start.year,
+        terms,
+        validation: validate(terms),
+      }
+    } catch {
+      planSnapshot = null
+    }
+  }
+  const existingPlan = planSnapshot ? await prisma.generatedPlan.findUnique({ where: { userId }, select: { planId: true, version: true } }) : null
+
   // One batch, so a reader never sees the courses half replaced. Batched (not interactive)
   // transactions are the kind that work through pgbouncer.
-  await prisma.$transaction([
+  const ops: Prisma.PrismaPromise<unknown>[] = [
     prisma.studentCourse.deleteMany({ where: { userId } }),
     prisma.studentCourse.createMany({ data: rows, skipDuplicates: true }),
     profile
       ? prisma.studentProfile.upsert({ where: { userId }, update: profile, create: { userId, ...profile } })
       : prisma.studentProfile.deleteMany({ where: { userId } }),
-  ])
+  ]
+  if (planSnapshot && existingPlan) {
+    ops.push(...planVersionWrites(existingPlan.planId, existingPlan.version + 1, planSnapshot, { createdBy: 'onboarding' }))
+  }
+  await prisma.$transaction(ops)
+
+  // A brand-new plan needs its id before the PlanVersion can reference it, so (like
+  // scripts/seed-demo-student.ts) it's two sequential writes here rather than one batched
+  // transaction — the same accepted exception to the single-batch rule.
+  if (planSnapshot && !existingPlan) {
+    const plan = await prisma.generatedPlan.create({
+      data: {
+        userId,
+        targetProgramId: planSnapshot.targetProgramId,
+        targetSpecializationIds: planSnapshot.targetSpecializationIds,
+        coursesPerTerm: planSnapshot.coursesPerTerm,
+        startSeason: planSnapshot.startSeason,
+        startYear: planSnapshot.startYear,
+        terms: planSnapshot.terms as unknown as Prisma.InputJsonValue,
+        version: 1,
+      },
+    })
+    await prisma.planVersion.create({ data: firstPlanVersionData(plan.planId, planSnapshot, 'onboarding') })
+  }
 }

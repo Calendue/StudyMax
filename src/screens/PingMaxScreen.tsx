@@ -1,0 +1,289 @@
+// "Ping Max" — the voice planning agent's entry point (docs/BayMax/implementation/
+// 06-vapi-voice-integration.md). A new screen rather than a repurposed CallScreen: that one is the
+// Bland one-way call and stays untouched as the fallback.
+//
+// Phone verification, consent, and the call itself are all screen-local state — nothing here needs
+// to live in the shared useStudyMax() model, since none of it is read by any other screen.
+import { useEffect, useState } from 'react'
+import { useModel } from '../model.ts'
+import { authHeader, startPhoneVerification, type PhoneVerificationSession } from '../auth.ts'
+import { api } from '../platform.ts'
+import { ActionBar, ScreenBody, ScreenTitle, TopBar } from '../ui/chrome.tsx'
+import { Icon } from '../ui/Icon.tsx'
+import { Appear, Button, Group, Row } from '../ui/primitives.tsx'
+
+const RECAPTCHA_CONTAINER_ID = 'ping-max-recaptcha'
+
+/**
+ * Firebase Phone Auth requires strict E.164 (+ country code + number, no spaces/punctuation) and
+ * won't guess a country code itself. Most people just type their 10-digit number, so assume North
+ * American (+1) for a bare 10-digit input rather than making them type the country code.
+ */
+function toE164(input: string): string {
+  const stripped = input.replace(/[^\d+]/g, '')
+  if (stripped.startsWith('+')) return stripped
+  if (stripped.length === 10) return `+1${stripped}`
+  if (stripped.length === 11 && stripped.startsWith('1')) return `+${stripped}`
+  return `+${stripped}`
+}
+
+interface MaxSettingsState {
+  phoneVerified: boolean
+  consentGranted: boolean
+  hasMetMax: boolean
+}
+
+type Step = 'loading' | 'phone' | 'code' | 'consent' | 'ready' | 'calling' | 'placed' | 'error'
+
+async function fetchSettings(): Promise<MaxSettingsState | null> {
+  const res = await fetch(api('/api/max/settings'), { headers: await authHeader() })
+  return res.ok ? ((await res.json()) as MaxSettingsState) : null
+}
+
+export function PingMaxScreen() {
+  const m = useModel()
+  const [settings, setSettings] = useState<MaxSettingsState | null>(null)
+  const [step, setStep] = useState<Step>('loading')
+  const [phoneInput, setPhoneInput] = useState('')
+  const [codeInput, setCodeInput] = useState('')
+  const [session, setSession] = useState<PhoneVerificationSession | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    fetchSettings()
+      .then((data) => {
+        if (cancelled) return
+        setSettings(data)
+        setStep(!data?.phoneVerified ? 'phone' : !data.consentGranted ? 'consent' : 'ready')
+      })
+      .catch(() => !cancelled && setStep('error'))
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  async function sendCode() {
+    setError(null)
+    setBusy(true)
+    try {
+      const s = await startPhoneVerification(toE164(phoneInput), RECAPTCHA_CONTAINER_ID)
+      setSession(s)
+      setStep('code')
+    } catch {
+      setError("Couldn't send a code to that number — check it and try again.")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function confirmCode() {
+    if (!session) return
+    setError(null)
+    setBusy(true)
+    try {
+      await session.confirm(codeInput.trim())
+      const res = await fetch(api('/api/max/settings'), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...(await authHeader()) },
+        body: JSON.stringify({ phoneE164: toE164(phoneInput), verified: true }),
+      })
+      if (!res.ok) throw new Error('save failed')
+      const data = (await res.json()) as MaxSettingsState
+      setSettings(data)
+      setStep(data.consentGranted ? 'ready' : 'consent')
+    } catch {
+      setError("That code didn't match — try again.")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function grantConsent() {
+    setBusy(true)
+    try {
+      const res = await fetch(api('/api/max/settings'), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...(await authHeader()) },
+        body: JSON.stringify({ consentGranted: true }),
+      })
+      const data = (await res.json()) as MaxSettingsState
+      setSettings(data)
+      setStep('ready')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function pingMax() {
+    setStep('calling')
+    setError(null)
+    try {
+      const res = await fetch(api('/api/max/call'), { method: 'POST', headers: await authHeader() })
+      const data = (await res.json().catch(() => ({}))) as { error?: string }
+      if (!res.ok) {
+        setError(
+          data.error === 'ALREADY_ON_A_CALL'
+            ? 'Max is already on a call with you.'
+            : data.error === 'PHONE_NOT_VERIFIED'
+              ? 'Your phone needs verifying first.'
+              : data.error === 'CONSENT_REQUIRED'
+                ? 'Consent is needed before Max can call.'
+                : "Max couldn't place the call.",
+        )
+        setStep('error')
+        return
+      }
+      setStep('placed')
+    } catch {
+      setError("Max couldn't place the call.")
+      setStep('error')
+    }
+  }
+
+  if (step === 'loading') {
+    return (
+      <>
+        <TopBar onBack={() => m.go('results', -1)} backLabel="Results" />
+        <ScreenBody>
+          <ScreenTitle lead="Checking your Max setup…">Ping Max</ScreenTitle>
+        </ScreenBody>
+      </>
+    )
+  }
+
+  if (step === 'calling' || step === 'placed') {
+    return (
+      <>
+        <TopBar onBack={step === 'calling' ? undefined : () => m.go('results', -1)} backLabel="Results" />
+        <ScreenBody className="call-state">
+          <div className={`pulse${step === 'calling' ? ' pulse--live' : ''}`} aria-hidden>
+            <span className="pulse__ring" />
+            <span className="pulse__ring" />
+            <span className="pulse__ring" />
+            <span className="pulse__core">
+              <Icon name={step === 'placed' ? 'check' : 'phone'} size={34} />
+            </span>
+          </div>
+          <div className="call-state__text" aria-live="polite">
+            <h1 className="wait__title">{step === 'calling' ? 'Calling Max…' : 'Max is calling you'}</h1>
+            <p className="lead">
+              {step === 'calling' ? 'Setting up the call.' : "Pick up when it rings — Max has your roadmap in front of him."}
+            </p>
+          </div>
+        </ScreenBody>
+        {step === 'placed' && (
+          <ActionBar>
+            <Button block variant="secondary" onClick={() => m.go('results', -1)}>
+              Back to your results
+            </Button>
+          </ActionBar>
+        )}
+      </>
+    )
+  }
+
+  return (
+    <>
+      <TopBar onBack={() => m.go('results', -1)} backLabel="Results" />
+      <ScreenBody>
+        <ScreenTitle lead="Max calls you, reads your real roadmap, and can save a change on a clear yes — all from one phone call.">
+          Ping Max
+        </ScreenTitle>
+
+        {step === 'phone' && (
+          <Appear className="form">
+            <label className="field-label" htmlFor="max-phone">
+              Your phone number
+            </label>
+            <div className="field">
+              <input
+                id="max-phone"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                enterKeyHint="go"
+                value={phoneInput}
+                onChange={(e) => setPhoneInput(e.target.value)}
+                placeholder="+1 306 555 0123"
+              />
+            </div>
+            {error && <p className="footnote">{error}</p>}
+            <div id={RECAPTCHA_CONTAINER_ID} />
+          </Appear>
+        )}
+
+        {step === 'code' && (
+          <Appear className="form">
+            <label className="field-label" htmlFor="max-code">
+              Enter the code we texted you
+            </label>
+            <div className="field">
+              <input
+                id="max-code"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                enterKeyHint="go"
+                value={codeInput}
+                onChange={(e) => setCodeInput(e.target.value)}
+                placeholder="123456"
+              />
+            </div>
+            {error && <p className="footnote">{error}</p>}
+          </Appear>
+        )}
+
+        {step === 'consent' && (
+          <Group>
+            <Row
+              leading={<Icon name="phone" />}
+              title="Max can call this number"
+              subtitle="Max reads your real roadmap and can save a plan change once you say yes out loud. You can revoke this anytime in your account settings."
+            />
+          </Group>
+        )}
+
+        {step === 'ready' && (
+          <Group>
+            <Row leading={<Icon name="phone" />} title="Ready when you are" subtitle="Max will call the number you verified." />
+          </Group>
+        )}
+
+        {step === 'error' && error && <p className="footnote">{error}</p>}
+      </ScreenBody>
+
+      <ActionBar>
+        {step === 'phone' && (
+          <Button block icon="phone" disabled={busy || phoneInput.replace(/\D/g, '').length < 7} onClick={() => void sendCode()}>
+            Send code
+          </Button>
+        )}
+        {step === 'code' && (
+          <Button block disabled={busy || codeInput.trim().length < 4} onClick={() => void confirmCode()}>
+            Verify
+          </Button>
+        )}
+        {step === 'consent' && (
+          <Button block disabled={busy} onClick={() => void grantConsent()}>
+            Agree and continue
+          </Button>
+        )}
+        {step === 'ready' && (
+          <Button block icon="phone" onClick={() => void pingMax()}>
+            Ping Max
+          </Button>
+        )}
+        {step === 'error' && (
+          <Button
+            block
+            icon="phone"
+            onClick={() => setStep(!settings?.phoneVerified ? 'phone' : !settings.consentGranted ? 'consent' : 'ready')}
+          >
+            Try again
+          </Button>
+        )}
+      </ActionBar>
+    </>
+  )
+}

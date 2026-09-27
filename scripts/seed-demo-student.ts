@@ -1,0 +1,153 @@
+// Seeds the one demo student Max's tools and every BayMax table point at this weekend
+// (docs/BayMax/implementation/01-seed-demo-student.md). Idempotent: upserts by the fixed
+// authUid "baymax-demo-student", so re-running it never duplicates rows.
+//
+// Run: node --experimental-strip-types --env-file=.env.local scripts/seed-demo-student.ts
+import { PrismaClient } from '@prisma/client'
+import { buildStudentPlan } from '../src/lib/plan.ts'
+import { specializations } from '../src/data/specializations.ts'
+import { completedCourses, inProgressCourses } from '../src/data/transcript.ts'
+
+const AUTH_UID = 'baymax-demo-student'
+const USASK_INSTITUTION = 'University of Saskatchewan'
+const TARGET_PROGRAM_ID = 'computer-science'
+const TARGET_SPECIALIZATION_ID = 'software-development'
+const COURSES_PER_TERM = 4
+// Hardcoded (not upcomingTerm(new Date())) so the seeded plan always matches the exact,
+// hand-verified "Winter 2027 -> Fall 2027" demo numbers regardless of what day this is re-run
+// (see 01-seed-demo-student.md step 5 and 6).
+const START = { season: 'Winter' as const, year: 2027 }
+const PLANNER_VERSION = 'lib/plan.ts@buildStudentPlan-v1'
+
+const prisma = new PrismaClient()
+
+const targetSpec = specializations.find((s) => s.id === TARGET_SPECIALIZATION_ID)
+if (!targetSpec) {
+  throw new Error(`specialization "${TARGET_SPECIALIZATION_ID}" not found in src/data/specializations.ts`)
+}
+
+const institution = await prisma.institution.findUnique({ where: { name: USASK_INSTITUTION } })
+if (!institution) {
+  throw new Error(
+    `Institution "${USASK_INSTITUTION}" not found — run "npm run db:seed:institutions" first.`,
+  )
+}
+
+const user = await prisma.userInfo.upsert({
+  where: { authUid: AUTH_UID },
+  update: { firstName: 'Demo', lastName: 'Student', email: 'demo@baymax.studymax.internal' },
+  create: {
+    authUid: AUTH_UID,
+    firstName: 'Demo',
+    lastName: 'Student',
+    email: 'demo@baymax.studymax.internal',
+  },
+})
+
+await prisma.studentProfile.upsert({
+  where: { userId: user.userId },
+  update: {
+    studentType: 'existing',
+    institutionId: institution.institutionId,
+    degree: 'Bachelor of Science',
+    majorProgramId: TARGET_PROGRAM_ID,
+    minorProgramId: null,
+    concentrationIds: [],
+    startingTermSeason: null,
+    startingTermYear: null,
+    goals: null,
+  },
+  create: {
+    userId: user.userId,
+    studentType: 'existing',
+    institutionId: institution.institutionId,
+    degree: 'Bachelor of Science',
+    majorProgramId: TARGET_PROGRAM_ID,
+    minorProgramId: null,
+    concentrationIds: [],
+  },
+})
+
+// Replace wholesale rather than diffing — same idea as api/session.ts's session save, and the
+// transcript file is the only source of truth for this student's courses.
+await prisma.$transaction([
+  prisma.studentCourse.deleteMany({ where: { userId: user.userId } }),
+  prisma.studentCourse.createMany({
+    data: [
+      ...completedCourses.map((courseCode) => ({ userId: user.userId, courseCode, status: 'completed' })),
+      ...inProgressCourses.map((courseCode) => ({ userId: user.userId, courseCode, status: 'in_progress' })),
+    ],
+    skipDuplicates: true,
+  }),
+])
+
+const completed = new Set(completedCourses)
+const inProgress = new Set(inProgressCourses)
+const terms = buildStudentPlan([targetSpec], specializations, completed, inProgress, COURSES_PER_TERM, START)
+
+if (terms.length === 0) {
+  throw new Error(
+    'buildStudentPlan produced an empty plan for the seeded transcript + software-development target — ' +
+      'the demo drop-CMPT370 scenario depends on this NOT being empty. Check src/data/transcript.ts and ' +
+      'src/data/specializations.ts for drift before seeding.',
+  )
+}
+
+const plan = await prisma.generatedPlan.upsert({
+  where: { userId: user.userId },
+  update: {
+    targetProgramId: TARGET_PROGRAM_ID,
+    targetSpecializationIds: [TARGET_SPECIALIZATION_ID],
+    coursesPerTerm: COURSES_PER_TERM,
+    startSeason: START.season,
+    startYear: START.year,
+    terms,
+    version: 1,
+  },
+  create: {
+    userId: user.userId,
+    targetProgramId: TARGET_PROGRAM_ID,
+    targetSpecializationIds: [TARGET_SPECIALIZATION_ID],
+    coursesPerTerm: COURSES_PER_TERM,
+    startSeason: START.season,
+    startYear: START.year,
+    terms,
+    version: 1,
+  },
+})
+
+// The seed script is the one deliberate exception to "always write GeneratedPlan through
+// commitPlanVersion()" (docs/BayMax/implementation/02-database-migration.md, "Single write path") —
+// there's no scenario to attach v1 to, so it's inserted directly here, matching an
+// "onboarding"-equivalent PlanVersion.
+const lastTerm = terms[terms.length - 1]
+const [projectedGradSeason, projectedGradYearStr] = lastTerm.label.split(' ')
+await prisma.planVersion.upsert({
+  where: { planId_versionNumber: { planId: plan.planId, versionNumber: 1 } },
+  update: {},
+  create: {
+    planId: plan.planId,
+    versionNumber: 1,
+    parentVersion: null,
+    targetProgramId: TARGET_PROGRAM_ID,
+    minorProgramId: null,
+    targetSpecializationIds: [TARGET_SPECIALIZATION_ID],
+    coursesPerTerm: COURSES_PER_TERM,
+    startSeason: START.season,
+    startYear: START.year,
+    terms,
+    projectedGradSeason,
+    projectedGradYear: Number(projectedGradYearStr),
+    validation: { ok: true, issues: [] },
+    plannerVersion: PLANNER_VERSION,
+    inputsHash: 'backfill',
+    createdBy: 'backfill',
+  },
+})
+
+console.log(`seed-demo-student.ts: userId=${user.userId} plan v1, ${terms.length} term(s):`)
+for (const term of terms) {
+  console.log(`  ${term.label}: ${term.courses.map((c) => c.code).join(', ')}`)
+}
+
+await prisma.$disconnect()

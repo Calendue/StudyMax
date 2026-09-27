@@ -75,8 +75,13 @@ export function AwardSpotlight({ award, className }: { award: Resource; classNam
       {award.value && <p className="spotlight__value">{award.value}</p>}
       <p className="spotlight__why">{award.whatItIs}</p>
       <div className="spotlight__actions">
+        {m.features.max && (
+          <Button block icon="phone" onClick={() => m.go('ping-max')}>
+            Ping Max
+          </Button>
+        )}
         {m.features.call && (
-          <Button block icon="phone" onClick={() => m.go('call')}>
+          <Button block icon="phone" variant={m.features.max ? 'secondary' : 'primary'} onClick={() => m.go('call')}>
             Get a call before it closes
           </Button>
         )}
