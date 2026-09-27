@@ -759,7 +759,9 @@ function useStudyMax() {
       setUploadInProgress(inProgressCodes)
       const terms: Record<string, Season> = data.inProgressTerms ?? {}
       setCourseTerms((prev) => termsAfterUpload(prev, terms, registered))
-      setCompletedTerms(data.completedTerms ?? {})
+      // Completed courses add up across uploads, and so do the terms that date them.
+      const passed: Record<string, string> = data.completedTerms ?? {}
+      setCompletedTerms((prev) => (replacing ? passed : { ...prev, ...passed }))
       setFoundCount(codes.length)
       setStatedProgram({ major: data.major ?? null, minor: data.minor ?? null })
       if (!early) seedTargets(targetSeed)
@@ -1364,6 +1366,7 @@ function useStudyMax() {
     setConcentrationIds([])
     setGradYear(null)
     setCourseTerms({})
+    setCompletedTerms({})
     setRegistered([])
     setRegisteredQuery('')
     setSpringSummer(false)
@@ -1373,7 +1376,6 @@ function useStudyMax() {
     setProgramId('')
     setCompleted(new Set())
     setUploadInProgress([])
-    setCompletedTerms({})
     setUploadStatus('idle')
     setHeroId(null)
     setExtraTargetIds([])
