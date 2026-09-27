@@ -1,7 +1,7 @@
 import { courseInfo } from '../data/prereqs.ts'
 import type { PlannedTerm } from './plan.ts'
 
-export type RoadmapNodeState = 'requirement' | 'prerequisite'
+export type RoadmapNodeState = 'requirement' | 'prerequisite' | 'registered'
 
 export interface RoadmapNodeLayout {
   code: string
@@ -48,7 +48,7 @@ export function buildRoadmapLayout(terms: PlannedTerm[]): RoadmapLayout {
     term.courses.forEach((c, col) => {
       nodes.push({
         code: c.code,
-        state: c.reason === 'prerequisite' ? 'prerequisite' : 'requirement',
+        state: c.reason,
         neededBy: c.neededBy,
         prerequisiteText: c.prerequisiteText,
         alsoAdvances: c.alsoAdvances,

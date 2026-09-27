@@ -1,5 +1,6 @@
 import type { Specialization } from '../data/specializations.ts'
 import { courseInfo } from '../data/prereqs.ts'
+import { offerings as scrapedOfferings } from '../data/offerings.ts'
 import { computeCourseOverlap, computeMatches, type SpecializationMatch } from './match.ts'
 
 export interface PlannedCourse {
@@ -8,8 +9,9 @@ export interface PlannedCourse {
    * `requirement` — the specialization asks for it directly.
    * `prerequisite` — the specialization doesn't ask for it, but a course that does can't be taken
    * without it. This is the hidden cost of a specialization.
+   * `registered` — already being taken; placed in its term for display, never scheduled by the plan.
    */
-  reason: 'requirement' | 'prerequisite'
+  reason: 'requirement' | 'prerequisite' | 'registered'
   /** Names of OTHER specializations this same course also advances — the double-dip payoff. */
   alsoAdvances: string[]
   /** For prerequisites: the course that needs it, and the catalogue's verbatim rule. */
@@ -206,9 +208,23 @@ export function nextTerm({ season, year }: TermStart, springSummer = false): Ter
   return { season: 'Fall', year }
 }
 
+/** Terms in calendar order: Winter, then Spring/Summer, then Fall, within a year. */
+function termOrder({ season, year }: TermStart): number {
+  return year * 10 + (season === 'Winter' ? 0 : season === 'Spring/Summer' ? 1 : 2)
+}
+
+function termFromLabel(label: string): TermStart | null {
+  const match = label.match(/^(Fall|Winter|Spring\/Summer) (\d{4})$/)
+  return match ? { season: match[1] as Season, year: Number(match[2]) } : null
+}
+
 /**
  * Spreads the courses across terms, `coursesPerTerm` at a time, never scheduling a course in the
  * same term as (or before) one of its prerequisites.
+ *
+ * `booked` holds courses the student is already taking, by term label ("Winter 2027"). They take up
+ * room in their term, so the plan only adds what's left of `coursesPerTerm` there, and they only
+ * count as passed once their term is over.
  */
 export function buildPlan(
   target: SpecializationMatch | SpecializationMatch[],
@@ -216,36 +232,86 @@ export function buildPlan(
   completed: Set<string>,
   coursesPerTerm: number,
   start: TermStart,
-  { includePrerequisites = true, springSummer = false }: { includePrerequisites?: boolean; springSummer?: boolean } = {},
+  {
+    includePrerequisites = true,
+    springSummer = false,
+    booked = {},
+    offerings = scrapedOfferings,
+  }: {
+    includePrerequisites?: boolean
+    springSummer?: boolean
+    booked?: Record<string, string[]>
+    /** The seasons each course runs in (src/data/offerings.ts); a course with none can go anywhere. */
+    offerings?: Record<string, Season[]>
+  } = {},
 ): PlannedTerm[] {
+  /**
+   * Whether a course runs in a season. A course the offerings don't know, or one that only runs in
+   * Spring/Summer when the plan leaves those out, is placed anywhere rather than never.
+   */
+  const runsIn = (code: string, season: Season) => {
+    const seasons = (offerings[code] ?? []).filter((s) => springSummer || s !== 'Spring/Summer')
+    return seasons.length === 0 || seasons.includes(season)
+  }
   const perTerm = Math.max(1, Math.floor(coursesPerTerm))
   const picked = selectCourses(target, allSpecializations, completed)
   const withPrereqs = includePrerequisites ? withPrerequisites(picked, completed) : picked
   const ordered = topologicalOrder(withPrereqs, completed)
 
+  const bookedTerms = Object.entries(booked).flatMap(([label, codes]) => {
+    const t = termFromLabel(label)
+    return t ? [{ order: termOrder(t), codes }] : []
+  })
   const terms: PlannedTerm[] = []
-  const satisfied = new Set(completed)
+  // A booked course isn't passed until its term ends, whatever `completed` assumes.
+  const bookedCodes = new Set(bookedTerms.flatMap((b) => b.codes))
+  const satisfied = new Set([...completed].filter((code) => !bookedCodes.has(code)))
   let pending = [...ordered]
   let term = start
 
-  while (pending.length > 0) {
+  // Enough terms to place everything even at one course a term around full ones; a safety bound.
+  for (let guard = 0; pending.length > 0 && guard < 60; guard++) {
+    // Courses booked in earlier terms (including ones this plan skips) are finished by now.
+    for (const b of bookedTerms) if (b.order < termOrder(term)) b.codes.forEach((code) => satisfied.add(code))
+    const label = `${term.season} ${term.year}`
+    const base = term.season === 'Spring/Summer' ? Math.min(perTerm, SPRING_SUMMER_COURSES) : perTerm
+    const limit = base - (booked[label]?.length ?? 0)
+    if (limit <= 0) {
+      // Already full with what the student is taking: nothing to add here.
+      term = nextTerm(term, springSummer)
+      continue
+    }
     const thisTerm: PlannedCourse[] = []
-    const limit = term.season === 'Spring/Summer' ? Math.min(perTerm, SPRING_SUMMER_COURSES) : perTerm
     for (const course of pending) {
       if (thisTerm.length === limit) break
+      // Only in a term that actually runs it.
+      if (!runsIn(course.code, term.season)) continue
       // A prerequisite taken this same term doesn't count — it has to be finished first.
       if (unmetPrerequisites(course.code, satisfied).length > 0) continue
       thisTerm.push(course)
     }
 
-    // Everything left is blocked by something not in the plan: place it rather than loop forever.
-    const batch = thisTerm.length > 0 ? thisTerm : pending.slice(0, limit)
+    // Nothing placed. If some course is only waiting for a term that runs it, move on; if everything
+    // left is blocked by something not in the plan, place what runs here rather than loop forever.
+    // "Waiting" means a missing prerequisite is still coming: planned, or booked in a later term.
+    const coming = new Set([...pending.map((c) => c.code), ...bookedCodes])
+    const stuck = pending.every((c) =>
+      unmetPrerequisites(c.code, satisfied).some((options) => !options.some((option) => coming.has(option))),
+    )
+    const batch = thisTerm.length > 0 ? thisTerm : stuck ? pending.filter((c) => runsIn(c.code, term.season)).slice(0, limit) : []
 
-    terms.push({ label: `${term.season} ${term.year}`, courses: batch })
+    if (batch.length === 0) {
+      term = nextTerm(term, springSummer)
+      continue
+    }
+    terms.push({ label, courses: batch })
     for (const course of batch) satisfied.add(course.code)
     pending = pending.filter((c) => !batch.includes(c))
     term = nextTerm(term, springSummer)
   }
+
+  // Anything the offerings or prerequisites couldn't fit in the window is shown, not dropped.
+  if (pending.length > 0) terms.push({ label: `${term.season} ${term.year}`, courses: pending })
 
   return terms
 }
@@ -265,10 +331,11 @@ export function buildStudentPlan(
   coursesPerTerm: number,
   start: TermStart,
   springSummer = false,
+  booked: Record<string, string[]> = {},
 ): PlannedTerm[] {
   const done = new Set([...completed, ...inProgress])
   const open = computeMatches(targets, done).filter((m) => m.remaining > 0)
-  return open.length > 0 ? buildPlan(open, allSpecializations, done, coursesPerTerm, start, { springSummer }) : []
+  return open.length > 0 ? buildPlan(open, allSpecializations, done, coursesPerTerm, start, { springSummer, booked }) : []
 }
 
 /** `count` consecutive terms from `start`, for a start-term picker. */

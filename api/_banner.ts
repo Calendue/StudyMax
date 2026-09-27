@@ -213,3 +213,40 @@ export async function searchCourse(term: string, subject: string, courseNumber: 
   })
   return (json.data ?? []).map(normalizeSection)
 }
+
+/**
+ * Every course number a subject runs in a term, for scripts/scrape-offerings.ts. Pages through the
+ * whole subject; an empty first page is retried once after a pause, since that's how Banner throttles.
+ */
+export async function subjectCourseNumbers(term: string, subject: string): Promise<Set<string>> {
+  const numbers = new Set<string>()
+  for (let attempt = 0; attempt < 2; attempt++) {
+    let offset = 0
+    let total = 0
+    do {
+      const cookie = await openSession(term)
+      const qs = new URLSearchParams({
+        txt_subject: subject,
+        txt_term: term,
+        startDatepicker: '',
+        endDatepicker: '',
+        pageOffset: String(offset),
+        pageMaxSize: '500',
+        sortColumn: 'subjectDescription',
+        sortDirection: 'asc',
+      })
+      const json = await bannerJson<{ totalCount: number; data: Array<Record<string, unknown>> | null }>(
+        `${BANNER_BASE}/searchResults/searchResults?${qs}`,
+        { headers: { Cookie: cookie } },
+      )
+      total = toInt(json.totalCount)
+      for (const row of json.data ?? []) numbers.add(String(row.courseNumber ?? ''))
+      offset += 500
+    } while (offset < total)
+    if (total > 0) break
+    await new Promise((r) => setTimeout(r, 3000))
+  }
+  numbers.delete('')
+  return numbers
+}
+

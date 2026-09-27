@@ -72,7 +72,7 @@ export function AwardsPage() {
               type="button"
               role="radio"
               aria-checked={filter === f.id}
-              className={`chip ${filter === f.id ? 'chip--target' : 'chip--add'}`}
+              className="chip chip--choice"
               onClick={() => setFilter(f.id)}
             >
               {f.label}

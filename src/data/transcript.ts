@@ -37,6 +37,21 @@ export const completedCourses: string[] = [
 // Registered but ungraded on the same audit, the seven preregistered classes. These are not
 // completed, so they never satisfy a requirement; the app shows them so a student can see the
 // difference between what they have and what they are sitting in right now.
+/**
+ * Which term each of those runs in, from USask's class search (checked 2026-09-26): CMPT 332, 360
+ * and 370 run only in Fall 2026, CMPT 340, 353 and 434 only in Winter 2027. MATH 266 runs in both;
+ * Fall is taken.
+ */
+export const inProgressTerms: Record<string, 'Fall' | 'Winter' | 'Spring/Summer'> = {
+  CMPT332: 'Fall',
+  CMPT360: 'Fall',
+  CMPT370: 'Fall',
+  MATH266: 'Fall',
+  CMPT340: 'Winter',
+  CMPT353: 'Winter',
+  CMPT434: 'Winter',
+}
+
 export const inProgressCourses: string[] = [
   'CMPT332',
   'CMPT340',

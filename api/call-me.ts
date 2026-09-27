@@ -1,10 +1,11 @@
-import { buildCallScript, buildCallTask, type CallContext } from '../src/lib/callScript.js'
+import { buildCallScript, buildCallTask, buildSeatCallScript, type CallContext, type SeatCallContext } from '../src/lib/callScript.js'
 import { allow, clientIp } from './_rateLimit.js'
 
 interface VercelRequest {
   method?: string
   headers?: Record<string, string | string[] | undefined>
-  body?: { phoneNumber: string; context: CallContext }
+  /** `context` for the award call, or `seat` for the Class Tracker's seat-open call. */
+  body?: { phoneNumber: string; context?: CallContext; seat?: SeatCallContext }
 }
 
 interface VercelResponse {
@@ -19,6 +20,15 @@ const PHONE_RE = /^\+?[0-9()\-.\s]{7,20}$/
 // quotes or line breaks) and the app's own countdown wording. Anything else could rewrite the call.
 const NAME_RE = /^[\p{L}\p{N} ()\-—.,&'’:/+]{1,120}$/u
 const COUNTDOWN_RE = /^Closes (today|tomorrow|in \d{1,3} days)$/
+
+// The seat call reads the section aloud too, so it only takes the exact shapes Banner and the app use.
+function cleanSeat(raw: unknown): SeatCallContext | null {
+  const s = raw as Partial<SeatCallContext> | null | undefined
+  if (!s || typeof s.course !== 'string' || !/^[A-Z]{2,5} \d{3}[A-Z]?$/.test(s.course)) return null
+  if (typeof s.section !== 'string' || !/^[A-Z0-9]{1,4}$/.test(s.section)) return null
+  if (typeof s.termDesc !== 'string' || !/^\d{4} (Fall|Winter|Spring|Summer) Term$/.test(s.termDesc)) return null
+  return { course: s.course, section: s.section, termDesc: s.termDesc }
+}
 
 function cleanContext(raw: unknown): CallContext | null {
   const c = raw as Partial<CallContext> | null | undefined
@@ -54,9 +64,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.status(400).json({ error: 'valid phoneNumber required' })
     return
   }
-  const context = cleanContext(body?.context)
-  if (!context) {
-    res.status(400).json({ error: 'context required' })
+  const seat = body?.seat !== undefined ? cleanSeat(body.seat) : null
+  const context = seat ? null : cleanContext(body?.context)
+  if (!seat && !context) {
+    res.status(400).json({ error: body?.seat !== undefined ? 'valid seat required' : 'context required' })
     return
   }
 
@@ -67,7 +78,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return
   }
 
-  const script = buildCallScript(context)
+  const script = seat ? buildSeatCallScript(seat) : buildCallScript(context!)
   const task = buildCallTask(script)
 
   const controller = new AbortController()

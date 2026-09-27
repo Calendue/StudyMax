@@ -4,7 +4,12 @@ import { ScreenTitle } from '../ui/chrome.tsx'
 import { Icon } from '../ui/Icon.tsx'
 import { Appear, Button, Group, Ring, Row, SectionLabel } from '../ui/primitives.tsx'
 import { Sheet } from '../ui/Sheet.tsx'
+import { WhatIfSheet } from './WhatIfSheet.tsx'
+import { ShareSheet } from './ShareSheet.tsx'
 import { PlanRoadmap } from './PlanRoadmap.tsx'
+import { SkillTree } from '../skilltree/SkillTree.tsx'
+import { PlanViewSwitch } from '../skilltree/PlanViewSwitch.tsx'
+import { usePlanView } from '../skilltree/planView.ts'
 
 // The plan's pieces, shared by the phone's Plan tab and the desktop's Plan page.
 
@@ -63,6 +68,10 @@ export function PlanTargets() {
           Plan another alongside
         </button>
       )}
+      <button type="button" className="chip chip--add" onClick={() => m.openSheet('whatif')}>
+        <Icon name="compare" size={14} />
+        What if…
+      </button>
     </Appear>
   )
 }
@@ -136,6 +145,9 @@ export function PlanCopy() {
         <Button block icon={m.planCopied ? 'check' : 'copy'} onClick={() => void m.copyPlan()}>
           {m.planCopied ? 'Copied' : 'Copy plan for my advisor'}
         </Button>
+        <Button block variant="secondary" icon="share" onClick={() => m.openSheet('share')}>
+          Share my plan as an image
+        </Button>
       </div>
       {m.planText !== null && (
         <>
@@ -144,8 +156,8 @@ export function PlanCopy() {
         </>
       )}
       <p className="footnote">
-        Prerequisites come from catalogue.usask.ca verbatim; nothing here is inferred. What we can&rsquo;t know is which terms
-        a course actually runs in, so confirm that with your advisor before you register.
+        Prerequisites come from catalogue.usask.ca verbatim, and each course sits in a term it ran in on USask&rsquo;s class
+        search over the last two years. Schedules can change, so confirm with your advisor before you register.
       </p>
     </>
   )
@@ -179,9 +191,40 @@ export function AddTargetSheet() {
 
 export function PlanTab() {
   const m = useModel()
-  if (m.plan.length === 0) return <PlanEmpty />
+  const [view, setView] = usePlanView()
+  if (view === 'tree') {
+    // The tree opens at its roots and grows up; the plan's settings sit under the roots.
+    return (
+      <>
+        <PlanViewSwitch view={view} onChange={setView} sticky />
+        <SkillTree bleed stickyTop={56} />
+        <div className="plan-after">
+          {m.plan.length > 0 && (
+            <p className="lead">
+              <PlanLead />
+            </p>
+          )}
+          <PlanTargets />
+          <PlanControls />
+          {m.plan.length > 0 && <PlanCopy />}
+        </div>
+        <AddTargetSheet />
+        <WhatIfSheet />
+        <ShareSheet />
+      </>
+    )
+  }
+  if (m.plan.length === 0) {
+    return (
+      <>
+        <PlanViewSwitch view={view} onChange={setView} />
+        <PlanEmpty />
+      </>
+    )
+  }
   return (
     <>
+      <PlanViewSwitch view={view} onChange={setView} />
       <ScreenTitle lead={<PlanLead />}>Your plan</ScreenTitle>
       <PlanTargets />
       <PlanControls />
@@ -189,6 +232,8 @@ export function PlanTab() {
       <PlanRoadmap />
       <PlanCopy />
       <AddTargetSheet />
+      <WhatIfSheet />
+      <ShareSheet />
     </>
   )
 }

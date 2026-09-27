@@ -252,12 +252,10 @@ function AccountMenu() {
             <Icon name="browse" size={18} />
             Your courses
           </button>
-          {account && (
-            <button type="button" className="menu__item" onClick={() => (close(), m.openSheet('account'))}>
-              <Icon name="person" size={18} />
-              Your account
-            </button>
-          )}
+          <button type="button" className="menu__item" onClick={() => (close(), m.openSheet('account'))}>
+            <Icon name="settings" size={18} />
+            Settings
+          </button>
           <button type="button" className="menu__item" onClick={() => (close(), m.setShowLanding(true))}>
             <Icon name="globe" size={18} />
             The pitch

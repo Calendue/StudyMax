@@ -24,7 +24,11 @@ assert.deepEqual(
   'seeded student\'s current plan matches the verified "before" plan',
 )
 
-// --- dropping CMPT370 from in-progress pushes graduation out by one term ---
+// --- dropping CMPT370 from in-progress pushes graduation out ---
+// Re-verified after src/lib/plan.ts became offerings-aware (src/data/offerings.ts): CMPT371 and
+// CMPT470 both only run in Winter, so once CMPT370 is no longer done, they can't land in the very
+// next (Fall) term anymore — they wait for the Winter after that. A full year out, not one term;
+// still a real, correct, and if anything more dramatic demo moment.
 const droppedInProgress = new Set(inProgressCourses.filter((c) => c !== 'CMPT370'))
 assert.ok(inProgressCourses.includes('CMPT370'), 'CMPT370 must actually be in-progress for this to test anything')
 const after = regenerate({ ...baseInput, inProgress: droppedInProgress }).terms
@@ -32,7 +36,7 @@ assert.deepEqual(
   after.map((t) => ({ label: t.label, codes: t.courses.map((c) => c.code) })),
   [
     { label: 'Winter 2027', codes: ['CMPT370'] },
-    { label: 'Fall 2027', codes: ['CMPT371', 'CMPT470'] },
+    { label: 'Winter 2028', codes: ['CMPT371', 'CMPT470'] },
   ],
   'dropping CMPT370 matches the verified "after" plan',
 )
@@ -40,15 +44,15 @@ assert.deepEqual(
 // --- diff produces the demo's headline and moved entries ---
 const result = diff(before, after)
 assert.ok(result.headline.length > 0, 'headline is non-empty when graduation changes')
-assert.equal(result.headline[0], 'Graduation moves from Winter 2027 to Fall 2027.', 'graduation headline is first')
-assert.deepEqual(result.graduation, { before: 'Winter 2027', after: 'Fall 2027', changed: true })
+assert.equal(result.headline[0], 'Graduation moves from Winter 2027 to Winter 2028.', 'graduation headline is first')
+assert.deepEqual(result.graduation, { before: 'Winter 2027', after: 'Winter 2028', changed: true })
 assert.deepEqual(result.added.sort(), ['CMPT370'])
 assert.deepEqual(result.removed, [])
 assert.deepEqual(
   result.moved.sort((a, b) => a.code.localeCompare(b.code)),
   [
-    { code: 'CMPT371', from: 'Winter 2027', to: 'Fall 2027' },
-    { code: 'CMPT470', from: 'Winter 2027', to: 'Fall 2027' },
+    { code: 'CMPT371', from: 'Winter 2027', to: 'Winter 2028' },
+    { code: 'CMPT470', from: 'Winter 2027', to: 'Winter 2028' },
   ],
 )
 

@@ -1,10 +1,29 @@
+import { useState } from 'react'
 import { useModel } from '../model.ts'
 import { firstName } from '../auth.ts'
-import { KIND_LABEL, WHY_IT_MATTERS, courseCode, plural } from '../format.ts'
+import { KIND_LABEL, WHY_IT_MATTERS, WHY_SHORT, courseCode, plural } from '../format.ts'
 import type { SpecializationMatch } from '../lib/match.ts'
 import { ScreenTitle } from '../ui/chrome.tsx'
 import { Appear, Button, Chip, CountUp, Group, OptionList, Ring, Row, SectionLabel } from '../ui/primitives.tsx'
 import { Sheet } from '../ui/Sheet.tsx'
+import { WhatIfSheet } from './WhatIfSheet.tsx'
+import { ShareSheet } from './ShareSheet.tsx'
+
+/** One line on why the credential counts, and the full reason a tap away. */
+function WhyItMatters() {
+  const m = useModel()
+  const [open, setOpen] = useState(false)
+  return (
+    <p className="lead why-line">
+      {open ? WHY_IT_MATTERS[m.heroKind] : WHY_SHORT[m.heroKind]}{' '}
+      {!open && (
+        <button type="button" className="inline-link" onClick={() => setOpen(true)} aria-expanded={open}>
+          Why it matters
+        </button>
+      )}
+    </p>
+  )
+}
 
 export function OverviewTab() {
   const m = useModel()
@@ -42,7 +61,7 @@ export function OverviewTab() {
         </div>
       </Appear>
       <Appear index={1}>
-        <p className="lead">{WHY_IT_MATTERS[m.heroKind]}</p>
+        <WhyItMatters />
       </Appear>
 
       {hero.remaining > 0 && (
@@ -64,6 +83,12 @@ export function OverviewTab() {
           <Appear index={4} className="hero-action">
             <Button block onClick={() => m.setTab('plan')}>
               See your term-by-term plan
+            </Button>
+            <Button block variant="secondary" icon="compare" onClick={() => m.openSheet('whatif')}>
+              What if I went for something else?
+            </Button>
+            <Button block variant="quiet" icon="share" onClick={() => m.openSheet('share')}>
+              Share my result
             </Button>
           </Appear>
         </>
@@ -125,6 +150,8 @@ export function OverviewTab() {
       </p>
 
       <TargetSheet />
+      <WhatIfSheet />
+      <ShareSheet />
     </>
   )
 }

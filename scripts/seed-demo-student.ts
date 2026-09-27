@@ -14,8 +14,11 @@ const TARGET_PROGRAM_ID = 'computer-science'
 const TARGET_SPECIALIZATION_ID = 'software-development'
 const COURSES_PER_TERM = 4
 // Hardcoded (not upcomingTerm(new Date())) so the seeded plan always matches the exact,
-// hand-verified "Winter 2027 -> Fall 2027" demo numbers regardless of what day this is re-run
-// (see 01-seed-demo-student.md step 5 and 6).
+// hand-verified demo numbers regardless of what day this is re-run (see 01-seed-demo-student.md
+// step 5 and 6): Winter 2027 baseline, and dropping CMPT370 pushes graduation to Winter 2028 —
+// re-verified after src/lib/plan.ts became offerings-aware (src/data/offerings.ts): CMPT371/CMPT470
+// only run in Winter, so they can no longer land in the very next (Fall) term once CMPT370 isn't
+// done — a full year out, not one term (originally verified as Fall 2027, before that change).
 const START = { season: 'Winter' as const, year: 2027 }
 const PLANNER_VERSION = 'lib/plan.ts@buildStudentPlan-v1'
 

@@ -10,8 +10,9 @@ import type { School } from './data/schools/types.ts'
 import { computerScience } from './data/programs/computerScience.ts'
 import type { Program } from './data/programs/types.ts'
 import { buildCallScript, type CallContext } from './lib/callScript.ts'
-import { buildStudentPlan, termsFrom, upcomingTerm, type TermStart } from './lib/plan.ts'
+import { buildStudentPlan, termsFrom, upcomingTerm, type Season, type TermStart } from './lib/plan.ts'
 import { computeCredentials } from './lib/credentials.ts'
+import { bookedByTerm, seasonNow, withCurrentCourses } from './lib/currentTerms.ts'
 import { searchCourses, catalogueTitle } from './lib/courseSearch.ts'
 import { courseInfo } from './data/prereqs.ts'
 import { artsAndScienceSubjects, catalogueCourses } from './data/courses.ts'
@@ -27,7 +28,7 @@ import { ModelContext } from './model.ts'
 import { useTheme } from './theme.ts'
 import type { Destination } from './ui/layout.ts'
 import { courseCode, registeredCode, type TargetKind } from './format.ts'
-import { DUR, INSTANT, SETTLE } from './ui/motion.ts'
+import { DUR, INSTANT, SETTLE, prefersReducedMotion } from './ui/motion.ts'
 import { Intro } from './screens/Intro.tsx'
 import { LandingScreen } from './screens/LandingScreen.tsx'
 import { LandingPage } from './components/landing/LandingPage.tsx'
@@ -36,12 +37,10 @@ import { AccountSheet } from './screens/AccountSheet.tsx'
 import { EditConcentrationsSheet, EditGradYearSheet, EditMajorSheet, EditMinorSheet } from './screens/EditProfileSheets.tsx'
 import { EditMaxNameSheet } from './screens/EditMaxNameSheet.tsx'
 import {
-  ConcentrationScreen,
-  GraduationScreen,
-  MajorScreen,
-  MinorScreen,
-  PhoneScreen,
+  DegreeScreen,
+  GoalsScreen,
   RegisteredScreen,
+  ReviewScreen,
   StudentScreen,
   UniversityScreen,
 } from './screens/Onboarding.tsx'
@@ -73,22 +72,21 @@ type Lookup =
 type UniversityChoice = '' | 'usask' | 'other'
 
 /**
- * The flow, in order. Onboarding asks one question per screen (student type, university,
- * graduation year, major, minor, concentrations, this term's courses, phone number); existing
- * students then add courses. A transcript upload skips what the transcript already answers. Results is tabbed; the call is
- * the last step.
+ * The flow, in order. Onboarding is six short steps (where you are, school, degree with major and
+ * graduation year, optional goals, this term's courses, and a review with the phone number);
+ * existing students then add courses. A transcript uploaded on the first question skips what it
+ * already answers (goals, this term's courses, the course list). Results is tabbed; the call is the
+ * last step.
  */
 export type Screen =
   | 'landing'
   | 'welcome'
   | 'student'
   | 'university'
-  | 'graduation'
-  | 'major'
-  | 'minor'
-  | 'concentration'
+  | 'degree'
+  | 'goals'
   | 'registered'
-  | 'phone'
+  | 'review'
   | 'courses'
   | 'reading'
   | 'reveal'
@@ -159,6 +157,8 @@ interface SavedState {
   registered?: string[]
   /** Whether the plan may use Spring/Summer terms. */
   springSummer?: boolean
+  /** The term each in-progress course is in, from the transcript or set by the student. */
+  courseTerms?: Record<string, Season>
 }
 
 
@@ -330,6 +330,8 @@ function useStudyMax() {
   })
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploadInProgress, setUploadInProgress] = useState<string[]>(saved.inProgress ?? [])
+  // Which term each in-progress course is in. A course without one is taken to be in the current term.
+  const [courseTerms, setCourseTerms] = useState<Record<string, Season>>(saved.courseTerms ?? {})
   const completedRef = useRef(completed)
   completedRef.current = completed
 
@@ -352,6 +354,7 @@ function useStudyMax() {
     gradYear,
     registered,
     springSummer,
+    courseTerms,
   }
   const snapshotJson = JSON.stringify(snapshot)
   useEffect(() => {
@@ -498,10 +501,7 @@ function useStudyMax() {
   function handleProgramChange(id: string) {
     setSheet(null)
     haptic.selection()
-    if (id === programId) {
-      requestAdvance()
-      return
-    }
+    if (id === programId) return
     setProgramId(id)
     // A transcript's courses are the student's whatever their major; only hand-picked ones reset.
     if (!fromTranscript) {
@@ -512,7 +512,6 @@ function useStudyMax() {
     setHeroId(null)
     setExtraTargetIds([])
     setConcentrationIds([]) // they belong to the major they were picked from
-    requestAdvance()
   }
 
   function chooseStudentType(type: StudentType) {
@@ -534,7 +533,6 @@ function useStudyMax() {
   function chooseGradYear(year: number) {
     haptic.selection()
     setGradYear(year)
-    requestAdvance()
   }
 
   // This term's courses are picked from the catalogue search, so a mistyped number can't get in:
@@ -563,7 +561,6 @@ function useStudyMax() {
   function chooseMinor(id: string | null) {
     haptic.selection()
     setMinorId(id)
-    requestAdvance()
   }
 
   function toggleConcentration(id: string) {
@@ -636,6 +633,7 @@ function useStudyMax() {
     setProgramId(computerScience.id)
     setCompleted(new Set(computerScience.sampleTranscript ?? []))
     setUploadInProgress(computerScience.sampleInProgress ?? [])
+    setCourseTerms(computerScience.sampleInProgressTerms ?? {})
     // A sample student is an existing one. Targets picked in onboarding still lead the plan.
     setStudentType('existing')
     if (programId !== computerScience.id) setConcentrationIds([])
@@ -727,6 +725,8 @@ function useStudyMax() {
 
       setCompleted((prev) => new Set(replacing ? codes : [...prev, ...codes]))
       setUploadInProgress((prev) => (replacing ? inProgressCodes : [...new Set([...prev, ...inProgressCodes])]))
+      const terms: Record<string, Season> = data.inProgressTerms ?? {}
+      setCourseTerms((prev) => (replacing ? terms : { ...prev, ...terms }))
       setFoundCount(codes.length)
       setStatedProgram({ major: data.major ?? null, minor: data.minor ?? null })
       if (!early) seedTargets(targetSeed)
@@ -773,6 +773,32 @@ function useStudyMax() {
     }
   }, [])
 
+  // The courses the student is taking, grouped by term: this term first, then the ones after it.
+  const currentSeason = seasonNow(today)
+  const currentByTerm = useMemo(() => {
+    const order: Season[] = ['Fall', 'Winter', 'Spring/Summer']
+    const from = order.indexOf(currentSeason)
+    const seasons = [...order.slice(from), ...order.slice(0, from)]
+    return seasons
+      .map((season) => ({ season, courses: inProgressCourses.filter((c) => (courseTerms[c] ?? currentSeason) === season) }))
+      .filter((group) => group.courses.length > 0)
+  }, [inProgressCourses, courseTerms, currentSeason])
+
+  function setCourseTerm(code: string, season: Season) {
+    haptic.selection()
+    setCourseTerms((prev) => ({ ...prev, [code]: season }))
+  }
+
+  // Whether the courses changed since the results were last worked out. Only then is "Update my
+  // results" worth offering; otherwise the results already reflect every course on the list.
+  const resultsKey = JSON.stringify([[...completed].sort(), [...inProgressCourses].sort()])
+  const [revealedKey, setRevealedKey] = useState<string | null>(null)
+  useEffect(() => {
+    // A session restored already revealed counts as up to date with what it restored.
+    if (revealed && revealedKey === null) setRevealedKey(resultsKey)
+  }, [revealed, revealedKey, resultsKey])
+  const resultsStale = revealed && revealedKey !== null && revealedKey !== resultsKey
+
   // --- term-by-term path to the closest specialization ---
   const [coursesPerTerm, setCoursesPerTerm] = useState(2)
   // Extra targets the student added to the same plan. Only ids from what they're already close to;
@@ -794,6 +820,8 @@ function useStudyMax() {
   // The plan starts in a term the student picks; in-progress courses count as passed by then.
   const startChoices = useMemo(() => termsFrom(upcomingTerm(today), 6), [today])
   const [startTerm, setStartTerm] = useState<TermStart>(startChoices[0])
+  // What the student is already taking, by term: it fills part of each term's courses-per-term.
+  const booked = useMemo(() => bookedByTerm(currentByTerm, today), [currentByTerm, today])
   const plan = useMemo(
     () =>
       buildStudentPlan(
@@ -804,9 +832,12 @@ function useStudyMax() {
         coursesPerTerm,
         startTerm,
         springSummer,
+        booked,
       ),
-    [targets, planningSpecs, completed, inProgressCourses, coursesPerTerm, startTerm, springSummer],
+    [targets, planningSpecs, completed, inProgressCourses, coursesPerTerm, startTerm, springSummer, booked],
   )
+  // The plan as the roadmap draws it: what's left, plus the courses already under way in their terms.
+  const roadmap = useMemo(() => withCurrentCourses(plan, currentByTerm, today), [plan, currentByTerm, today])
   const [planCopied, setPlanCopied] = useState(false)
   // Clipboard writes are blocked in some browsers and contexts. Rather than a button that appears to
   // do nothing, the plan text is shown for the student to select by hand.
@@ -1156,24 +1187,21 @@ function useStudyMax() {
   // far. Continue moves one along it and Back (the button or Android's) one back.
   // A question not answered yet assumes the longer USask path, so the dots and the button don't
   // promise an early finish.
+  // Another university has no catalogue here, so it skips the goals and this term's courses; its
+  // degree step asks only the graduation year. A transcript read on the first question answers the
+  // goals and this term's courses (and usually the major, which the degree step then shows filled in),
+  // so that path is just the school, the degree step and the review.
   const onboardingSteps: Screen[] = fromTranscript
-    ? [
-        'student',
-        'university',
-        'graduation',
-        'phone',
-        // Only if the transcript didn't name a major StudyMax knows.
-        ...(uploadStatus === 'success' && !selectedProgram ? (['major'] as const) : []),
-      ]
+    ? ['student', 'university', 'degree', 'review']
     : [
     'student',
     'university',
-    ...(universityId !== 'other' ? (['graduation', 'major', 'minor'] as const) : (['graduation'] as const)),
-    ...(universityId !== 'other' && (!selectedProgram || concentrationOptions.length > 0)
-      ? (['concentration'] as const)
+    'degree',
+    ...(universityId !== 'other' && (!selectedProgram || concentrationOptions.length > 0 || minorOptions.length > 0)
+      ? (['goals'] as const)
       : []),
-    'registered',
-    'phone',
+    ...(universityId !== 'other' ? (['registered'] as const) : []),
+    'review',
   ]
   const flow: Screen[] = [
     ...(isAuthConfigured && !account ? (['welcome'] as const) : []),
@@ -1186,9 +1214,17 @@ function useStudyMax() {
   /** Where Back from the results goes: the courses, or the last question onboarding asked. */
   const resultsBack = flow[flow.length - 1]
 
+  // Set by an Edit link on the review: the edited step's Continue goes straight back to the review.
+  const returnToReview = useRef(false)
+  const EDITABLE_STEPS: Screen[] = ['student', 'university', 'degree', 'goals', 'registered']
+
   function next() {
-    // The major step drops out of the transcript path's list once it's answered, hence the explicit check.
-    if (fromTranscript && (screen === 'major' || flowIndex === flow.length - 1)) {
+    if (returnToReview.current && screen !== 'review' && EDITABLE_STEPS.includes(screen)) {
+      returnToReview.current = false
+      go('review')
+      return
+    }
+    if (fromTranscript && flowIndex === flow.length - 1) {
       finishTranscriptPath()
       return
     }
@@ -1209,8 +1245,18 @@ function useStudyMax() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [advanceSignal])
 
+  // The pick shows its check for a beat before the next question slides in, so the choice is seen.
+  const advanceTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   function requestAdvance() {
-    setAdvanceSignal((s) => s + 1)
+    clearTimeout(advanceTimer.current)
+    advanceTimer.current = setTimeout(() => setAdvanceSignal((s) => s + 1), prefersReducedMotion() ? 0 : 320)
+  }
+
+  /** An Edit link on the review: back to that step, and its Continue returns to the review. */
+  function editStep(step: Screen) {
+    haptic.selection()
+    returnToReview.current = true
+    go(step, -1)
   }
 
   /** Back out of the flow to the landing page, from its first step. */
@@ -1237,8 +1283,10 @@ function useStudyMax() {
 
   /** End of the transcript path (the read already succeeded): straight to the dashboard. */
   function finishTranscriptPath() {
-    if (!selectedProgram) {
-      go('major')
+    // The transcript named no major StudyMax knows, and it was never picked: the degree step asks it.
+    if (universityId === 'usask' && !selectedProgram) {
+      returnToReview.current = true
+      go('degree', -1)
       return
     }
     completeOnboarding()
@@ -1254,6 +1302,7 @@ function useStudyMax() {
 
   function finishReveal() {
     setRevealed(true)
+    setRevealedKey(resultsKey)
     haptic.medium()
     go('results')
   }
@@ -1265,6 +1314,7 @@ function useStudyMax() {
     setMinorId(null)
     setConcentrationIds([])
     setGradYear(null)
+    setCourseTerms({})
     setRegistered([])
     setRegisteredQuery('')
     setSpringSummer(false)
@@ -1384,6 +1434,14 @@ function useStudyMax() {
       case 'ping-max':
         go('results', -1)
         return true
+      case 'courses':
+        // Once there are results, Courses is a destination beside them, not a step of onboarding.
+        if (revealed) {
+          go('results', 1)
+          return true
+        }
+        go(flowIndex > 0 ? flow[flowIndex - 1] : 'student', -1)
+        return true
       default:
         // Welcome and the onboarding steps: one step back, and out of the app from the first.
         if (flowIndex === 0) return false
@@ -1401,9 +1459,9 @@ function useStudyMax() {
     if (screen === 'results' && lookup === null && universityId === 'usask') loadAwards.current()
   }, [screen, lookup, universityId])
 
-  // Watching full USask sections for an open seat (the Classes tab). Lives up here so an opening is
+  // Watching full USask sections for an open seat (the Class Tracker tab). Lives up here so an opening is
   // heard from any tab.
-  const classes = useClassTracker()
+  const classes = useClassTracker({ phone, callEnabled: features.call })
 
   return {
     features,
@@ -1475,8 +1533,14 @@ function useStudyMax() {
     foundCount,
     handleTranscriptFile,
     // results
+    currentByTerm,
+    setCourseTerm,
+    roadmap,
+    resultsStale,
     matches,
     credentials,
+    planningSpecs,
+    booked,
     hero,
     heroKind,
     kindOf,
@@ -1539,6 +1603,8 @@ function useStudyMax() {
     startFromLanding,
     toLanding,
     nextIsReveal,
+    editStep,
+    onboardingSteps,
     canGoBack: flowIndex > 0,
     stepIndex,
     stepCount: onboardingSteps.length,
@@ -1556,12 +1622,10 @@ const SCREENS: Record<Screen, ComponentType> = {
   welcome: WelcomeScreen,
   student: StudentScreen,
   university: UniversityScreen,
-  major: MajorScreen,
-  minor: MinorScreen,
-  concentration: ConcentrationScreen,
-  graduation: GraduationScreen,
+  degree: DegreeScreen,
+  goals: GoalsScreen,
   registered: RegisteredScreen,
-  phone: PhoneScreen,
+  review: ReviewScreen,
   courses: CoursesScreen,
   reading: ReadingScreen,
   reveal: RevealScreen,

@@ -1,0 +1,1162 @@
+/* The Academic Skill Tree: the student's degree as a tree on the app's own page. Rose-led and calm,
+ * like the rest of StudyMax: the app's cards, a Rosy Taupe trunk, Cherry Rose for what's done and the
+ * one course to take next. Every colour here derives from tokens.css, in light and dark.
+ *
+ * Contrast (light on Old Lace / dark on #0B1619): Cherry Rose 7.3:1 / lifted rose 9.3:1; planned
+ * outline (taupe deepened with ink) 4.2:1 / taupe 6.6:1; credential tints teal 10.6:1 / 7.7:1, plum
+ * 8.2:1 / 7.2:1, sand 4.0:1 / 8.8:1. Strokes all clear 3:1; every piece of text is AA. */
+.tree,
+.tree-detail,
+.tree-detail__empty {
+  --tree-wood: color-mix(in srgb, var(--taupe) 72%, transparent);
+  --tree-twig: color-mix(in srgb, var(--taupe) 62%, transparent);
+  --tree-root: color-mix(in srgb, var(--taupe) 55%, transparent);
+  --tree-done: var(--accent-fill); /* solid: Take next only */
+  --tree-on-done: var(--on-accent);
+  --tree-done-tint: color-mix(in srgb, var(--accent) 11%, var(--card)); /* Done: a quiet rose tint */
+  --tree-now: var(--accent);
+  --tree-planned: color-mix(in srgb, var(--taupe) 72%, var(--ink));
+  --tree-locked: color-mix(in srgb, var(--ink) 30%, transparent);
+  --tree-halo: color-mix(in srgb, var(--cherry) 34%, transparent);
+  --tree-link: var(--accent);
+  --tree-signal: var(--accent);
+  --tree-signal-core: color-mix(in srgb, var(--accent) 30%, var(--old-lace));
+
+  /* The hero is the brand's own rose; the rest are quiet, brand-adjacent tints, only ever a ring, a
+     dot or a branch. */
+  --tree-cred-1: var(--accent);
+  --tree-cred-2: #1f4047; /* deep teal */
+  --tree-cred-3: #6e3a5e; /* plum */
+  --tree-cred-4: #9a7549; /* warm sand, deepened to 3:1 on the card */
+
+  --tree-bar-h: 84px;
+}
+
+:root[data-theme='dark'] :is(.tree, .tree-detail, .tree-detail__empty) {
+  --tree-planned: var(--taupe);
+  --tree-locked: color-mix(in srgb, var(--ink) 26%, transparent);
+  --tree-halo: color-mix(in srgb, var(--cherry) 55%, transparent);
+  --tree-cred-2: #7fb0b8;
+  --tree-cred-3: #c792b8;
+  --tree-cred-4: #cfae7f;
+}
+
+.tree {
+  position: relative;
+  margin: 0 0 var(--s5);
+  color: var(--ink);
+}
+
+/* On a phone the tree fills the tab, edge to edge. */
+.tree--bleed {
+  margin-left: calc(-1 * (var(--s4) + var(--sal)));
+  margin-right: calc(-1 * (var(--s4) + var(--sar)));
+}
+
+/* ── the key and the credential chips, sticky at the top ── */
+.tree__bar {
+  position: sticky;
+  top: var(--tree-sticky-top, 0px);
+  z-index: 5;
+  display: grid;
+  align-content: center;
+  gap: var(--s2);
+  height: var(--tree-bar-h);
+  padding: 0 var(--s4);
+  background: var(--bg);
+  box-shadow: 0 1px 0 var(--divider);
+}
+
+.tree__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px var(--s3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.tree--compact .tree__legend {
+  display: grid;
+  grid-template-columns: repeat(4, max-content);
+  column-gap: var(--s3);
+  animation: tree-fade-in var(--d-med) var(--settle);
+}
+
+/* Phones pin one row (Key, then the credential chips); the key opens above it on request. */
+.tree--compact {
+  --tree-bar-h: 56px;
+}
+
+.tree--compact.tree--key-open {
+  --tree-bar-h: 108px;
+}
+
+.tree__bar-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
+}
+
+.tree__bar-row .tree__chips {
+  flex: 1;
+  min-width: 0;
+  margin-left: 0;
+  padding-left: 0;
+}
+
+.tree__key-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 32px;
+  padding: 0 8px 0 12px;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px var(--divider);
+  color: var(--ink-2);
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  transition:
+    background-color var(--d-fast),
+    color var(--d-fast);
+}
+
+.tree__key-btn.is-on {
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.tree__key-chev {
+  transform: rotate(90deg);
+  transition: transform var(--d-fast) var(--settle);
+}
+
+.tree__key-btn.is-on .tree__key-chev {
+  transform: rotate(-90deg);
+}
+
+.tree__legend::-webkit-scrollbar,
+.tree__chips::-webkit-scrollbar,
+.tree__scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.tree__legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.tree__key,
+.tree-swatch {
+  flex: none;
+  width: 14px;
+  height: 10px;
+  border: 1.5px solid var(--tree-planned);
+  border-radius: 3px;
+  background: var(--card);
+}
+
+.tree__key--completed,
+.tree-swatch--completed {
+  background: var(--tree-done-tint);
+  border-color: var(--accent);
+}
+
+.tree__key--inProgress,
+.tree-swatch--inProgress {
+  border-color: var(--tree-now);
+}
+
+.tree__key--next,
+.tree-swatch--next {
+  background: var(--tree-done);
+  border-color: var(--tree-done);
+  box-shadow: 0 0 0 3px var(--tree-halo);
+}
+
+.tree__key--elective,
+.tree-swatch--elective {
+  border-style: dashed;
+}
+
+.tree__key--locked,
+.tree-swatch--locked {
+  border-color: var(--tree-locked);
+  background: transparent;
+}
+
+.tree__chips {
+  display: flex;
+  gap: var(--s2);
+  margin: 0 calc(-1 * var(--s4));
+  padding: 0 var(--s4);
+  overflow-x: auto;
+  scrollbar-width: none;
+  /* Full names, scrolled sideways; the fade says there's more. */
+  mask-image: linear-gradient(to right, var(--ink) 86%, transparent);
+}
+
+.tree__chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  transition:
+    background-color var(--d-fast),
+    box-shadow var(--d-fast);
+}
+
+.tree__chip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--hue);
+}
+
+.tree__chip-name {
+  white-space: nowrap;
+}
+
+.tree__chip-count {
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.tree__chip--on {
+  background: var(--card);
+  box-shadow: inset 0 0 0 1.5px var(--hue);
+}
+
+/* ── the canvas: the page itself ── */
+.tree__board {
+  position: relative;
+  overflow: hidden;
+}
+
+.tree__svg,
+.tree__links {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+/* Under the cards, so a link passes behind a course instead of across its text. */
+.tree__links {
+  z-index: 0;
+}
+
+.tree__hairline {
+  stroke: var(--divider);
+  stroke-width: 1;
+}
+
+.tree__trunk {
+  fill: var(--tree-wood);
+}
+
+.tree__grow-line {
+  fill: none;
+  stroke: white; /* mask luminance, never painted */
+  stroke-width: 60;
+}
+
+.tree__root {
+  fill: none;
+  stroke: var(--tree-root);
+  stroke-linecap: round;
+}
+
+.tree__twig {
+  fill: none;
+  stroke: var(--tree-twig);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  transition:
+    opacity var(--d-med) var(--settle),
+    stroke var(--d-med);
+}
+
+.tree__twig--done {
+  stroke: color-mix(in srgb, var(--accent) 35%, var(--tree-twig));
+}
+
+.tree__branch {
+  fill: none;
+  stroke: color-mix(in srgb, var(--hue) 55%, transparent);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+  transition:
+    stroke-dashoffset 900ms var(--settle),
+    opacity var(--d-med) var(--settle);
+}
+
+.tree__branch.is-folded {
+  stroke-dashoffset: 1;
+}
+
+.tree__twig.is-on,
+.tree__branch.is-on {
+  stroke: var(--tree-link);
+  stroke-width: 2.2;
+}
+
+.tree__twig.is-dim,
+.tree__branch.is-dim {
+  opacity: 0.25;
+}
+
+/* Relationships on demand: the chosen course's prerequisites below it and what it unlocks above.
+   Each link draws in, lands on an arrowhead at the course it unlocks, then a glowing signal keeps
+   running along it in that direction, rippling up from the roots. */
+.tree__link-line {
+  fill: none;
+  stroke: var(--tree-link);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: tree-draw 520ms var(--settle) forwards;
+}
+
+.tree__link--or .tree__link-line {
+  stroke-width: 1.6;
+}
+
+.tree__arrow {
+  fill: var(--tree-link);
+  opacity: 0;
+  animation: tree-fade-in 200ms var(--settle) 420ms forwards;
+}
+
+/* A short bead of light, the same size on every link (its length comes in as --len). */
+.tree__signal {
+  fill: none;
+  stroke: var(--tree-signal);
+  stroke-width: 3.5;
+  stroke-linecap: round;
+  stroke-dasharray: 16px calc(var(--len) * 1px + 32px);
+  stroke-dashoffset: 16px;
+  opacity: 0;
+  animation: tree-signal 2.8s cubic-bezier(0.45, 0, 0.35, 1) calc(600ms + var(--signal-delay, 0ms)) infinite;
+}
+
+/* Its bright centre, over the rose glow, so it reads as light rather than a smudge. */
+.tree__signal--core {
+  stroke: var(--tree-signal-core);
+  stroke-width: 1.8;
+}
+
+@keyframes tree-signal {
+  0% {
+    stroke-dashoffset: 16px;
+    opacity: 0;
+  }
+  6%,
+  46% {
+    opacity: 1;
+  }
+  52%,
+  100% {
+    stroke-dashoffset: calc(var(--len) * -1px);
+    opacity: 0;
+  }
+}
+
+@keyframes tree-fade-in {
+  to {
+    opacity: 1;
+  }
+}
+
+.tree__key-arrow {
+  flex: none;
+  overflow: visible;
+}
+
+.tree__key-arrow path:first-child {
+  fill: none;
+  stroke: var(--tree-link);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+.tree__key-arrow path:last-child {
+  fill: var(--tree-link);
+}
+
+@keyframes tree-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* ── course cards: the app's cards, status by fill and outline ── */
+.tree-node {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: 0 10px;
+  border: 1.5px solid var(--tree-planned);
+  border-radius: var(--r2);
+  background: var(--card);
+  color: var(--ink);
+  text-align: left;
+  box-shadow: var(--shadow-card);
+  transition:
+    opacity var(--d-med) var(--settle),
+    transform var(--d-med) var(--settle);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tree-node:active {
+  transform: scale(0.97);
+}
+
+.tree-node__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.tree-node__code {
+  font-size: 13.5px;
+  font-weight: 700;
+  line-height: 1.15;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.tree-node__sub {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 11.5px;
+  line-height: 1.25;
+  color: var(--ink-2);
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.tree-node__sub--one {
+  -webkit-line-clamp: 1;
+}
+
+.tree-node__glyph {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  margin-left: auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.tree-node__tag {
+  margin-left: auto;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--tree-on-done);
+  color: var(--cherry);
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.tree-node__tag--now {
+  background: var(--accent-tint);
+  color: var(--tree-now);
+}
+
+.tree-node__dots {
+  position: absolute;
+  right: 8px;
+  bottom: 7px;
+  display: flex;
+  gap: 3px;
+}
+
+.tree-node__dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--hue);
+}
+
+.tree-node--completed {
+  border-color: var(--accent-edge);
+  background: var(--tree-done-tint);
+  color: var(--accent);
+  box-shadow: none;
+}
+
+.tree-node--next .tree-node__sub {
+  color: color-mix(in srgb, var(--tree-on-done) 85%, transparent);
+}
+
+/* Taking now: a rose outline that breathes, slowly. */
+.tree-node--inProgress {
+  border-color: var(--tree-now);
+}
+
+.tree-node--inProgress::after {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border: 1.5px solid var(--tree-now);
+  border-radius: calc(var(--r2) + 4px);
+  opacity: 0;
+  animation: tree-breathe 3.2s var(--settle) infinite;
+  pointer-events: none;
+}
+
+@keyframes tree-breathe {
+  0% {
+    opacity: 0.45;
+    transform: scale(0.97);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.05);
+  }
+}
+
+/* Take next: the one highlight on the tree. */
+.tree-node--next {
+  border-color: var(--tree-done);
+  background: var(--tree-done);
+  color: var(--tree-on-done);
+  box-shadow:
+    0 0 0 4px var(--tree-halo),
+    0 8px 28px var(--tree-halo);
+}
+
+.tree-node--elective {
+  border-style: dashed;
+}
+
+.tree-node--locked {
+  border-color: var(--tree-locked);
+  box-shadow: none;
+  color: var(--ink-2);
+}
+
+.tree-node:focus-visible,
+.tree-node.is-selected,
+.tree-leaf:focus-visible,
+.tree-leaf[aria-pressed='true'] {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+/* ── the canopy: badge cards with a thin ring ── */
+.tree-leaf {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: 0 var(--s3);
+  border-radius: var(--r3);
+  background: var(--card);
+  color: var(--ink);
+  text-align: left;
+  box-shadow: inset 0 0 0 1px var(--hairline), var(--shadow-card);
+  transition:
+    opacity var(--d-med) var(--settle),
+    transform var(--d-slow) var(--settle);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tree-leaf--hero {
+  box-shadow: inset 0 0 0 1.5px var(--hue), var(--shadow-card);
+}
+
+.tree-leaf__ring {
+  position: relative;
+  flex: none;
+  width: 38px;
+  height: 38px;
+}
+
+.tree--compact .tree-leaf {
+  gap: var(--s2);
+  padding: 0 10px;
+}
+
+.tree--compact .tree-leaf__ring {
+  width: 34px;
+  height: 34px;
+}
+
+.tree-leaf__ring svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.tree-leaf__ring circle {
+  fill: none;
+  stroke-width: 2.5;
+}
+
+.tree-leaf__track {
+  stroke: var(--track);
+}
+
+.tree-leaf__fill {
+  stroke: var(--hue);
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: calc(1 - var(--pct));
+  transition: stroke-dashoffset 900ms var(--settle) 250ms;
+}
+
+.tree-leaf__count {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.tree-leaf__text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tree-leaf__name {
+  display: -webkit-box;
+  overflow: hidden;
+  font: 600 13.5px/1.2 var(--font-brand);
+  overflow-wrap: normal;
+  word-break: normal;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.tree-leaf__kind {
+  font-size: var(--fs-caption);
+  color: var(--ink-2);
+}
+
+/* ── years: a calm label that stays on the left as you scroll, and quiet Fall / Winter heads ── */
+.tree__band,
+.tree__band-sentinel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+}
+
+.tree__band-sentinel {
+  right: auto;
+  width: 1px;
+}
+
+.tree__year-label {
+  position: sticky;
+  top: calc(var(--tree-sticky-top, 0px) + var(--tree-bar-h) + 10px);
+  display: block;
+  width: max-content;
+  margin: 12px 0 0 4px;
+  font: 600 12px/1 var(--font-brand);
+  letter-spacing: 0.04em;
+  color: var(--ink-2);
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  white-space: nowrap;
+}
+
+.tree:not(.tree--compact) .tree__year-label {
+  margin-left: 10px;
+  font-size: 13px;
+}
+
+.tree__now {
+  color: var(--accent);
+}
+
+.tree__lane-head {
+  position: absolute;
+  top: 12px;
+  font-size: var(--fs-caption);
+  color: var(--ink-2);
+}
+
+/* ── the roots ── */
+.tree__roots {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: grid;
+  justify-items: center;
+  gap: var(--s1);
+  padding: 0 var(--s4);
+  text-align: center;
+  pointer-events: none;
+}
+
+.tree__plate {
+  font: 600 var(--fs-caption) / 1.35 var(--font-brand);
+  color: var(--ink-2);
+}
+
+.tree__sapling {
+  max-width: 32ch;
+  font-size: var(--fs-caption);
+  color: var(--ink-2);
+}
+
+.tree__cue {
+  position: absolute;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  transform: translateX(-50%);
+  transition: opacity var(--d-slow) var(--settle);
+  pointer-events: none;
+}
+
+.tree__cue svg,
+.tree__float-btn svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.tree__cue.is-gone {
+  opacity: 0;
+}
+
+/* ── Back to roots / Jump to now, once you've climbed ── */
+.tree__float {
+  position: sticky;
+  bottom: var(--s3);
+  z-index: 6;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  height: 0;
+  pointer-events: none;
+}
+
+.tree__float-inner[hidden] {
+  display: none;
+}
+
+/* ── the phone's peek: what a tapped course needs and unlocks, over the tab bar ── */
+.tree-peek {
+  display: grid;
+  gap: 10px;
+  width: min(calc(100% - 2 * var(--s3)), 520px);
+  padding: var(--s3) var(--s3) var(--s4) var(--s4);
+  border-radius: var(--r3);
+  background: var(--raised);
+  box-shadow: var(--shadow-float), inset 0 0 0 1px var(--hairline);
+  pointer-events: auto;
+  animation: tree-peek-in var(--d-med) var(--settle);
+}
+
+@keyframes tree-peek-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+.tree-peek__head {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+}
+
+.tree-peek__id {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 10px;
+}
+
+.tree-peek__id--leaf {
+  flex-wrap: nowrap;
+  align-items: center;
+}
+
+.tree-peek__name {
+  margin: 0;
+  font: 700 1.0625rem / 1.25 var(--font-brand);
+  color: var(--ink);
+}
+
+.tree-peek__status {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.tree-peek__more {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 36px;
+  padding: 0 8px 0 14px;
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--fs-caption);
+  font-weight: 600;
+}
+
+.tree-peek__close {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  color: var(--ink-2);
+}
+
+.tree-peek__title {
+  margin: -6px 0 0;
+  overflow: hidden;
+  font-size: var(--fs-caption);
+  color: var(--ink-2);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.tree-peek__row {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
+}
+
+.tree-peek__label {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: 66px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.tree-peek__codes {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tree-peek__codes::-webkit-scrollbar {
+  display: none;
+}
+
+.tree-peek__code-chip {
+  flex: none;
+}
+
+.tree__float-inner {
+  display: flex;
+  gap: var(--s2);
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity var(--d-med) var(--settle),
+    transform var(--d-med) var(--settle);
+}
+
+.tree__float-inner.is-on {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
+.tree__float-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: var(--raised);
+  color: var(--ink);
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px var(--hairline), var(--shadow-float);
+}
+
+/* ── growing: the trunk rises from the roots, each year settles in, the leaves bloom ── */
+.tree__grow-line.is-drawing {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: tree-draw 1.2s var(--settle) 0.1s forwards;
+}
+
+.tree__roots-wood.is-growing {
+  animation: tree-fade 700ms var(--settle) both;
+}
+
+@keyframes tree-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.tree--grow .tree-node {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.tree--grow .tree-leaf {
+  opacity: 0;
+  transform: scale(0.92);
+}
+
+.tree--grow .tree-node.is-in,
+.tree--grow .tree-leaf.is-in {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 420ms var(--settle) calc(var(--i, 0) * 45ms),
+    transform 520ms var(--settle) calc(var(--i, 0) * 45ms);
+}
+
+.tree--grow .tree-leaf:not(.is-in) .tree-leaf__fill {
+  stroke-dashoffset: 1;
+}
+
+/* ── focus: a chosen course lights its path down to the roots and up to the leaves ── */
+.tree--focus .tree-node.is-dim,
+.tree--focus .tree-leaf.is-dim {
+  opacity: 0.3;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tree-node--inProgress::after {
+    display: none;
+  }
+
+  .tree--grow .tree-node,
+  .tree--grow .tree-leaf,
+  .tree__roots-wood.is-growing {
+    opacity: 1;
+    transform: none;
+    animation: none;
+  }
+
+  .tree__grow-line.is-drawing,
+  .tree__link-line {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+
+  .tree__arrow {
+    animation: none;
+    opacity: 1;
+  }
+
+  .tree__signal {
+    display: none;
+  }
+
+  .tree-peek,
+  .tree--compact .tree__legend {
+    animation: none;
+  }
+
+  .tree__branch.is-folded {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* ── the switch above the Plan: Tree or the roadmap ── */
+.plan-switch {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  margin-bottom: var(--s3);
+}
+
+.plan-switch .segmented {
+  flex: 1;
+  max-width: 280px;
+}
+
+.plan-switch--sticky {
+  position: sticky;
+  top: 0;
+  z-index: 7;
+  height: 56px;
+  margin: calc(-1 * var(--s2)) calc(-1 * (var(--s4) + var(--sar))) 0 calc(-1 * (var(--s4) + var(--sal)));
+  padding: 0 calc(var(--s4) + var(--sar)) 0 calc(var(--s4) + var(--sal));
+  background: var(--bg);
+}
+
+.plan-after {
+  display: grid;
+  gap: var(--s3);
+}
+
+/* ── the detail sheet and panel ── */
+.tree-detail {
+  display: grid;
+  gap: var(--s3);
+}
+
+.tree-detail .lead,
+.tree-detail__lead {
+  margin: 0;
+}
+
+.tree-detail__status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  font-weight: 600;
+}
+
+.tree-detail__when {
+  color: var(--ink-2);
+}
+
+.tree-detail__section h3 {
+  margin-bottom: var(--s1);
+  font: 600 var(--fs-section) / 1.3 var(--font-brand);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+.tree-detail__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: var(--s2);
+}
+
+.tree-detail__pick {
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
+.tree-detail__creds {
+  display: grid;
+  gap: var(--s2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tree-detail__creds .inline-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  text-align: left;
+}
+
+.tree-detail__leaf {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+}
+
+.tree-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+}
+
+.tree-swatch[style] {
+  border: 0;
+  border-radius: 50%;
+  background: var(--hue);
+}
+
+.tree-detail__empty {
+  margin: 0;
+}
+
+/* ── the desktop page: the tree scrolls in its own box, so the switch, the lead, the key and the
+      chips above it stay put ── */
+.plan-page__tree .tree {
+  max-width: 880px;
+  margin: var(--s3) auto 0;
+}
+
+.tree--contained .tree__bar {
+  position: static;
+  height: auto;
+  padding: var(--s2) 0 var(--s3);
+  background: none;
+  box-shadow: none;
+}
+
+.tree--contained .tree__chips {
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+  mask-image: none;
+}
+
+.tree--contained .tree__scroll {
+  height: clamp(460px, calc(100dvh - 300px), 1100px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: none; /* it scrolls by wheel, touch and keys; Back to roots is the way home */
+  overscroll-behavior: contain;
+  border-radius: var(--r2);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+}
+
+.tree--contained .tree__year-label {
+  top: 10px;
+}

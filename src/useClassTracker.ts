@@ -7,6 +7,7 @@ import { applyReading, defaultTerm, MAX_WATCHES, watchFrom, type SeatState, type
 // and visible, from wherever the student is in the results, so an opening is heard on any tab.
 
 const STORAGE_KEY = 'studymax:class-watches'
+const CALL_KEY = 'studymax:class-call-on-open'
 const POLL_MS = 60_000
 
 export type Load<T> = { state: 'idle' } | { state: 'loading' } | { state: 'error'; message: string } | { state: 'done'; value: T }
@@ -28,7 +29,21 @@ async function getJson<T>(path: string): Promise<T> {
 
 const UNREACHABLE = "Couldn't reach USask's class search. Try again in a moment."
 
-export function useClassTracker() {
+export type SeatCall = 'idle' | 'calling' | 'placed' | 'failed'
+
+function loadCallOnOpen(): boolean {
+  try {
+    return localStorage.getItem(CALL_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+/**
+ * `phone` and `callEnabled` come from the app: the student's number (onboarding or the call screen)
+ * and whether this deployment can place calls at all (Bland key present).
+ */
+export function useClassTracker({ phone, callEnabled }: { phone: string; callEnabled: boolean }) {
   const [terms, setTerms] = useState<Load<Term[]>>({ state: 'idle' })
   const [term, setTerm] = useState('')
   const [course, setCourse] = useState('')
@@ -37,7 +52,13 @@ export function useClassTracker() {
   /** The most recent opening, until the student has seen it. */
   const [alert, setAlert] = useState<Watch | null>(null)
   const [checking, setChecking] = useState(false)
+  /** Phone the student when a watched seat opens. Off until they turn it on. */
+  const [callOnOpen, setCallOnOpenState] = useState(loadCallOnOpen)
+  const [seatCall, setSeatCall] = useState<SeatCall>('idle')
   const searchId = useRef(0)
+  /** Which open terms run the course being typed: section count per term, null where the check failed. */
+  const [offered, setOffered] = useState<{ course: string; byTerm: Load<Record<string, number | null>> } | null>(null)
+  const offeredId = useRef(0)
 
   useEffect(() => {
     try {
@@ -80,6 +101,34 @@ export function useClassTracker() {
     }
   }
 
+  /** Looks the course up across every open term, so each term can say whether it runs it. */
+  const checkOffered = useCallback(
+    async (code: string) => {
+      const clean = code.trim().toUpperCase().replace(/\s+/g, '')
+      const open = terms.state === 'done' ? terms.value.filter((t) => !t.viewOnly).map((t) => t.code) : []
+      const id = ++offeredId.current
+      if (!clean || open.length === 0) {
+        setOffered(null)
+        return
+      }
+      setOffered({ course: clean, byTerm: { state: 'loading' } })
+      try {
+        const { offered: byTerm } = await getJson<{ offered: Record<string, number | null> }>(
+          `/api/classes?op=offered&terms=${open.join(',')}&course=${encodeURIComponent(clean)}`,
+        )
+        if (id === offeredId.current) setOffered({ course: clean, byTerm: { state: 'done', value: byTerm } })
+      } catch {
+        if (id === offeredId.current) setOffered({ course: clean, byTerm: { state: 'error', message: UNREACHABLE } })
+      }
+    },
+    [terms],
+  )
+
+  const clearOffered = useCallback(() => {
+    offeredId.current++
+    setOffered(null)
+  }, [])
+
   function chooseTerm(code: string) {
     haptic.selection()
     setTerm(code)
@@ -105,6 +154,40 @@ export function useClassTracker() {
 
   const watchesRef = useRef(watches)
   watchesRef.current = watches
+
+  function setCallOnOpen(on: boolean) {
+    haptic.selection()
+    setCallOnOpenState(on)
+    try {
+      localStorage.setItem(CALL_KEY, on ? '1' : '0')
+    } catch {
+      // storage blocked: the choice holds for this session
+    }
+  }
+
+  // Read through a ref so the minute-by-minute check always sees the latest number and choice.
+  const callPrefs = useRef({ phone, callEnabled, callOnOpen })
+  callPrefs.current = { phone, callEnabled, callOnOpen }
+
+  /** One call per opening, and only when the student asked for it and left a number. */
+  const callAbout = useCallback(async (opened: Watch) => {
+    const { phone: number, callEnabled: can, callOnOpen: wanted } = callPrefs.current
+    if (!can || !wanted || number.replace(/\D/g, '').length < 7) return
+    setSeatCall('calling')
+    try {
+      const res = await fetch(api('/api/call-me'), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          phoneNumber: number.trim(),
+          seat: { course: `${opened.subject} ${opened.courseNumber}`, section: opened.sectionNumber, termDesc: opened.termDesc },
+        }),
+      })
+      setSeatCall(res.ok ? 'placed' : 'failed')
+    } catch {
+      setSeatCall('failed')
+    }
+  }, [])
 
   // The poll, the tab coming back into view and the Check button can all fire together; one check at
   // a time is enough, and overlapping ones would race each other's results.
@@ -155,8 +238,9 @@ export function useClassTracker() {
     if (opened) {
       haptic.medium()
       setAlert(opened)
+      void callAbout(opened)
     }
-  }, [])
+  }, [callAbout])
 
   // Re-check about once a minute while there's something to watch and the app is on screen.
   const hasWatches = watches.length > 0
@@ -189,6 +273,7 @@ export function useClassTracker() {
     setWatches(next)
     haptic.medium()
     setAlert(opened)
+    void callAbout(opened)
   }
 
   return {
@@ -200,6 +285,9 @@ export function useClassTracker() {
     course,
     sections,
     search,
+    offered,
+    checkOffered,
+    clearOffered,
     watches,
     watch,
     unwatch,
@@ -207,7 +295,13 @@ export function useClassTracker() {
     checking,
     checkNow,
     alert,
-    dismissAlert: () => setAlert(null),
+    dismissAlert: () => {
+      setAlert(null)
+      setSeatCall('idle')
+    },
+    callOnOpen,
+    setCallOnOpen,
+    seatCall,
     simulateOpening,
   }
 }

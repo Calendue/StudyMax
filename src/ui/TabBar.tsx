@@ -35,7 +35,7 @@ export function TabBar() {
   const m = useModel()
   const reduce = useReducedMotion()
   const largeText = useLargeText()
-  // Seat watching reads USask's own class search, so the Classes tab is USask-only.
+  // Seat watching reads USask's own class search, so the Class Tracker tab is USask-only.
   const tabs = DESTINATIONS.filter((d) => d.id !== 'courses' && (d.id !== 'classes' || m.universityId === 'usask'))
   const activeIndex = Math.max(0, tabs.findIndex((t) => t.id === m.tab))
 
@@ -206,7 +206,7 @@ export function TabBar() {
         onClick={() => m.openSheet('account')}
       >
         <span className="tab__icon">{m.account ? <Avatar account={m.account} size={24} /> : <Icon name="settings" size={22} />}</span>
-        {!largeText && <span className="tab__label">{m.account ? 'You' : 'Settings'}</span>}
+        {!largeText && <span className="tab__label">Settings</span>}
       </button>
     </nav>
   )
