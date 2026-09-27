@@ -58,6 +58,15 @@ function web() {
   return webAuth
 }
 
+/**
+ * Loads the web SDK ahead of a click. Safari (and Chrome after a few seconds) only lets a click open a
+ * popup while the click is still fresh; loading the SDK after the tap can use that up, and the
+ * sign-in window is blocked. The Welcome screen calls this as it opens. A no-op on native.
+ */
+export function prepareSignIn() {
+  if (!isNative && isAuthConfigured) void web().catch(() => {})
+}
+
 export async function currentAccount(): Promise<Account | null> {
   if (!isAuthConfigured) return null
   try {

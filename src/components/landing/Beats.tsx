@@ -213,6 +213,9 @@ export function TeamBeat({ grown }: BeatProps) {
           ))}
         </ul>
         <p className="beat-card__close">{TEAM.close}</p>
+        <p className="team__stack">
+          <span className="team__stack-label">Built with</span> {TEAM.stack.join(' · ')}
+        </p>
       </article>
     </Beat>
   )

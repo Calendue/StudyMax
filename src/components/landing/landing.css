@@ -909,6 +909,24 @@
   font: 600 var(--fs-climb-body) / 1.35 var(--font-brand);
 }
 
+/* The stack, as small print: there if you look, never competing with the story. */
+.team__stack {
+  margin: var(--s4) 0 0;
+  padding-top: var(--s3);
+  border-top: 1px solid var(--divider);
+  font-size: 0.75rem;
+  line-height: 1.6;
+  color: var(--ink-3);
+  text-wrap: pretty;
+}
+
+.team__stack-label {
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
 /* ── the canopy: the payoff, under the dusk sky ── */
 .beat--canopy {
   padding: clamp(96px, 13vh, 150px) var(--gutter) 0;

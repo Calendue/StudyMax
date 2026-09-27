@@ -1,5 +1,6 @@
+import { useEffect } from 'react'
 import { useModel } from '../model.ts'
-import type { Provider } from '../auth.ts'
+import { prepareSignIn, type Provider } from '../auth.ts'
 import { Wordmark } from '../ui/Brand.tsx'
 import { Appear, Button } from '../ui/primitives.tsx'
 import { isNative } from '../platform.ts'
@@ -32,14 +33,14 @@ function Spinner() {
   return <span className="spinner" aria-hidden />
 }
 
-function ProviderButton({ provider, label }: { provider: Provider; label: string }) {
+function ProviderButton({ provider, label, off = false }: { provider: Provider; label: string; off?: boolean }) {
   const m = useModel()
   const busy = m.authBusy === provider
   return (
     <button
       type="button"
-      className={`auth-btn auth-btn--${provider}`}
-      disabled={m.authBusy !== null}
+      className={`auth-btn auth-btn--${provider}${off ? ' auth-btn--off' : ''}`}
+      disabled={off || m.authBusy !== null}
       aria-busy={busy}
       onClick={() => void m.signInWith(provider)}
     >
@@ -51,6 +52,7 @@ function ProviderButton({ provider, label }: { provider: Provider; label: string
 
 export function WelcomeScreen() {
   const m = useModel()
+  useEffect(prepareSignIn, [])
   return (
     <>
       <main className="welcome">
@@ -74,7 +76,8 @@ export function WelcomeScreen() {
           </p>
         )}
         {/* Apple first: Apple's rule wherever Sign in with Apple sits beside another provider. */}
-        <ProviderButton provider="apple" label="Continue with Apple" />
+        {/* Apple on the web needs its own Services ID set up with Apple; until then it's shown, greyed. */}
+        <ProviderButton provider="apple" label={isNative ? 'Continue with Apple' : 'Continue with Apple · coming soon'} off={!isNative} />
         <ProviderButton provider="google" label="Continue with Google" />
         <Button block variant="quiet" disabled={m.authBusy !== null} onClick={m.continueWithoutAccount}>
           Continue without an account
