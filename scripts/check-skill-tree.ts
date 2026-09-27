@@ -227,6 +227,27 @@ assert.ok(datedNode('CMPT141').termKnown && datedNode('CMPT141').term === 'Fall 
 assert.ok(datedNode('CMPT145').term === 'Winter 2024' && datedNode('CMPT145').year === 1 && datedNode('CMPT145').lane === 'winter')
 assert.ok(datedNode('CMPT317').term === 'Winter 2026' && datedNode('CMPT317').year === 3 && datedNode('CMPT317').lane === 'winter')
 
+// ── a transcript that dates every USask course, plus undated transfer credit: the transfer credit
+// sits in Year 1 (over the load if need be) and never adds a year the transcript doesn't have ──
+{
+  const terms: Record<string, string> = {}
+  const put = (label: string, codes: string[]) => codes.forEach((c) => (terms[c] = label))
+  put('Fall 2024', ['ARTH120', 'CMRS110', 'ENG111', 'MATH110', 'MATH163'])
+  put('Winter 2025', ['CMPT214', 'GEOL121', 'LING114', 'MATH116', 'MATH164'])
+  put('Fall 2025', ['BIOL120', 'CMPT270', 'COMM101', 'PHIL232', 'STAT241'])
+  put('Winter 2026', ['CMPT215', 'CMPT263', 'CMPT280', 'STAT245'])
+  const transfer = student([...Object.keys(terms), 'CMPT141', 'CMPT145', 'MUS111'], ['CMPT332', 'CMPT360', 'CMPT370'], TODAY, 1000, {
+    ...SAMPLE,
+    completedTerms: terms,
+  })
+  assert.equal(transfer.layout.currentYear, 3, 'Fall 2024 is Year 1, so Fall 2026 is Year 3: transfer credit adds no year')
+  for (const code of ['CMPT141', 'CMPT145', 'MUS111']) {
+    const n = transfer.layout.nodes.find((x) => x.code === code)!
+    assert.ok(n.year === 1 && !n.termKnown, `${code} (transfer credit) sits in Year 1, marked approximate`)
+  }
+  assert.equal(transfer.layout.nodes.find((x) => x.code === 'MATH110')!.year, 1, 'Fall 2024 is Year 1')
+}
+
 // ── a first-year with nothing done yet: a sapling, the canopy already showing the target ──
 const firstYear = student([], [], TODAY, 390)
 checkLayout('first-year', firstYear)

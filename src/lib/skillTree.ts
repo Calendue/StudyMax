@@ -341,13 +341,18 @@ export function studentYear(input: StudentYearInput) {
     return free
   }
   let currentYear = Math.max(1, cuYear, topLevel, knownYear)
-  while (room(currentYear) < undated.length) currentYear++
+  // On a transcript that dates nearly everything (a real USask one dates every course it taught), the
+  // few undated courses are transfer or placement credit, never taken in one of these terms: they
+  // don't need a term's room, and mustn't add a year the transcript doesn't have. A mostly undated
+  // list (courses added by hand, a DegreeWorks audit) is placed by room, as before.
+  const transferOnly = knownDone.size > 0 && knownDone.size >= 2 * undated.length
+  if (!transferOnly) while (room(currentYear) < undated.length) currentYear++
   // A student who hasn't started (nothing done, nothing registered) starts Year 1 with their plan's
   // first term, not with the calendar: a plan from Fall 2027 is Year 1 from Fall 2027.
   const started = completed.size > 0 || inProgress.length > 0
   const firstTerm = input.firstTerm
   const baseAY = !started && firstTerm ? Math.max(currentAY, academicYear(firstTerm)) : currentAY
-  return { knownDone, undated, currentYear, started, baseAY }
+  return { knownDone, undated, transferOnly, currentYear, started, baseAY }
 }
 
 /** The academic year (by its Fall) that is Year `year` of the student's degree. */
@@ -370,7 +375,7 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
   // plans to take now: a part-time plan doesn't make their first years part-time.
   const pastLoad = Math.max(termLoad, TERM_LOAD)
   const firstTerm = input.plan.map((t) => parseTerm(t.label)).find((t) => t !== null) ?? null
-  const { knownDone, undated, currentYear, started, baseAY } = studentYear({ ...input, firstTerm })
+  const { knownDone, undated, transferOnly, currentYear, started, baseAY } = studentYear({ ...input, firstTerm })
   const finishedLanes = (year: number, now: number) => finishedLanesOf(year, now, current)
   const yearOf = (t: TermStart) => Math.max(1, currentYear + academicYear(t) - baseAY)
   // Completed courses with no date sit in a year that's already over (or in this year's Fall, when it's Winter).
@@ -396,9 +401,10 @@ export function layoutSkillTree(input: SkillTreeInput): SkillTreeLayout {
     [...drafts.values()].filter((d) => d.year === year && (d.lane === null || finishedLanes(year, currentYear).includes(d.lane as 'fall' | 'winter'))).length
   const capacity = (year: number) => finishedLanes(year, currentYear).length * pastLoad
   for (const code of undated.sort((a, b) => courseLevel(a) - courseLevel(b) || a.localeCompare(b))) {
-    const want = Math.min(lastDoneYear, Math.max(1, Math.min(4, courseLevel(code))))
+    const want = Math.max(1, Math.min(lastDoneYear, Math.min(4, courseLevel(code))))
     let year = want
-    for (let k = 0; k <= 2 * lastDoneYear; k++) {
+    // Transfer credit beside a dated transcript stays in its level's year, over the load if need be.
+    for (let k = 0; !transferOnly && k <= 2 * lastDoneYear; k++) {
       const y = want + (k % 2 === 1 ? (k + 1) / 2 : -k / 2)
       if (y >= 1 && y <= lastDoneYear && heldIn(y) < capacity(y)) {
         year = y
