@@ -239,6 +239,15 @@ export function CanopyBeat({ grown, onGetStarted, onSkip }: BeatProps & { onGetS
             <span>{CANOPY.url}</span>
           </figcaption>
         </figure>
+        <figure className="canopy__meme">
+          <img
+            src="/study-maxing-meme.jpg"
+            width={230}
+            height={230}
+            loading="lazy"
+            alt="Drake meme: rejecting “Aura maxing,” approving “Study maxing.”"
+          />
+        </figure>
       </div>
       <ul className="blossoms" aria-label="Credentials StudyMax maps">
         {CANOPY.blossoms.map((b, i) => (
