@@ -1047,6 +1047,12 @@ p.card__empty {
   align-items: start;
 }
 
+/* The Plan page hosts the skill tree: the tree's box ends above the fold at 1440x900, so the roots
+   and the program's name under them are in view on arrival and only the box scrolls. */
+.plan-page__tree .tree--contained .tree__scroll {
+  height: clamp(380px, calc(100dvh - 390px), 1100px);
+}
+
 .plan-page__lead {
   margin-bottom: var(--s4);
 }
