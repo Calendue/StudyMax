@@ -9,7 +9,9 @@ import type { ValidationResult } from '../src/lib/max/planningAdapter.js'
 
 // v2: PlannedCourse carries cu, group and year; the scheduler honours offerings, credit and level
 // gates, and the senior CMPT limit.
-const PLANNER_VERSION = 'lib/plan.ts@buildStudentPlan-v2'
+// v3: server plans go through planningAdapter.regenerate(), the app's own plan — the whole degree,
+// credentials and a declared minor, at the student's load and Spring/Summer preferences.
+const PLANNER_VERSION = 'lib/plan.ts@buildStudentPlan-v3'
 
 function hashInputs(snapshot: {
   targetProgramId: string
@@ -26,6 +28,9 @@ export interface PlanSnapshot {
   minorProgramId: string | null
   targetSpecializationIds: string[]
   coursesPerTerm: number
+  /** Spring/Summer preferences the plan was built with. No GeneratedPlan/PlanVersion columns — kept in the inputs hash. */
+  springSummer: boolean
+  summerPerTerm: number
   startSeason: string
   startYear: number
   terms: PlannedTerm[]

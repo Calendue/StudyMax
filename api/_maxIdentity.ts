@@ -15,11 +15,16 @@ export interface MaxUser {
   isGuest: boolean
 }
 
-export async function resolveMaxUser(req: RequestLike): Promise<MaxUser | null> {
+/**
+ * A signed-in student with no saved account yet (onboarding not finished, or a school we don't map)
+ * resolves to `{ noProfile: true }` — never to the demo student, which would read them someone
+ * else's plan and let them overwrite the demo student's phone number. Only a guest gets the demo.
+ */
+export async function resolveMaxUser(req: RequestLike): Promise<MaxUser | { noProfile: true } | null> {
   const verified = await verifiedUser(req)
   if (verified) {
     const row = await db().userInfo.findUnique({ where: { authUid: verified.uid } })
-    if (row) return { userId: row.userId, isGuest: false }
+    return row ? { userId: row.userId, isGuest: false } : { noProfile: true }
   }
   const demo = await getDemoUser()
   return demo ? { userId: demo.userId, isGuest: true } : null

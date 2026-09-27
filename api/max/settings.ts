@@ -39,6 +39,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return
   }
   const resolved = await resolveMaxUser(req)
+  if (resolved && 'noProfile' in resolved) {
+    res.status(409).json({ error: 'NO_PROFILE' })
+    return
+  }
   if (!resolved) {
     res.status(500).json({ error: 'demo student not seeded — run npm run db:seed:demo-student' })
     return

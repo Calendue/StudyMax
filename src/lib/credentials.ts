@@ -1,6 +1,6 @@
-import type { Program } from '../data/programs/types.ts'
-import type { Specialization } from '../data/specializations.ts'
-import { computeMatches, type SpecializationMatch } from './match.ts'
+import type { Program } from '../data/programs/types.js'
+import type { Specialization } from '../data/specializations.js'
+import { computeMatches, type SpecializationMatch } from './match.js'
 
 export interface CredentialMatch extends SpecializationMatch {
   program: Program

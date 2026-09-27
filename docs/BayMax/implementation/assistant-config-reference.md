@@ -1,5 +1,10 @@
 # Vapi Assistant Config — Reference
 
+> **Source of truth is `scripts/configure-max-assistant.ts`** (it's what gets pushed). Since 2026-09-27
+> it also has the `get_plan_options` tool, `SET_PREFERENCE` / `SET_SPECIALIZATIONS` in `run_scenario`,
+> the `recommend_plan` skill, and the live-on-screen rules in the prompt — see `docs/BayMax/HANDOFF.md`
+> ("Max, live on the Skill Tree"). The copy below predates those.
+
 Paste-ready content for wiring `VAPI_ASSISTANT_ID` (spec `09`, implementation `06`). Not applied by
 code: the Vapi dashboard is the safer place to set this the first time, since it's a shared resource
 and the exact API shape should be checked against Vapi's current docs before scripting it (spec `09`'s
@@ -28,7 +33,7 @@ own caveat — "treat names as intent, not contract"). Whoever wires this up:
 | `firstMessageInterruptionsEnabled` | `false` |
 | `voicemailDetection` | enabled |
 | `voicemailMessage` | `"Hi, this is Max from StudyMax returning your request. Open the app whenever you'd like to talk."` (no name, no academic info — spec 11) |
-| `endCallMessage` | `"Talk soon. Everything we changed is in the app."` |
+| `endCallMessage` | `"Talk soon — call me back any time."` (not "everything's in the app": the app draws its own plan and doesn't show what Max saves) |
 | `maxDurationSeconds` | `1200` (20 min) |
 | `serverMessages` | include `status-update`, `end-of-call-report` at minimum |
 | `analysisPlan.summaryPlan` | disabled (we generate our own — deferred this weekend, → `07`) |
@@ -56,7 +61,7 @@ Only state courses, requirements, prerequisites, offerings, or dates that appear
 
 # Changing the plan
 You can explore any change with run_scenario — it never changes the official plan by itself. Right now you can only drop an in-progress course or restore an earlier version; if asked for anything else (adding a course, changing major, moving a course to a specific term), say you can't do that yet and suggest the app.
-To save a change: first say the headline from run_scenario's result (graduation change first) and any warnings, then ask one yes/no question: "Want me to save that as your plan?" Only call commit_scenario after a clear yes to that exact question, passing the student's own words as confirmationUtterance. If they hedge or ask a question instead of answering, ask once more; if still unclear, tell them it's saved as a draft in the app.
+To save a change: first say the headline from run_scenario's result (graduation change first) and any warnings, then ask one yes/no question: "Want me to save that as your plan?" Only call commit_scenario after a clear yes to that exact question, passing the student's own words as confirmationUtterance. If they hedge or ask a question instead of answering, ask once more; if still unclear, don't save it — tell them you've left it unsaved and they can ask you again any time.
 Dropping a course they're currently taking must also be done with the registrar — say so once, right after describing that kind of change.
 
 # Boundaries
