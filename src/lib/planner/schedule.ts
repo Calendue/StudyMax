@@ -333,7 +333,7 @@ function deadlines(c: Ctx, H: number, earliest: number[], pack: boolean): number
 
 // ---- list scheduling ----
 
-type Prio = 'template' | 'edf'
+type Prio = 'template' | 'edf' | 'senior'
 
 function listSchedule(c: Ctx, H: number, dl: number[], prio: Prio, missed?: { item: number; before?: number }): Int32Array | null {
   const s = newState(c)
@@ -341,6 +341,9 @@ function listSchedule(c: Ctx, H: number, dl: number[], prio: Prio, missed?: { it
   const keyOf = (i: number, t: number, year: number): number[] => {
     const it = c.items[i]
     if (prio === 'edf') return [dl[i], c.due[i], c.year[i], it.loose ? 1 : 0, -c.chain[i], it.named ? 0 : 1, it.group]
+    // Senior CMPT first (three a term at most, none in Spring/Summer): a plan that saves them for the
+    // end can't catch up, so this order pulls them forward as soon as their gates open.
+    if (prio === 'senior') return [dl[i] <= t ? 0 : 1, it.seniorCmpt ? 0 : 1, dl[i], -c.chain[i], c.year[i], it.loose ? 1 : 0, it.named ? 0 : 1, it.group]
     return [dl[i] <= t ? 0 : paced[i] ? 1 : 2, c.due[i] > year ? 1 : 0, c.year[i], it.loose ? 1 : 0, -c.chain[i], c.due[i], dl[i], it.named ? 0 : 1, it.named ? it.level : 0, it.group]
   }
   for (let t = 0; t <= H && t < c.T; t++) {
@@ -628,7 +631,7 @@ function solveAt(c: Ctx, H: number, earliest: number[], budget: { left: number }
     if (at) return { at, proven: true }
     if (!tighten(c, dl, missed.item, missed.before)) break
   }
-  for (const [dl, prio] of [[packedDl, 'template'], [packedDl, 'edf'], [chainDl, 'edf']] as const) {
+  for (const [dl, prio] of [[packedDl, 'template'], [packedDl, 'edf'], [chainDl, 'edf'], [packedDl, 'senior'], [chainDl, 'senior']] as const) {
     const at = listSchedule(c, H, dl, prio)
     if (at) return { at, proven: true }
   }

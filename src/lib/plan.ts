@@ -588,7 +588,9 @@ function runPlan(
       const G = result.graduation
       for (let t = 0; t < G; t++) {
         const term = built.core.terms[t]
-        const used = placed.get(t)?.length ?? 0
+        // A full-year course started the term before holds a seat here too.
+        const carried = (placed.get(t - 1) ?? []).filter((x) => x.fullYear).length
+        const used = (placed.get(t)?.length ?? 0) + carried
         if (term.cap > used && term.season !== 'Spring/Summer') {
           diagnostics.push({ level: 'warning', code: 'EMPTY_SEAT', term: term.label, message: `${term.label} has ${term.cap - used} open seat${term.cap - used > 1 ? 's' : ''}: nothing left can be taken yet then.` })
         }

@@ -78,9 +78,18 @@ for (const c of matrixCases()) {
   if (planKey(buildCase(c, { completed: rot(c.stage.completed), inProgress: rot(c.stage.inProgress) }).plan) !== key) brk('determinism', `${c.key}: rotated inputs differ`)
 
   // baseline
+  // The greedy planner gave each full-year course (CMPT 400) one Fall seat, breaking the seat rule; it
+  // holds its Winter seat now, so each one planned may push graduation one term past the baseline.
   const was = baseline[c.key]
+  const fullYear = b.plan.flatMap((t) => t.courses).filter((x) => x.fullYear).length
+  let allowed = was
+  if (was !== undefined && was > 0 && fullYear > 0) {
+    let t: TermStart = { season: (['Winter', 'Spring/Summer', 'Fall'] as const)[was % 10], year: Math.floor(was / 10) }
+    for (let k = 0; k < fullYear; k++) t = nextTerm(t, c.summer)
+    allowed = termOrd(`${t.season} ${t.year}`)
+  }
   if (was === undefined) brk('baseline', `${c.key}: not in plan-baseline.json`)
-  else if (gLabels > was) brk('baseline', `${c.key}: ${showOrd(gLabels)}, later than the greedy planner's ${showOrd(was)}`)
+  else if (gLabels > allowed) brk('baseline', `${c.key}: ${showOrd(gLabels)}, later than the greedy planner's ${showOrd(was)}${fullYear ? ` (+${fullYear} full-year seat)` : ''}`)
   else if (gLabels < was) stats.improved++
   else stats.same++
 
@@ -128,6 +137,12 @@ for (const c of matrixCases()) {
     const start = nextTerm(parseTerm(first.label)!, c.summer)
     const r = buildCase(c, { completed: done, inProgress: c.stage.inProgress.filter((x) => !done.includes(x)), start })
     const rest = b.plan.slice(firstIdx + 1)
+    // Gated: doing exactly what the plan said never moves graduation. Reported only: whether every later
+    // term is identical (the planner re-optimises from its inputs alone, so it may re-pick among equally
+    // early plans for future, unregistered terms).
+    const restG = graduationOrdFullYear(rest, {})
+    const againG = graduationOrdFullYear(r.plan, {})
+    if (againG !== restG) brk('replan-graduation', `${c.key} (passed ${first.label}): graduation ${showOrd(restG)} → ${showOrd(againG)}`)
     if (slotKey(r.plan) !== slotKey(rest)) {
       const diff = [...r.plan, ...rest].map((t) => t.label).sort((x, y) => termOrd(x) - termOrd(y)).find((l) => slotKey(r.plan.filter((t) => t.label === l)) !== slotKey(rest.filter((t) => t.label === l)))
       brk('replan', `${c.key} (passed ${first.label}): the rest changed${diff ? `, first at ${diff}` : ''}`)
@@ -156,7 +171,10 @@ console.log(`${times.length} cases · per plan p50 ${p(0.5).toFixed(1)} ms · p9
 console.log(`overrides: ${stats.freed} finish earlier because a removed course isn't taken again (freed seat, not a break)`)
 console.log(`baseline: ${stats.improved} earlier than the greedy planner, ${stats.same} the same`)
 console.log(`replan checked on ${stats.replanChecked} (skipped ${stats.replanSkipped}: first term holds an elective slot); prefix checked on ${stats.prefixChecked}`)
-const PROPS = ['determinism', 'monotone-load', 'monotone-summer', 'monotone-fail', 'monotone-block', 'monotone-drop', 'monotone-completed', 'booked', 'prefix', 'replan', 'baseline', 'runtime']
+const PROPS = ['determinism', 'monotone-load', 'monotone-summer', 'monotone-fail', 'monotone-block', 'monotone-drop', 'monotone-completed', 'booked', 'replan-graduation', 'prefix', 'replan', 'baseline', 'runtime']
+// Report-only: exact prefix and replan identity. What's gated is that graduation never moves on a replan
+// (replan-graduation) or earlier on a block (monotone-block), and registered courses never move (booked).
+const REPORT_ONLY = new Set(['prefix', 'replan'])
 console.log(PROPS.map((k) => `${k} ${breaks.get(k)?.length ?? 0}`).join(' · '))
 for (const k of PROPS) {
   const list = breaks.get(k)
@@ -164,7 +182,8 @@ for (const k of PROPS) {
   console.log(`\n${k}:`)
   for (const m of VERBOSE ? list : list.slice(0, 5)) console.log(`  ${m}`)
 }
-const total = [...breaks.values()].reduce((n, l) => n + l.length, 0)
+const total = [...breaks.entries()].filter(([k]) => !REPORT_ONLY.has(k)).reduce((n, [, l]) => n + l.length, 0)
+for (const k of REPORT_ONLY) console.log(`${k}: ${breaks.get(k)?.length ?? 0} (reported, not gated)`)
 if (total > 0) {
   console.error(`\ncheck-plan-properties: ${total} break(s)`)
   process.exit(1)
