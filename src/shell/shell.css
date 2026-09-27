@@ -1594,8 +1594,21 @@ p.card__empty {
   border-radius: var(--r4);
 }
 
+.wizard__stage > .screen:has(> .welcome) {
+  justify-content: center;
+  padding: 0 var(--s6) var(--s7);
+}
+
 .wizard .welcome {
-  padding-top: var(--s7);
+  flex: none;
+  padding: 0 0 var(--s5);
+}
+
+.wizard .welcome__actions {
+  padding: var(--s4) 0 0;
+  margin: 0;
+  background: none;
+  border-radius: 0;
 }
 
 /* ─────────────────────────────────────────────────────────── sheets become modals */

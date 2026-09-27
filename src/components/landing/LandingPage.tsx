@@ -18,11 +18,14 @@ interface CoverageRow {
 }
 
 const COVERAGE: CoverageRow[] = [
-  { program: 'Computer Science', status: 'full', detail: 'Matching, planning, credentials — everything, end to end.' },
-  { program: 'Applied Mathematics', status: 'partial', detail: 'Produces a plan. Credential detection isn’t built yet.' },
-  { program: 'Physics', status: 'partial', detail: 'Produces a plan. Credential detection isn’t built yet.' },
-  { program: 'Applied Computing', status: 'partial', detail: 'Produces a plan. Credential detection isn’t built yet.' },
-  { program: 'Every other Arts & Science subject', status: 'scholarships-only', detail: 'No requirement data yet — still finds awards and deadlines.' },
+  { program: 'Computer Science', status: 'full', detail: 'Matching, planning and credentials, end to end.' },
+  { program: 'Applied Mathematics, Physics, Applied Computing', status: 'partial', detail: 'A term-by-term plan; credential detection is next.' },
+  {
+    program: 'Biology, Psychology, Engineering, Nursing, Commerce and more',
+    status: 'partial',
+    detail: 'A plan built from the degree’s own requirements.',
+  },
+  { program: 'Every other Arts & Science subject', status: 'scholarships-only', detail: 'Awards and deadlines, ranked for you.' },
 ]
 
 const COVERAGE_LABEL: Record<CoverageRow['status'], string> = {
@@ -37,36 +40,38 @@ const STEP_ICONS: IconName[] = ['upload', 'target', 'plan', 'phone']
 const STEPS = [
   {
     title: 'Upload your transcript',
-    body: 'A DegreeWorks audit or an unofficial transcript, as a PDF. StudyMax reads every course in every subject and separates what you’ve finished from what you’re taking now.',
+    body: 'A DegreeWorks audit or unofficial transcript. StudyMax splits what you’ve finished from what you’re taking now.',
   },
   {
     title: 'See what you’re closest to',
-    body: 'Deterministic matching against the real requirement data finds the specialization, certificate, or minor you’re nearest to finishing — and the one course that moves you furthest toward it.',
+    body: 'The specialization, certificate or minor you’re nearest to finishing, and the one course that moves you furthest.',
   },
   {
     title: 'Get a term-by-term plan',
-    body: 'Prerequisite chains expand automatically, including the ones the specialization page itself never lists, so the plan is one you could actually register from.',
+    body: 'Every prerequisite chain expanded, even the ones the program page never lists. A plan you can register from.',
   },
   {
     title: 'Get the call',
-    body: 'A phone call about the award closing soonest — because nobody reopens a dashboard, and a $2,000 bursary deadline is worth interrupting a Tuesday for.',
+    body: 'Your phone rings about the award closing soonest, because nobody reopens a dashboard for a $2,000 deadline.',
   },
 ]
 
 interface Feature {
   tag: string
+  icon: IconName
   title: string
   body: string
 }
 
 const FEATURES: Feature[] = [
-  { tag: 'upload', title: 'Transcript parsing', body: 'PDF in, structured course list out — completed and in-progress, split automatically.' },
-  { tag: 'match', title: 'Credential matching', body: 'The specialization, certificate, or minor you’re closest to finishing, ranked by how little is left.' },
-  { tag: 'plan', title: 'Term-by-term plan', body: 'A real sequence, prerequisites expanded, not just a checklist of remaining requirements.' },
-  { tag: 'detect', title: 'Certificates & minors detector', body: 'Surfaces credentials a student is already partway through without knowing it.' },
-  { tag: 'fund', title: 'Scholarships by deadline', body: 'Every award ranked by how soon it closes, with AI-written copy on why it fits you specifically.' },
-  { tag: 'call', title: 'The phone call', body: 'One outbound call about the award closing soonest. It says its piece and hangs up — on purpose, see below.' },
-  { tag: 'demo', title: 'Sample data, no transcript needed', body: '“Load sample student data” runs the entire reveal on a canned USask CS record — our own demo safety net.' },
+  { tag: 'upload', icon: 'upload', title: 'Transcript reading', body: 'PDF in, course list out: completed and in progress, split automatically.' },
+  { tag: 'match', icon: 'target', title: 'Credential matching', body: 'What you’re closest to finishing, ranked by how little is left.' },
+  { tag: 'plan', icon: 'plan', title: 'Term-by-term plan', body: 'A real sequence with prerequisites expanded, not a checklist.' },
+  { tag: 'detect', icon: 'layers', title: 'Hidden certificates and minors', body: 'Credentials you’re already partway through without knowing it.' },
+  { tag: 'fund', icon: 'award', title: 'Awards by deadline', body: 'Every award ranked by how soon it closes, with a note on why it fits you.' },
+  { tag: 'classes', icon: 'seat', title: 'Live class seats', body: 'Watch a full USask section and see the moment a seat opens.' },
+  { tag: 'call', icon: 'phone', title: 'The phone call', body: 'One short call about the award closing soonest. It says its piece and hangs up.' },
+  { tag: 'demo', icon: 'person', title: 'A sample student', body: 'A real USask Computer Science audit, for the full reveal without a transcript.' },
 ]
 
 interface QA {
@@ -107,24 +112,21 @@ export function LandingPage({ onGetStarted, onSkip }: LandingPageProps) {
       <div className="landing__topbar">
         <Wordmark height={40} className="landing__wordmark" />
         <div className="landing__topbar-end">
-          <button type="button" className="landing__skip" onClick={onSkip}>
-            Skip to a sample student
-          </button>
           <ThemeSwitch />
         </div>
       </div>
 
-      <Hero onGetStarted={onGetStarted} />
+      <Hero onGetStarted={onGetStarted} onSkip={onSkip} />
 
       <section className="landing__band landing__band--rose">
         <p className="landing__lede">
-          Your university hides things in plain sight. Specializations that go on your transcript, certificates and
-          minors you’re most of the way through, scholarships with deadlines you never hear about. They exist —
-          they’re just spread across dozens of pages nobody reads end to end.
+          Specializations that go on your transcript. Certificates and minors you’re most of the way through.
+          Scholarships with deadlines you never hear about. They all exist, spread across dozens of pages nobody
+          reads end to end.
         </p>
       </section>
 
-      <section className="landing__section" aria-labelledby="how-heading">
+      <section className="landing__section landing__section--wide" aria-labelledby="how-heading">
         <h2 id="how-heading" className="landing__heading">
           How it works
         </h2>
@@ -145,11 +147,9 @@ export function LandingPage({ onGetStarted, onSkip }: LandingPageProps) {
 
       <section className="landing__section" aria-labelledby="coverage-heading">
         <h2 id="coverage-heading" className="landing__heading">
-          What actually works today
+          Where it works today
         </h2>
-        <p className="landing__section-intro">
-          We’d rather tell you the coverage map than let you find its edges live.
-        </p>
+        <p className="landing__section-intro">The University of Saskatchewan first, mapped from its own catalogue.</p>
         <div className="landing__ledger" role="table">
           {COVERAGE.map((row) => (
             <div className="landing__ledger-row" role="row" key={row.program}>
@@ -167,25 +167,21 @@ export function LandingPage({ onGetStarted, onSkip }: LandingPageProps) {
         </div>
       </section>
 
-      <section className="landing__section" aria-labelledby="features-heading">
+      <section className="landing__section landing__section--wide" aria-labelledby="features-heading">
         <h2 id="features-heading" className="landing__heading">
           Everything in the reveal
         </h2>
-        <div className="landing__ledger landing__ledger--features" role="table">
+        <ul className="landing__features">
           {FEATURES.map((f) => (
-            <div className="landing__ledger-row" role="row" key={f.tag}>
-              <span className="landing__tag" role="cell">
-                {f.tag}
+            <li className="landing__feature" key={f.tag}>
+              <span className="landing__step-index" aria-hidden="true">
+                <Icon name={f.icon} size={20} />
               </span>
-              <span className="landing__ledger-program" role="cell">
-                {f.title}
-              </span>
-              <span className="landing__ledger-detail" role="cell">
-                {f.body}
-              </span>
-            </div>
+              <h3 className="landing__step-title">{f.title}</h3>
+              <p className="landing__step-body">{f.body}</p>
+            </li>
           ))}
-        </div>
+        </ul>
       </section>
 
       <section className="landing__meme" aria-label="Team meme">
@@ -198,9 +194,9 @@ export function LandingPage({ onGetStarted, onSkip }: LandingPageProps) {
 
       <section className="landing__section" aria-labelledby="qa-heading">
         <h2 id="qa-heading" className="landing__heading">
-          Questions we’d ask ourselves
+          Questions, answered
         </h2>
-        <p className="landing__section-intro">The ones we expect, answered before anyone has to ask.</p>
+        <p className="landing__section-intro">The ones people ask first.</p>
         <div className="landing__qa-list">
           {JUDGE_QA.map((item) => (
             <QAItem key={item.q} q={item.q} a={item.a} />
@@ -213,10 +209,10 @@ export function LandingPage({ onGetStarted, onSkip }: LandingPageProps) {
           <h2 className="landing__heading">See what your school is hiding.</h2>
           <div className="landing__actions">
             <button type="button" className="landing__cta" onClick={onGetStarted}>
-              Get Started
+              Get started
             </button>
             <button type="button" className="landing__cta landing__cta--ghost" onClick={onSkip}>
-              Skip to the app
+              Skip to a sample student
             </button>
           </div>
         </div>
@@ -229,7 +225,7 @@ export function LandingPage({ onGetStarted, onSkip }: LandingPageProps) {
   )
 }
 
-function Hero({ onGetStarted }: { onGetStarted: () => void }) {
+function Hero({ onGetStarted, onSkip }: { onGetStarted: () => void; onSkip: () => void }) {
   return (
     <section className="landing__hero">
       <div className="landing__hero-copy">
@@ -240,7 +236,10 @@ function Hero({ onGetStarted }: { onGetStarted: () => void }) {
         </p>
         <div className="landing__actions">
           <button type="button" className="landing__cta" onClick={onGetStarted}>
-            Get Started
+            Get started
+          </button>
+          <button type="button" className="landing__cta landing__cta--ghost" onClick={onSkip}>
+            Skip to a sample student
           </button>
         </div>
         <p className="landing__hero-note">Computer Science at the University of Saskatchewan, end to end. Everyone else still gets the scholarships.</p>
