@@ -117,6 +117,8 @@ export interface CoreItem {
   group: number
   /** Subject, for subject-filtered credit rules ('' for an elective slot). */
   subject: string
+  /** Optional (additive): a loose slot (free, senior or breadth elective) the list scheduler places after the degree's own slots of the same year. */
+  loose?: boolean
 }
 
 export interface CoreInput {
@@ -131,6 +133,11 @@ export interface CoreInput {
   assumedCuPerTerm?: number
   /** Deterministic search budget, in DFS nodes. */
   nodeBudget?: number
+  /**
+   * Optional (additive): credit rules count named courses only, not elective slots (stricter than
+   * rule (a)); the USask plans set it while check-degree.ts's I3 counts named courses only.
+   */
+  namedCreditOnly?: boolean
 }
 
 export type BindingKind = 'chain' | 'capacity' | 'season' | 'senior' | 'gate' | 'booked' | 'none'
